@@ -1,0 +1,4 @@
+[workspace]
+members = [
+    "fido-iot-data-formats",
+]
