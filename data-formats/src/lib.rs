@@ -5,11 +5,13 @@ const PROTOCOL_MAJOR_VERSION: u16 = 1;
 const PROTOCOL_MINOR_VERSION: u16 = 0;
 const PROTOCOL_VERSION: u16 = (PROTOCOL_MAJOR_VERSION * 100) + PROTOCOL_MINOR_VERSION;
 
-mod constants;
-pub use constants::{DeviceSigType, HashType};
+pub mod constants;
 
-mod types;
-pub use types::{Hash, SigInfo};
+pub mod types;
 
-mod ownershipvoucher;
+pub mod ownershipvoucher;
+
 mod publickey;
+pub use publickey::{PublicKey, PublicKeyBody};
+
+pub mod messages;

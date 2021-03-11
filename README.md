@@ -11,4 +11,7 @@ Current specification version target: v1.0 20200730.
 - Transfer Ownership Protocol 2 (TO2)
 
 ## Crates and parts
+- *fido-iot-stream-message*: Implements the stream message creation/parsing of StreamMsg. Currently not implemented
 - *fido-iot-data-formats* [DI, TO0, TO1, TO2]: Implements the different low-level messaging formats used.
+
+### fido-iot-data-formats

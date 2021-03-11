@@ -1,4 +1,4 @@
-use std::convert::{TryFrom};
+use std::convert::TryFrom;
 
 use openssl::{
     pkey::{PKey, Public},

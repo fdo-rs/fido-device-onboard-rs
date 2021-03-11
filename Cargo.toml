@@ -1,4 +1,11 @@
 [workspace]
 members = [
-    "fido-iot-data-formats",
+    "data-formats",
+    "http-wrapper",
+    "mfg_station",
+    "owner_onboarding_service",
+    "rendezvous_server",
+    "client_linuxapp",
+
+"testing"
 ]
