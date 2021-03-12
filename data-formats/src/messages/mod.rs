@@ -1,13 +1,12 @@
-use thiserror::Error;
-use serde::{Serialize, Serializer, Deserialize};
 use serde::ser::SerializeSeq;
+use serde::{Deserialize, Serialize, Serializer};
 use serde_cbor::Value;
+use thiserror::Error;
 
 use crate::constants::ErrorCode;
 
 mod di;
 pub use di::{DIAppStart, DISetCredentials};
-
 
 #[derive(Debug, Error)]
 pub enum ParseError {
@@ -17,7 +16,7 @@ pub enum ParseError {
     InvalidBody,
 }
 
-pub trait Message: Send + InternalMessage + std::fmt::Debug {
+pub trait Message: Send + InternalMessage {
     fn message_type() -> u8;
 
     fn to_wire(&self) -> Result<Vec<u8>, ParseError> {
@@ -25,13 +24,18 @@ pub trait Message: Send + InternalMessage + std::fmt::Debug {
     }
 
     fn to_response(&self, token: &str) -> http::response::Response<hyper::body::Body> {
-        println!("Sending response: {:?} with token: {:?}", &self, token);
         match self.try_to_response(&Self::message_type().to_string(), token) {
             Ok(v) => v,
             Err(e) => {
                 eprintln!("Error serializing response: {:?}", e);
-                // TODO: Serialize a new ErrorMessage
-                todo!();
+                ErrorMessage::new(
+                    ErrorCode::InternalServerError,
+                    Self::message_type(),
+                    "Error serializing response".to_string(),
+                    0,
+                )
+                .try_to_response(&ErrorMessage::message_type().to_string(), "")
+                .expect("Error serializing error message")
             }
         }
     }
@@ -52,7 +56,11 @@ pub trait InternalMessage: Send + Serialize + Sized {
         http::StatusCode::OK
     }
 
-    fn try_to_response(&self, message_type: &str, token: &str) -> Result<http::response::Response<hyper::body::Body>, serde_cbor::Error> {
+    fn try_to_response(
+        &self,
+        message_type: &str,
+        token: &str,
+    ) -> Result<http::response::Response<hyper::body::Body>, serde_cbor::Error> {
         let body = serde_cbor::to_vec(&self)?;
         let body = hyper::body::Body::from(body);
 
@@ -66,21 +74,19 @@ pub trait InternalMessage: Send + Serialize + Sized {
 
         Ok(builder.body(body).unwrap())
     }
-
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ErrorMessage(
-    ErrorCode,
-    u8,
-    String,
-    Option<serde_cbor::Value>,
-    u128,
-);
+pub struct ErrorMessage(ErrorCode, u8, String, Option<serde_cbor::Value>, u128);
 
 impl ErrorMessage {
-    pub fn new(error_code: ErrorCode, previous_message_id: u8, error_string: String, error_uuid: u128) -> Self {
-        ErrorMessage (
+    pub fn new(
+        error_code: ErrorCode,
+        previous_message_id: u8,
+        error_string: String,
+        error_uuid: u128,
+    ) -> Self {
+        ErrorMessage(
             error_code,
             previous_message_id,
             error_string,

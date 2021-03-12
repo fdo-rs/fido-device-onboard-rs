@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use fdo_data_formats::{
     constants::ErrorCode,
-    messages::{self, Message, ErrorMessage},
+    messages::{self, ErrorMessage, Message},
 };
 
 #[derive(Debug, Error)]
@@ -48,7 +48,9 @@ impl ServiceClient {
     {
         let url = format!("{}/fdo/100/msg/{}", &self.base_url, OM::message_type());
 
-        let mut req = self.client.post(url)
+        let mut req = self
+            .client
+            .post(url)
             .header("Content-Type", "application/cbor")
             .body(to_send.to_wire()?);
 
@@ -56,15 +58,17 @@ impl ServiceClient {
             req = req.header("Authorization", authorization_token);
         }
 
-        let resp = req
-            .send()
-            .await?;
+        let resp = req.send().await?;
 
-        let msgtype = resp.headers()
+        let msgtype = resp
+            .headers()
             .get("message-type")
             .ok_or(Error::MissingMessageType)?
-            .to_str().map_err(|_| Error::MissingMessageType)?;
-        let msgtype = msgtype.parse::<u8>().map_err(|_| Error::InvalidMessageType(msgtype.to_string()))?;
+            .to_str()
+            .map_err(|_| Error::MissingMessageType)?;
+        let msgtype = msgtype
+            .parse::<u8>()
+            .map_err(|_| Error::InvalidMessageType(msgtype.to_string()))?;
 
         if let Some(val) = resp.headers().get("authorization") {
             self.authorization_token = Some(val.to_str().unwrap().to_string());

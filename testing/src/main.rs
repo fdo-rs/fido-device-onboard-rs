@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
-use serde_tuple::{Serialize_tuple, Deserialize_tuple};
+use serde::{Deserialize, Serialize};
+use serde_tuple::{Deserialize_tuple, Serialize_tuple};
 
 #[derive(Deserialize)]
 struct Empty {}

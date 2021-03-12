@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 
 use openssl::pkey::{PKeyRef, Private};
-use serde::{Deserialize, Serialize, Serializer, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
     constants::HashType,
@@ -23,7 +23,6 @@ pub struct OwnershipVoucher(
 
 impl OwnershipVoucher {
     pub(crate) fn new() -> Self {
-
         todo!();
     }
 
@@ -241,8 +240,7 @@ impl TryFrom<OwnershipVoucherHeader> for Vec<u8> {
     type Error = Error;
 
     fn try_from(ovh: OwnershipVoucherHeader) -> Result<Vec<u8>> {
-        serde_cbor::to_vec(&RawOwnershipVoucherHeader::from(ovh))
-        .map_err(|e| e.into())
+        serde_cbor::to_vec(&RawOwnershipVoucherHeader::from(ovh)).map_err(|e| e.into())
     }
 }
 

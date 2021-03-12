@@ -6,29 +6,21 @@ use fdo_data_formats::{
 };
 
 use warp::{Filter, Rejection};
-use warp_sessions::{
-    Session,
-    SessionStore,
-    SessionWithStore,
-};
+use warp_sessions::{Session, SessionStore, SessionWithStore};
 
 #[derive(Debug)]
-pub struct Error (
-    messages::ErrorMessage
-);
+pub struct Error(messages::ErrorMessage);
 
 impl Error {
     pub fn new(error_code: ErrorCode, previous_message_id: u8, error_string: &str) -> Self {
         let new_uuid = uuid::Uuid::new_v4();
 
-        Error(
-            messages::ErrorMessage::new(
-                error_code,
-                previous_message_id,
-                error_string.to_string(),
-                new_uuid.to_u128_le() & 0xFFFFFFFFFFFFFFFF,
-            )
-        )
+        Error(messages::ErrorMessage::new(
+            error_code,
+            previous_message_id,
+            error_string.to_string(),
+            new_uuid.to_u128_le() & 0xFFFFFFFFFFFFFFFF,
+        ))
     }
 }
 
@@ -57,7 +49,6 @@ where
         );
         &local_err
     } else {
-        println!("Error: {:?}", err);
         local_err = Error::new(
             ErrorCode::InternalServerError,
             IM::message_type(),
@@ -66,9 +57,7 @@ where
         &local_err
     };
 
-    Ok(
-        err.0.to_response("")
-    )
+    Ok(err.0.to_response(""))
 }
 
 #[derive(Debug)]
@@ -79,76 +68,101 @@ async fn parse_request<IM>(inbound: warp::hyper::body::Bytes) -> Result<IM, warp
 where
     IM: messages::Message,
 {
-    IM::from_wire(&inbound)
-    .map_err(|e| { println!("Error parsing request: {:?}", e);  warp::reject::custom(ParseError) })
+    IM::from_wire(&inbound).map_err(|e| {
+        println!("Error parsing request: {:?}", e);
+        warp::reject::custom(ParseError)
+    })
 }
 
-async fn store_session<IM, OM, SST>(response: OM, ses_with_store: SessionWithStore<SST>) -> Result<(OM, Option<String>), warp::Rejection>
+async fn store_session<IM, OM, SST>(
+    response: OM,
+    ses_with_store: SessionWithStore<SST>,
+) -> Result<(OM, Option<String>), warp::Rejection>
 where
     IM: Message,
     SST: SessionStore,
 {
     Ok((
         response,
-        ses_with_store.session_store.store_session(ses_with_store.session).await.map_err(|_| Error::new(ErrorCode::InternalServerError, IM::message_type(), "Error storing session"))?
+        ses_with_store
+            .session_store
+            .store_session(ses_with_store.session)
+            .await
+            .map_err(|_| {
+                Error::new(
+                    ErrorCode::InternalServerError,
+                    IM::message_type(),
+                    "Error storing session",
+                )
+            })?,
     ))
 }
 
-pub fn fdo_request_filter<IM, OM, F, FR, SST>(session_store: SST, handler: F) -> warp::filters::BoxedFilter<(warp::reply::Response,)>
+pub fn fdo_request_filter<UDT, IM, OM, F, FR, SST>(
+    user_data: UDT,
+    session_store: SST,
+    handler: F,
+) -> warp::filters::BoxedFilter<(warp::reply::Response,)>
 where
-    F: Fn(IM, SessionWithStore<SST>) -> FR + Clone + Send + Sync + 'static,
+    UDT: Clone + Send + Sync + 'static,
+    F: Fn(UDT, IM, SessionWithStore<SST>) -> FR + Clone + Send + Sync + 'static,
     SST: SessionStore,
     FR: futures::Future<Output = Result<(OM, SessionWithStore<SST>), warp::Rejection>> + Send,
     IM: messages::Message + 'static,
     OM: messages::Message + 'static,
 {
     warp::post()
-        .and(warp::path("fdo")).and(warp::path("100")).and(warp::path("msg")).and(warp::path(IM::message_type().to_string()))
+        // Construct expected HTTP path
+        .and(warp::path("fdo"))
+        .and(warp::path("100"))
+        .and(warp::path("msg"))
+        .and(warp::path(IM::message_type().to_string()))
+        // Parse the request
         .and(warp::body::content_length_limit(1024 * 16))
         .and(warp::body::bytes())
         .and(warp::header::exact("Content-Type", "application/cbor"))
         .and_then(parse_request)
-
         // Process "session" (i.e. Authorization header) retrieval
         .and(warp::header::optional("Authorization"))
         .map(move |req, hdr| (req, hdr, session_store.clone()))
         .and_then(
             |(req, hdr, ses_store): (IM, Option<String>, SST)| async move {
-                println!("Requesting session with {:?}", hdr);
                 let ses = match hdr {
-                    Some(val) => {
-                        match ses_store.load_session(val).await {
-                            Ok(Some(ses)) => ses,
-                            Ok(None) => Session::new(),
-                            Err(_) => {
-                                return Err(Rejection::from(Error::new(
-                                    ErrorCode::InternalServerError,
-                                    IM::message_type(),
-                                    "Error retrieving session",
-                                )))
-                            }
+                    Some(val) => match ses_store.load_session(val).await {
+                        Ok(Some(ses)) => ses,
+                        Ok(None) => Session::new(),
+                        Err(_) => {
+                            return Err(Rejection::from(Error::new(
+                                ErrorCode::InternalServerError,
+                                IM::message_type(),
+                                "Error retrieving session",
+                            )))
                         }
                     },
                     None => Session::new(),
                 };
-                Ok((req, SessionWithStore {
-                    session: ses,
-                    session_store: ses_store,
-                    cookie_options: Default::default(),
-                }))
-            }
+                Ok((
+                    req,
+                    SessionWithStore {
+                        session: ses,
+                        session_store: ses_store,
+                        cookie_options: Default::default(),
+                    },
+                ))
+            },
         )
-        .untuple_one()
-
+        // Insert the user data
+        .map(move |(req, ses)| (user_data.clone(), req, ses))
         // Call the handler
+        .untuple_one()
         .and_then(handler)
-
         // Process "session" storage
         .untuple_one()
         .and_then(store_session::<IM, _, _>)
-
         // Process response
-        .map(|(res, ses_token): (OM, Option<String>)| res.to_response(&ses_token.unwrap_or_else(|| "".to_string())))
+        .map(|(res, ses_token): (OM, Option<String>)| {
+            res.to_response(&ses_token.unwrap_or_else(|| "".to_string()))
+        })
         .recover(handle_rejection::<IM>)
         .unify()
         .boxed()

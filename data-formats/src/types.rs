@@ -1,18 +1,18 @@
+use serde_tuple::Serialize_tuple;
 use std::{convert::TryInto, ops::Deref};
-use serde_tuple::{Serialize_tuple};
 
 use crate::{
     constants::{DeviceSigType, HashType, RendezvousVariable, TransportProtocol},
-    errors::{Error},
+    errors::Error,
     publickey::PublicKey,
     PROTOCOL_VERSION,
 };
 
 use aws_nitro_enclaves_cose::sign::HeaderMap;
 use openssl::hash::{hash, MessageDigest};
-use serde::{Deserialize, Serialize, Serializer, Deserializer};
-use serde::ser::{SerializeSeq};
-use serde::de::{self, Visitor, SeqAccess};
+use serde::de::{self, SeqAccess, Visitor};
+use serde::ser::SerializeSeq;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Hash(
@@ -207,17 +207,22 @@ impl<'de> Deserialize<'de> for Message {
             where
                 V: SeqAccess<'de>,
             {
-                let msglen = seq.next_element()?
+                let msglen = seq
+                    .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                let msgtype = seq.next_element()?
+                let msgtype = seq
+                    .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(1, &self))?;
-                let protver = seq.next_element()?
+                let protver = seq
+                    .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(2, &self))?;
-                let protocol_info = seq.next_element()?
+                let protocol_info = seq
+                    .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(3, &self))?;
-                let body = seq.next_element()?
+                let body = seq
+                    .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(4, &self))?;
-                Ok(Message{
+                Ok(Message {
                     msglen,
                     msgtype,
                     protver,
