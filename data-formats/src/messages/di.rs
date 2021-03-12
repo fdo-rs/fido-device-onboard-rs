@@ -35,7 +35,7 @@ impl DIAppStart {
 }
 
 impl Message for DIAppStart {
-    fn message_type() -> u32 {
+    fn message_type() -> u8 {
         10
     }
 
@@ -67,7 +67,7 @@ impl DISetCredentials {
 }
 
 impl Message for DISetCredentials {
-    fn message_type() -> u32 {
+    fn message_type() -> u8 {
         11
     }
 

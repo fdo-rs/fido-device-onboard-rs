@@ -6,6 +6,11 @@ use fdo_data_formats::{
 };
 
 use warp::{Filter, Rejection};
+use warp_sessions::{
+    Session,
+    SessionStore,
+    SessionWithStore,
+};
 
 #[derive(Debug)]
 pub struct Error (
@@ -29,7 +34,10 @@ impl Error {
 
 impl warp::reject::Reject for Error {}
 
-async fn handle_rejection(err: Rejection) -> Result<warp::reply::Response, Infallible> {
+async fn handle_rejection<IM>(err: Rejection) -> Result<warp::reply::Response, Infallible>
+where
+    IM: Message,
+{
     let local_err: Error;
 
     let err = if let Some(err) = err.find::<Error>() {
@@ -37,14 +45,14 @@ async fn handle_rejection(err: Rejection) -> Result<warp::reply::Response, Infal
     } else if let Some(ParseError) = err.find() {
         local_err = Error::new(
             ErrorCode::MessageBodyError,
-            0,
+            IM::message_type(),
             "Invalid request body",
         );
         &local_err
     } else if err.is_not_found() {
         local_err = Error::new(
             ErrorCode::MessageBodyError,
-            0,
+            IM::message_type(),
             "Invalid request type",
         );
         &local_err
@@ -52,7 +60,7 @@ async fn handle_rejection(err: Rejection) -> Result<warp::reply::Response, Infal
         println!("Error: {:?}", err);
         local_err = Error::new(
             ErrorCode::InternalServerError,
-            0,
+            IM::message_type(),
             "Error processing response",
         );
         &local_err
@@ -75,12 +83,24 @@ where
     .map_err(|e| { println!("Error parsing request: {:?}", e);  warp::reject::custom(ParseError) })
 }
 
-pub fn fdo_request_filter<IM, OM, F, FR>(handler: F) -> warp::filters::BoxedFilter<(warp::reply::Response,)>
+async fn store_session<IM, OM, SST>(response: OM, ses_with_store: SessionWithStore<SST>) -> Result<(OM, Option<String>), warp::Rejection>
 where
-    F: Fn(IM) -> FR + Clone + Send + Sync + 'static,
-    FR: futures::Future<Output = Result<OM, warp::Rejection>> + Send,
+    IM: Message,
+    SST: SessionStore,
+{
+    Ok((
+        response,
+        ses_with_store.session_store.store_session(ses_with_store.session).await.map_err(|_| Error::new(ErrorCode::InternalServerError, IM::message_type(), "Error storing session"))?
+    ))
+}
+
+pub fn fdo_request_filter<IM, OM, F, FR, SST>(session_store: SST, handler: F) -> warp::filters::BoxedFilter<(warp::reply::Response,)>
+where
+    F: Fn(IM, SessionWithStore<SST>) -> FR + Clone + Send + Sync + 'static,
+    SST: SessionStore,
+    FR: futures::Future<Output = Result<(OM, SessionWithStore<SST>), warp::Rejection>> + Send,
     IM: messages::Message + 'static,
-    OM: messages::Message,
+    OM: messages::Message + 'static,
 {
     warp::post()
         .and(warp::path("fdo")).and(warp::path("100")).and(warp::path("msg")).and(warp::path(IM::message_type().to_string()))
@@ -88,10 +108,48 @@ where
         .and(warp::body::bytes())
         .and(warp::header::exact("Content-Type", "application/cbor"))
         .and_then(parse_request)
+
+        // Process "session" (i.e. Authorization header) retrieval
+        .and(warp::header::optional("Authorization"))
+        .map(move |req, hdr| (req, hdr, session_store.clone()))
+        .and_then(
+            |(req, hdr, ses_store): (IM, Option<String>, SST)| async move {
+                println!("Requesting session with {:?}", hdr);
+                let ses = match hdr {
+                    Some(val) => {
+                        match ses_store.load_session(val).await {
+                            Ok(Some(ses)) => ses,
+                            Ok(None) => Session::new(),
+                            Err(_) => {
+                                return Err(Rejection::from(Error::new(
+                                    ErrorCode::InternalServerError,
+                                    IM::message_type(),
+                                    "Error retrieving session",
+                                )))
+                            }
+                        }
+                    },
+                    None => Session::new(),
+                };
+                Ok((req, SessionWithStore {
+                    session: ses,
+                    session_store: ses_store,
+                    cookie_options: Default::default(),
+                }))
+            }
+        )
+        .untuple_one()
+
+        // Call the handler
         .and_then(handler)
-        // TODO: Token
-        .map(|res: OM| res.to_response(""))
-        .recover(handle_rejection)
+
+        // Process "session" storage
+        .untuple_one()
+        .and_then(store_session::<IM, _, _>)
+
+        // Process response
+        .map(|(res, ses_token): (OM, Option<String>)| res.to_response(&ses_token.unwrap_or_else(|| "".to_string())))
+        .recover(handle_rejection::<IM>)
         .unify()
         .boxed()
 }

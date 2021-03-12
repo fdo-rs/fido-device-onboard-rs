@@ -17,14 +17,15 @@ pub enum ParseError {
     InvalidBody,
 }
 
-pub trait Message: Send + InternalMessage {
-    fn message_type() -> u32;
+pub trait Message: Send + InternalMessage + std::fmt::Debug {
+    fn message_type() -> u8;
 
     fn to_wire(&self) -> Result<Vec<u8>, ParseError> {
         Ok(serde_cbor::to_vec(&self)?)
     }
 
     fn to_response(&self, token: &str) -> http::response::Response<hyper::body::Body> {
+        println!("Sending response: {:?} with token: {:?}", &self, token);
         match self.try_to_response(&Self::message_type().to_string(), token) {
             Ok(v) => v,
             Err(e) => {
@@ -110,7 +111,7 @@ impl ErrorMessage {
 }
 
 impl Message for ErrorMessage {
-    fn message_type() -> u32 {
+    fn message_type() -> u8 {
         255
     }
 

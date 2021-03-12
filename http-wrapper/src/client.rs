@@ -18,7 +18,7 @@ pub enum Error {
     #[error("Invalid message type {0} encountered")]
     InvalidMessageType(String),
     #[error("Invalid message type {0} encountered, expected {1}")]
-    InvalidMessage(u32, u32),
+    InvalidMessage(u8, u8),
     #[error("Error returned by server")]
     Error(ErrorMessage),
 }
@@ -64,7 +64,7 @@ impl ServiceClient {
             .get("message-type")
             .ok_or(Error::MissingMessageType)?
             .to_str().map_err(|_| Error::MissingMessageType)?;
-        let msgtype = msgtype.parse::<u32>().map_err(|_| Error::InvalidMessageType(msgtype.to_string()))?;
+        let msgtype = msgtype.parse::<u8>().map_err(|_| Error::InvalidMessageType(msgtype.to_string()))?;
 
         if let Some(val) = resp.headers().get("authorization") {
             self.authorization_token = Some(val.to_str().unwrap().to_string());

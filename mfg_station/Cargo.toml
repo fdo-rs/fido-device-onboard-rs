@@ -12,5 +12,7 @@ warp = "0.3"
 futures = "0.3"
 serde = "1.0"
 
+warp-sessions = "1.0"
+
 fdo-data-formats = { path = "../data-formats" }
 fdo_http_wrapper = { path = "../http-wrapper", features = ["server"] }

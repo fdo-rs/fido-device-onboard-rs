@@ -8,9 +8,17 @@ async fn main() {
         "http://localhost:8080/",
     );
 
-    let appstart = messages::DIAppStart::new("testclient");
-    let response: RequestResult<messages::DIAppStart> = di_client.send_request(appstart).await;
 
     println!("CLient: {:?}", di_client);
-    println!("Response: {:?}", response);
+
+    let mut i: u8 = 0;
+    while i < 6 {
+        println!("Performing request nr {}", i);
+        let appstart = messages::DIAppStart::new("testclient");
+        let response: RequestResult<messages::DISetCredentials> = di_client.send_request(appstart).await;
+
+        println!("Response: {:?}", response);
+
+        i += 1
+    }
 }
