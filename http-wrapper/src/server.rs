@@ -105,7 +105,7 @@ pub fn fdo_request_filter<UDT, IM, OM, F, FR, SST>(
 ) -> warp::filters::BoxedFilter<(warp::reply::Response,)>
 where
     UDT: Clone + Send + Sync + 'static,
-    F: Fn(UDT, IM, SessionWithStore<SST>) -> FR + Clone + Send + Sync + 'static,
+    F: Fn(UDT, SessionWithStore<SST>, IM) -> FR + Clone + Send + Sync + 'static,
     SST: SessionStore,
     FR: futures::Future<Output = Result<(OM, SessionWithStore<SST>), warp::Rejection>> + Send,
     IM: messages::Message + 'static,
@@ -153,6 +153,8 @@ where
         )
         // Insert the user data
         .map(move |(req, ses)| (user_data.clone(), req, ses))
+        // Move the request message to the end
+        .map(move |(user_data, req, ses)| (user_data, ses, req))
         // Call the handler
         .untuple_one()
         .and_then(handler)

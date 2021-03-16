@@ -12,8 +12,8 @@ mod handlers {
 
     pub(super) async fn appstart<ST: SessionStore>(
         user_data: super::MfgUDT,
-        msg: messages::DIAppStart,
         mut ses_with_store: SessionWithStore<ST>,
+        msg: messages::DIAppStart,
     ) -> Result<(messages::DISetCredentials, SessionWithStore<ST>), warp::Rejection> {
         let mut session = ses_with_store.session;
 

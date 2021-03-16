@@ -6,6 +6,5 @@ members = [
     "owner_onboarding_service",
     "rendezvous_server",
     "client_linuxapp",
-
-"testing"
+    "owner_tool",
 ]

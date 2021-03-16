@@ -43,7 +43,7 @@ impl OwnershipVoucher {
         let (last_hash, owner_pubkey) = if self.3.is_empty() {
             (
                 Hash::new(hash_type, &self.hdr_hash())?,
-                self.get_raw_header()?.4,
+                self.get_header()?.public_key,
             )
         } else {
             let lastrawentry = &self.3[self.3.len() - 1];
@@ -64,7 +64,7 @@ impl OwnershipVoucher {
         }
 
         // Create new entry
-        let hdrinfo_hash = Hash::new(hash_type, &self.get_raw_header()?.get_info()?)?;
+        let hdrinfo_hash = Hash::new(hash_type, &self.get_header()?.get_info()?)?;
         let new_entry = OwnershipVoucherEntry {
             hash_previous_entry: last_hash,
             hash_header_info: hdrinfo_hash,
@@ -86,23 +86,19 @@ impl OwnershipVoucher {
         Ok(())
     }
 
-    pub fn get_header(&self) -> Result<OwnershipVoucherHeader> {
-        self.get_raw_header().map(|e| e.into())
-    }
-
-    fn get_raw_header(&self) -> Result<RawOwnershipVoucherHeader> {
+    fn get_header(&self) -> Result<OwnershipVoucherHeader> {
         serde_cbor::from_slice(&self.0).map_err(|e| e.into())
     }
 }
 
 impl<'a> OwnershipVoucher {
     pub fn iter_entries(&'a self) -> Result<EntryIter> {
-        let hdr = self.get_raw_header()?;
+        let hdr = self.get_header()?;
         let hdrinfo = hdr.get_info()?;
 
         Ok(EntryIter {
             voucher: self,
-            pubkey: hdr.4.clone(),
+            pubkey: hdr.public_key.clone(),
             header: hdr,
             headerinfo: hdrinfo,
             index: 0,
@@ -115,7 +111,7 @@ impl<'a> OwnershipVoucher {
 pub struct EntryIter<'a> {
     voucher: &'a OwnershipVoucher,
     pubkey: PublicKey,
-    header: RawOwnershipVoucherHeader,
+    header: OwnershipVoucherHeader,
     headerinfo: Vec<u8>,
     index: usize,
     errored: bool,
@@ -179,28 +175,18 @@ impl<'a> EntryIter<'a> {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct RawOwnershipVoucherHeader(
-    u16,            // OVProtVer
-    Guid,           // OVGuid
-    RendezvousInfo, // OVRVInfo
-    String,         // OVDeviceInfo
-    PublicKey,      // OVPubKey
-    Option<Hash>,   // OVDevCertChainHash
-);
-
-impl RawOwnershipVoucherHeader {
+impl OwnershipVoucherHeader {
     fn get_info(&self) -> Result<Vec<u8>> {
-        let device_info_bytes = self.3.as_bytes();
-        let mut hdrinfo = Vec::with_capacity(self.1.len() + device_info_bytes.len());
-        hdrinfo.extend_from_slice(&self.1);
+        let device_info_bytes = self.device_info.as_bytes();
+        let mut hdrinfo = Vec::with_capacity(self.guid.len() + device_info_bytes.len());
+        hdrinfo.extend_from_slice(&self.guid);
         hdrinfo.extend_from_slice(&device_info_bytes);
 
         Ok(hdrinfo)
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct OwnershipVoucherHeader {
     pub protocol_version: u16,
     pub guid: Guid,
@@ -210,37 +196,20 @@ pub struct OwnershipVoucherHeader {
     pub device_certificate_chain_hash: Option<Hash>,
 }
 
-impl From<OwnershipVoucherHeader> for RawOwnershipVoucherHeader {
-    fn from(hdr: OwnershipVoucherHeader) -> RawOwnershipVoucherHeader {
-        RawOwnershipVoucherHeader(
-            hdr.protocol_version,
-            hdr.guid,
-            hdr.rendezvous_info,
-            hdr.device_info,
-            hdr.public_key,
-            hdr.device_certificate_chain_hash,
-        )
+impl Serialize for OwnershipVoucherHeader {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        todo!();
     }
 }
 
-impl From<RawOwnershipVoucherHeader> for OwnershipVoucherHeader {
-    fn from(raw: RawOwnershipVoucherHeader) -> OwnershipVoucherHeader {
-        OwnershipVoucherHeader {
-            protocol_version: raw.0,
-            guid: raw.1,
-            rendezvous_info: raw.2,
-            device_info: raw.3,
-            public_key: raw.4,
-            device_certificate_chain_hash: raw.5,
-        }
-    }
-}
-
-impl TryFrom<OwnershipVoucherHeader> for Vec<u8> {
+impl TryFrom<&OwnershipVoucherHeader> for Vec<u8> {
     type Error = Error;
 
-    fn try_from(ovh: OwnershipVoucherHeader) -> Result<Vec<u8>> {
-        serde_cbor::to_vec(&RawOwnershipVoucherHeader::from(ovh)).map_err(|e| e.into())
+    fn try_from(ovh: &OwnershipVoucherHeader) -> Result<Vec<u8>> {
+        serde_cbor::to_vec(&ovh).map_err(|e| e.into())
     }
 }
 
