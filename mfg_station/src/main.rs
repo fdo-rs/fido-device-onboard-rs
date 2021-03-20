@@ -6,15 +6,16 @@ mod handlers {
     use fdo_data_formats::constants::ErrorCode;
     use fdo_data_formats::messages;
 
-    use fdo_http_wrapper::server::Error;
+    use fdo_http_wrapper::server::{set_encryption_keys, Error};
+    use fdo_http_wrapper::EncryptionKeys;
 
-    use warp_sessions::{SessionStore, SessionWithStore};
+    use fdo_http_wrapper::server::{SessionStore, SessionWithStore};
 
     pub(super) async fn appstart<ST: SessionStore>(
         user_data: super::MfgUDT,
         mut ses_with_store: SessionWithStore<ST>,
-        msg: messages::DIAppStart,
-    ) -> Result<(messages::DISetCredentials, SessionWithStore<ST>), warp::Rejection> {
+        msg: messages::di::AppStart,
+    ) -> Result<(messages::di::SetCredentials, SessionWithStore<ST>), warp::Rejection> {
         let mut session = ses_with_store.session;
 
         println!("DI Appstart: {:?}", msg);
@@ -33,15 +34,20 @@ mod handlers {
         };
         session.insert("ctr", newval).unwrap();
 
+        if newval == 2 {
+            set_encryption_keys::<messages::di::AppStart>(
+                &mut session,
+                EncryptionKeys::AEAD(vec![1, 2, 3, 4]),
+            )?;
+        }
+
         println!("Counter is now set with val {}", newval);
 
         ses_with_store.session = session;
 
         println!("Returning");
-        return Ok((
-            messages::DISetCredentials::new(vec![newval]),
-            ses_with_store,
-        ));
+
+        Ok((messages::di::SetCredentials::new(42), ses_with_store))
     }
 }
 
@@ -58,7 +64,7 @@ async fn main() {
 
     let hello = warp::get().map(|| "Hello from the MFG Station");
 
-    let ses_store = warp_sessions::MemoryStore::new();
+    let ses_store = fdo_http_wrapper::server::MemoryStore::new();
 
     let routes = warp::any()
         .and(hello)

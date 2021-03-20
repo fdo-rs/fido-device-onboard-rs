@@ -9,11 +9,6 @@ edition = "2018"
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 warp = "0.3"
-futures = "0.3"
-serde = "1.0"
-openssl = "0.10"
-
-warp-sessions = "1.0"
 
 fdo-data-formats = { path = "../data-formats" }
 fdo_http_wrapper = { path = "../http-wrapper", features = ["server"] }

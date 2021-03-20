@@ -1,14 +1,14 @@
 use std::convert::Infallible;
 
-use serde::{Deserialize, Serialize};
-
+use super::EncryptionKeys;
 use fdo_data_formats::{
     constants::ErrorCode,
     messages::{self, Message},
 };
 
 use warp::{Filter, Rejection};
-use warp_sessions::{Session, SessionStore, SessionWithStore};
+pub use warp_sessions::MemoryStore;
+pub use warp_sessions::{Session, SessionStore, SessionWithStore};
 
 #[derive(Debug)]
 pub struct Error(messages::ErrorMessage);
@@ -69,6 +69,8 @@ where
 struct ParseError;
 impl warp::reject::Reject for ParseError {}
 
+const ENCRYPTION_KEYS_SES_KEY: &str = "_encryption_keys_";
+
 async fn parse_request<IM, SST>(
     inbound: warp::hyper::body::Bytes,
     ses_with_store: SessionWithStore<SST>,
@@ -77,14 +79,24 @@ where
     IM: messages::Message,
     SST: SessionStore,
 {
-    let keys = ses_with_store
+    let keys: EncryptionKeys = ses_with_store
         .session
-        .get("encryption_keys")
+        .get(ENCRYPTION_KEYS_SES_KEY)
         .unwrap_or(EncryptionKeys::None);
-    // TODO: Possibly decrypt
+    let inbound = match keys.decrypt(&inbound) {
+        Ok(v) => v,
+        Err(_) => {
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                IM::message_type(),
+                "Error decrypting",
+            )
+            .into())
+        }
+    };
 
     Ok((
-        IM::from_wire(&inbound).map_err(|e| {
+        serde_cbor::from_slice(&inbound).map_err(|e| {
             println!("Error parsing request: {:?}", e);
             warp::reject::custom(ParseError)
         })?,
@@ -92,11 +104,22 @@ where
     ))
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-enum EncryptionKeys {
-    None,
-    AEAD(Vec<u8>),
-    Separate(Vec<u8>, Vec<u8>),
+pub fn set_encryption_keys<IM>(
+    ses: &mut Session,
+    new_keys: EncryptionKeys,
+) -> Result<(), warp::Rejection>
+where
+    IM: Message,
+{
+    ses.insert(ENCRYPTION_KEYS_SES_KEY, new_keys).map_err(|e| {
+        println!("Error setting session encryption keys: {:?}", e);
+        Error::new(
+            ErrorCode::InternalServerError,
+            IM::message_type(),
+            "Internal error",
+        )
+        .into()
+    })
 }
 
 async fn store_session<IM, OM, SST>(
@@ -109,7 +132,7 @@ where
 {
     let keys = ses_with_store
         .session
-        .get("encryption_keys")
+        .get(ENCRYPTION_KEYS_SES_KEY)
         .unwrap_or(EncryptionKeys::None);
 
     Ok((
@@ -146,15 +169,26 @@ where
     builder.body(val.into()).unwrap()
 }
 
-async fn encrypt_and_generate_response<OM>(
+async fn encrypt_and_generate_response<IM, OM>(
     val: Vec<u8>,
     token: Option<String>,
     enc_keys: EncryptionKeys,
 ) -> Result<warp::reply::Response, warp::Rejection>
 where
+    IM: Message,
     OM: Message,
 {
-    // TODO: Possibly encrypt
+    let val = match enc_keys.encrypt(&val) {
+        Ok(v) => v,
+        Err(_) => {
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                IM::message_type(),
+                "Error encrypting",
+            )
+            .into())
+        }
+    };
 
     Ok(to_response::<OM>(val, token))
 }
@@ -233,7 +267,7 @@ where
             },
         )
         .untuple_one()
-        .and_then(encrypt_and_generate_response::<OM>)
+        .and_then(encrypt_and_generate_response::<IM, OM>)
         .recover(handle_rejection::<IM>)
         .unify()
         .boxed()

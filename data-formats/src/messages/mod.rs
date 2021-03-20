@@ -1,10 +1,13 @@
-use serde::{Deserialize, Serialize};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use thiserror::Error;
 
 use crate::constants::ErrorCode;
 
-mod di;
-pub use di::{DIAppStart, DISetCredentials};
+mod error;
+pub use error::ErrorMessage;
+
+pub mod di;
 
 #[derive(Debug, Error)]
 pub enum ParseError {
@@ -14,7 +17,7 @@ pub enum ParseError {
     InvalidBody,
 }
 
-pub trait Message: Send + Serialize + Sized {
+pub trait Message: Send + Serialize + DeserializeOwned + Sized {
     fn message_type() -> u8;
 
     fn to_wire(&self) -> Result<Vec<u8>, ParseError> {
@@ -39,61 +42,5 @@ pub trait Message: Send + Serialize + Sized {
                 serde_cbor::to_vec(&errmsg).expect("Error serializing error message")
             }
         }
-    }
-
-    fn from_wire(body: &[u8]) -> Result<Self, ParseError>;
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ErrorMessage(ErrorCode, u8, String, Option<serde_cbor::Value>, u128);
-
-impl ErrorMessage {
-    pub fn new(
-        error_code: ErrorCode,
-        previous_message_id: u8,
-        error_string: String,
-        error_uuid: u128,
-    ) -> Self {
-        ErrorMessage(
-            error_code,
-            previous_message_id,
-            error_string,
-            None,
-            error_uuid,
-        )
-    }
-
-    pub fn error_code(&self) -> ErrorCode {
-        self.0
-    }
-
-    pub fn previous_message_id(&self) -> u8 {
-        self.1
-    }
-
-    pub fn error_string(&self) -> &str {
-        &self.2
-    }
-
-    pub fn error_timestamp(&self) -> Option<&serde_cbor::Value> {
-        self.3.as_ref()
-    }
-
-    pub fn error_uuid(&self) -> u128 {
-        self.4
-    }
-}
-
-impl Message for ErrorMessage {
-    fn message_type() -> u8 {
-        255
-    }
-
-    fn status_code() -> http::StatusCode {
-        http::StatusCode::INTERNAL_SERVER_ERROR
-    }
-
-    fn from_wire(body: &[u8]) -> Result<Self, ParseError> {
-        Ok(serde_cbor::from_slice(body)?)
     }
 }

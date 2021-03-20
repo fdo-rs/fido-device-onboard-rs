@@ -1,14 +1,15 @@
-use std::convert::TryFrom;
-
 use thiserror::Error;
 
-use fdo_data_formats::{
-    constants::ErrorCode,
-    messages::{self, ErrorMessage, Message},
-};
+use fdo_data_formats::messages::{ErrorMessage, Message};
+
+use crate::{CryptoError, EncryptionKeys};
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("Cryptographic error encrypting/decrypting")]
+    Crypto,
+    #[error("Serialization/deserialization error")]
+    Serde(#[from] serde_cbor::Error),
     #[error("Error parsing or generating request")]
     Parse(#[from] fdo_data_formats::messages::ParseError),
     #[error("Error performing request")]
@@ -23,6 +24,12 @@ pub enum Error {
     Error(ErrorMessage),
 }
 
+impl From<CryptoError> for Error {
+    fn from(_: CryptoError) -> Self {
+        Error::Crypto
+    }
+}
+
 pub type RequestResult<MT> = Result<MT, Error>;
 
 #[derive(Debug)]
@@ -30,6 +37,7 @@ pub struct ServiceClient {
     base_url: String,
     client: reqwest::Client,
     authorization_token: Option<String>,
+    encryption_keys: EncryptionKeys,
 }
 
 impl ServiceClient {
@@ -38,24 +46,38 @@ impl ServiceClient {
             base_url: base_url.trim_end_matches('/').to_string(),
             client: reqwest::Client::new(),
             authorization_token: None,
+            encryption_keys: EncryptionKeys::None,
         }
     }
 
-    pub async fn send_request<OM, SM>(&mut self, to_send: OM) -> RequestResult<SM>
+    pub async fn send_request<OM, SM>(
+        &mut self,
+        to_send: OM,
+        new_keys: Option<EncryptionKeys>,
+    ) -> RequestResult<SM>
     where
         OM: Message,
         SM: Message,
     {
+        let to_send = to_send.to_wire()?;
+        let to_send = self.encryption_keys.encrypt(&to_send)?;
+
+        println!("Sending: {:?}", &to_send);
+
         let url = format!("{}/fdo/100/msg/{}", &self.base_url, OM::message_type());
 
         let mut req = self
             .client
             .post(url)
             .header("Content-Type", "application/cbor")
-            .body(to_send.to_wire()?);
+            .body(to_send);
 
         if let Some(authorization_token) = &self.authorization_token {
             req = req.header("Authorization", authorization_token);
+        }
+
+        if let Some(new_keys) = new_keys {
+            self.encryption_keys = new_keys;
         }
 
         let resp = req.send().await?;
@@ -87,11 +109,13 @@ impl ServiceClient {
         };
 
         let resp = resp.bytes().await?;
+        println!("Response: {:?}", resp);
 
         if is_success {
-            Ok(SM::from_wire(&resp)?)
+            let resp = self.encryption_keys.decrypt(&resp)?;
+            Ok(serde_cbor::from_slice(&resp)?)
         } else {
-            Err(Error::Error(ErrorMessage::from_wire(&resp)?))
+            Err(Error::Error(serde_cbor::from_slice(&resp)?))
         }
     }
 }

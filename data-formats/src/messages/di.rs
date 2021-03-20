@@ -1,71 +1,50 @@
-use serde::ser::SerializeSeq;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::Deserialize;
+use serde_tuple::Serialize_tuple;
 
-use super::{Message, ParseError};
+use super::Message;
 use crate::{ownershipvoucher::OwnershipVoucherHeader, types::CborSimpleType};
 
-#[derive(Debug, Deserialize)]
-pub struct DIAppStart(
-    CborSimpleType,
-    #[serde(skip)] u8, // This is a trick to make serde produce and expect a tuple....
-);
-
-impl Serialize for DIAppStart {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut seq = serializer.serialize_seq(Some(1))?;
-        seq.serialize_element(&self.0)?;
-        seq.end()
-    }
+#[derive(Debug, Serialize_tuple, Deserialize)]
+pub struct AppStart {
+    mfg_info: CborSimpleType,
 }
 
-impl DIAppStart {
+impl AppStart {
     pub fn new(mfg_info: CborSimpleType) -> Self {
-        DIAppStart(mfg_info, 0)
+        AppStart { mfg_info }
     }
 
     pub fn get_mfg_info(&self) -> &CborSimpleType {
-        &self.0
+        &self.mfg_info
     }
 }
 
-impl Message for DIAppStart {
+impl Message for AppStart {
     fn message_type() -> u8 {
         10
     }
-
-    fn from_wire(body: &[u8]) -> Result<Self, ParseError> {
-        Ok(serde_cbor::from_slice(body)?)
-    }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DISetCredentials(
-    //OwnershipVoucherHeader,
-    Vec<u8>,
-    #[serde(skip)] u8, // This is a trick to make serde produce and expect a tuple....
-);
+#[derive(Debug, Serialize_tuple, Deserialize)]
+pub struct SetCredentials {
+    //ov_header: OwnershipVoucherHeader,
+    ov_header: u8,
+}
 
-impl DISetCredentials {
+impl SetCredentials {
     //pub fn new(ov_header: OwnershipVoucherHeader) -> Self {
-    pub fn new(ov_header: Vec<u8>) -> Self {
-        DISetCredentials(ov_header, 0)
+    pub fn new(ov_header: u8) -> Self {
+        SetCredentials { ov_header }
     }
 
     //pub fn get_ov_header(&self) -> &OwnershipVoucherHeader {
-    pub fn get_ov_header(&self) -> &[u8] {
-        &self.0
+    pub fn get_ov_header(&self) -> u8 {
+        self.ov_header
     }
 }
 
-impl Message for DISetCredentials {
+impl Message for SetCredentials {
     fn message_type() -> u8 {
         11
-    }
-
-    fn from_wire(body: &[u8]) -> Result<Self, ParseError> {
-        Ok(serde_cbor::from_slice(body)?)
     }
 }
