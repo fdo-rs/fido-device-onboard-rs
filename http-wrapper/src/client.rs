@@ -62,8 +62,6 @@ impl ServiceClient {
         let to_send = to_send.to_wire()?;
         let to_send = self.encryption_keys.encrypt(&to_send)?;
 
-        println!("Sending: {:?}", &to_send);
-
         let url = format!("{}/fdo/100/msg/{}", &self.base_url, OM::message_type());
 
         let mut req = self
@@ -109,7 +107,6 @@ impl ServiceClient {
         };
 
         let resp = resp.bytes().await?;
-        println!("Response: {:?}", resp);
 
         if is_success {
             let resp = self.encryption_keys.decrypt(&resp)?;
