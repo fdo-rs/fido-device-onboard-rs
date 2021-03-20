@@ -9,5 +9,8 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0"
 clap = "2"
+openssl = "0.10"
+serde_cbor = "0.11"
+serde_yaml = "0.8"
 
 fdo-data-formats = { path = "../data-formats" }

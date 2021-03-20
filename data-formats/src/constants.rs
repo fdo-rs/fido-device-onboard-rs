@@ -1,11 +1,13 @@
 use std::convert::{TryFrom, TryInto};
+use std::str::FromStr;
 
-use crate::{errors::Result, Error};
+use crate::{errors::Result, types::CborSimpleType, Error};
 
 use openssl::{
     hash::{hash, DigestBytes, MessageDigest},
     nid::Nid,
 };
+use serde_cbor::Value;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, PartialEq, Eq)]
@@ -129,6 +131,32 @@ pub enum RendezvousVariable {
     Delaysec = 13,
     Bypass = 14,
     Extended = 15,
+}
+
+impl FromStr for RendezvousVariable {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        Ok(match &s.to_lowercase()[..] {
+            "deviceonly" | "device_only" => RendezvousVariable::DeviceOnly,
+            "owneronly" | "owner_only" => RendezvousVariable::OwnerOnly,
+            "ipaddress" | "ip_address" | "ip" => RendezvousVariable::IPAddress,
+            "deviceport" | "device_port" => RendezvousVariable::DevicePort,
+            "ownerport" | "owner_port" => RendezvousVariable::OwnerPort,
+            "dns" => RendezvousVariable::Dns,
+            "servercerthash" | "server_cert_hash" => RendezvousVariable::ServerCertHash,
+            "clientcerthash" | "client_cert_hash" => RendezvousVariable::ClientCertHash,
+            "userinput" | "user_input" => RendezvousVariable::UserInput,
+            "wifissid" | "wifi_ssid" => RendezvousVariable::WifiSsid,
+            "wifipw" | "wifi_pw" => RendezvousVariable::WifiPw,
+            "medium" => RendezvousVariable::Medium,
+            "protocol" => RendezvousVariable::Protocol,
+            "delaysec" | "delay_sec" | "delay" => RendezvousVariable::Delaysec,
+            "bypass" => RendezvousVariable::Bypass,
+            "extended" => RendezvousVariable::Extended,
+            _ => return Err(Error::InconsistentValue),
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr)]

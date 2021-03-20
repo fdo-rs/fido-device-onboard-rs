@@ -1,7 +1,7 @@
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize, Serializer};
 
-use super::{InternalMessage, Message, ParseError};
+use super::{Message, ParseError};
 use crate::{ownershipvoucher::OwnershipVoucherHeader, types::CborSimpleType};
 
 #[derive(Debug, Deserialize)]
@@ -41,8 +41,6 @@ impl Message for DIAppStart {
     }
 }
 
-impl InternalMessage for DIAppStart {}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DISetCredentials(
     //OwnershipVoucherHeader,
@@ -71,5 +69,3 @@ impl Message for DISetCredentials {
         Ok(serde_cbor::from_slice(body)?)
     }
 }
-
-impl InternalMessage for DISetCredentials {}

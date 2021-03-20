@@ -11,7 +11,6 @@ pub mod types;
 
 pub mod ownershipvoucher;
 
-mod publickey;
-pub use publickey::{PublicKey, PublicKeyBody};
+pub mod publickey;
 
 pub mod messages;

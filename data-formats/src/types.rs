@@ -14,28 +14,39 @@ use serde::de::{self, SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Hash(
-    HashType, // hashtype
-    Vec<u8>,  // hash
-);
+#[derive(Debug, Serialize_tuple, Deserialize, Clone)]
+pub struct Hash {
+    hash_type: HashType, // hashtype
+    value: Vec<u8>,      // hash
+}
 
 impl Hash {
     pub fn new(alg: Option<HashType>, data: &[u8]) -> Result<Self, Error> {
         let alg = alg.unwrap_or(HashType::Sha384);
 
-        Ok(Hash(alg, hash(alg.try_into()?, data)?.to_vec()))
+        Ok(Hash {
+            hash_type: alg,
+            value: hash(alg.try_into()?, data)?.to_vec(),
+        })
+    }
+
+    pub fn new_from_data(hash_type: HashType, value: Vec<u8>) -> Self {
+        Hash { hash_type, value }
     }
 
     pub fn get_type(&self) -> HashType {
-        self.0
+        self.hash_type
+    }
+
+    pub fn value(&self) -> &[u8] {
+        &self.value
     }
 
     pub fn compare_data(&self, other: &[u8]) -> Result<(), Error> {
-        let other_digest = hash(self.0.try_into()?, other)?;
+        let other_digest = hash(self.hash_type.try_into()?, other)?;
 
         // Compare
-        if openssl::memcmp::eq(&self.1, &other_digest) {
+        if openssl::memcmp::eq(&self.value, &other_digest) {
             Ok(())
         } else {
             Err(Error::IncorrectHash)
@@ -43,25 +54,34 @@ impl Hash {
     }
 }
 
+impl std::fmt::Display for Hash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} ({:?})", hex::encode(&self.value), self.hash_type)
+    }
+}
+
 pub type HMac = Hash;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SigInfo(
-    DeviceSigType, // sgType
-    Vec<u8>,       // Info
-);
+#[derive(Debug, Serialize_tuple, Deserialize)]
+pub struct SigInfo {
+    sig_type: DeviceSigType, // sgType
+    info: Vec<u8>,           // Info
+}
 
 impl SigInfo {
     pub fn new(dst: DeviceSigType, info: Vec<u8>) -> Self {
-        SigInfo(dst, info)
+        SigInfo {
+            sig_type: dst,
+            info,
+        }
     }
 
     pub fn get_sig_type(&self) -> DeviceSigType {
-        self.0
+        self.sig_type
     }
 
     pub fn get_info(&self) -> &[u8] {
-        &self.1
+        &self.info
     }
 }
 
@@ -98,12 +118,16 @@ impl Deref for Nonce {
 pub struct Guid([u8; 16]);
 
 impl Guid {
-    fn new() -> Result<Guid, Error> {
+    pub fn new() -> Result<Guid, Error> {
         Ok(Guid(new_nonce_or_guid_val()?))
     }
 
     fn value(&self) -> &[u8] {
         &self.0
+    }
+
+    pub fn as_uuid(&self) -> uuid::Uuid {
+        uuid::Uuid::from_bytes(self.0)
     }
 }
 
@@ -129,109 +153,48 @@ pub type CborSimpleType = serde_cbor::Value;
 
 pub type TO2Address = Vec<TO2AddressEntry>;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TO2AddressEntry(
-    Option<IPAddress>,  // RVIP
-    Option<DNSAddress>, // RVDNS
-    Port,               // RVPort
-    TransportProtocol,  // RVProtocol
-);
+#[derive(Debug, Serialize_tuple, Deserialize)]
+pub struct TO2AddressEntry {
+    ip: Option<IPAddress>,       // RVIP
+    dns: Option<DNSAddress>,     // RVDNS
+    port: Port,                  // RVPort
+    protocol: TransportProtocol, // RVProtocol
+}
 
 type MAROEPrefix = Vec<u8>;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct KeyExchange(
-    Vec<u8>, // xAKeyExchange
-    Vec<u8>, // xBKeyExchange
-);
+pub struct KeyExchange {
+    a_key_exchange: Vec<u8>, // xAKeyExchange
+    b_key_exchange: Vec<u8>, // xBKeyExchange
+}
 
 type IVData = Vec<u8>;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DeviceCredential(
-    bool,           // Active
-    u16,            // ProtVer
-    Vec<u8>,        // HmacSecret
-    String,         // DeviceInfo
-    Guid,           // Guid
-    RendezvousInfo, // RVInfo
-    Hash,           // PubKeyHash
-);
+#[derive(Debug, Serialize_tuple, Deserialize)]
+pub struct DeviceCredential {
+    pub active: bool,           // Active
+    pub protver: u16,           // ProtVer
+    pub hmac_secret: Vec<u8>,   // HmacSecret
+    pub device_info: String,    // DeviceInfo
+    pub guid: Guid,             // Guid
+    pub rvinfo: RendezvousInfo, // RVInfo
+    pub pubkey_hash: Hash,      // PubKeyHash
+
+    // Custom from here
+    pub private_key: Vec<u8>,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MessageProtocolInfo {
     token: Option<Vec<u8>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct Message {
     msglen: u16,
     msgtype: crate::constants::MessageType,
     protver: u16,
     protocol_info: MessageProtocolInfo,
     body: Vec<u8>,
-}
-
-impl Serialize for Message {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut seq = serializer.serialize_seq(Some(5))?;
-
-        seq.serialize_element(&self.msglen)?;
-        seq.serialize_element(&self.msgtype)?;
-        seq.serialize_element(&self.protver)?;
-        seq.serialize_element(&self.protocol_info)?;
-        seq.serialize_element(&self.body)?;
-
-        seq.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for Message {
-    fn deserialize<D>(deserializer: D) -> Result<Message, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct MessageVisitor;
-
-        impl<'de> Visitor<'de> for MessageVisitor {
-            type Value = Message;
-
-            fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
-                formatter.write_str("A sequence")
-            }
-
-            fn visit_seq<V>(self, mut seq: V) -> Result<Message, V::Error>
-            where
-                V: SeqAccess<'de>,
-            {
-                let msglen = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                let msgtype = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
-                let protver = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(2, &self))?;
-                let protocol_info = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(3, &self))?;
-                let body = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(4, &self))?;
-                Ok(Message {
-                    msglen,
-                    msgtype,
-                    protver,
-                    protocol_info,
-                    body,
-                })
-            }
-        }
-
-        deserializer.deserialize_seq(MessageVisitor)
-    }
 }

@@ -1,6 +1,4 @@
-use serde::ser::SerializeSeq;
-use serde::{Deserialize, Serialize, Serializer};
-use serde_cbor::Value;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::constants::ErrorCode;
@@ -16,64 +14,34 @@ pub enum ParseError {
     InvalidBody,
 }
 
-pub trait Message: Send + InternalMessage {
+pub trait Message: Send + Serialize + Sized {
     fn message_type() -> u8;
 
     fn to_wire(&self) -> Result<Vec<u8>, ParseError> {
         Ok(serde_cbor::to_vec(&self)?)
     }
 
-    fn to_response(&self, token: &str) -> http::response::Response<hyper::body::Body> {
-        match self.try_to_response(&Self::message_type().to_string(), token) {
+    fn status_code() -> http::StatusCode {
+        http::StatusCode::OK
+    }
+
+    fn to_response(&self) -> Vec<u8> {
+        match serde_cbor::to_vec(&self) {
             Ok(v) => v,
             Err(e) => {
                 eprintln!("Error serializing response: {:?}", e);
-                ErrorMessage::new(
+                let errmsg = ErrorMessage::new(
                     ErrorCode::InternalServerError,
                     Self::message_type(),
                     "Error serializing response".to_string(),
                     0,
-                )
-                .try_to_response(&ErrorMessage::message_type().to_string(), "")
-                .expect("Error serializing error message")
+                );
+                serde_cbor::to_vec(&errmsg).expect("Error serializing error message")
             }
         }
     }
 
     fn from_wire(body: &[u8]) -> Result<Self, ParseError>;
-
-    /*fn from_wire(body: &[u8]) -> Result<Self, ParseError> {
-        let raw = serde_cbor::from_slice(body)?;
-        match raw {
-            Value::Array(vals) if vals.len() == Self::raw_component_len() => Self::from_raw(vals),
-            _ => Err(ParseError::InvalidBody),
-        }
-    }*/
-}
-
-pub trait InternalMessage: Send + Serialize + Sized {
-    fn status_code() -> http::StatusCode {
-        http::StatusCode::OK
-    }
-
-    fn try_to_response(
-        &self,
-        message_type: &str,
-        token: &str,
-    ) -> Result<http::response::Response<hyper::body::Body>, serde_cbor::Error> {
-        let body = serde_cbor::to_vec(&self)?;
-        let body = hyper::body::Body::from(body);
-
-        let mut builder = http::response::Response::builder()
-            .status(Self::status_code())
-            .header("Message-Type", message_type);
-
-        if !token.is_empty() {
-            builder = builder.header("Authorization", token);
-        }
-
-        Ok(builder.body(body).unwrap())
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -121,13 +89,11 @@ impl Message for ErrorMessage {
         255
     }
 
-    fn from_wire(body: &[u8]) -> Result<Self, ParseError> {
-        Ok(serde_cbor::from_slice(body)?)
-    }
-}
-
-impl InternalMessage for ErrorMessage {
     fn status_code() -> http::StatusCode {
         http::StatusCode::INTERNAL_SERVER_ERROR
+    }
+
+    fn from_wire(body: &[u8]) -> Result<Self, ParseError> {
+        Ok(serde_cbor::from_slice(body)?)
     }
 }

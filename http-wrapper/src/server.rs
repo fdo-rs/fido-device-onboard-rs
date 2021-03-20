@@ -1,5 +1,7 @@
 use std::convert::Infallible;
 
+use serde::{Deserialize, Serialize};
+
 use fdo_data_formats::{
     constants::ErrorCode,
     messages::{self, Message},
@@ -57,31 +59,59 @@ where
         &local_err
     };
 
-    Ok(err.0.to_response(""))
+    Ok(to_response::<messages::ErrorMessage>(
+        err.0.to_response(),
+        None,
+    ))
 }
 
 #[derive(Debug)]
 struct ParseError;
 impl warp::reject::Reject for ParseError {}
 
-async fn parse_request<IM>(inbound: warp::hyper::body::Bytes) -> Result<IM, warp::Rejection>
+async fn parse_request<IM, SST>(
+    inbound: warp::hyper::body::Bytes,
+    ses_with_store: SessionWithStore<SST>,
+) -> Result<(IM, SessionWithStore<SST>), warp::Rejection>
 where
     IM: messages::Message,
+    SST: SessionStore,
 {
-    IM::from_wire(&inbound).map_err(|e| {
-        println!("Error parsing request: {:?}", e);
-        warp::reject::custom(ParseError)
-    })
+    let keys = ses_with_store
+        .session
+        .get("encryption_keys")
+        .unwrap_or(EncryptionKeys::None);
+    // TODO: Possibly decrypt
+
+    Ok((
+        IM::from_wire(&inbound).map_err(|e| {
+            println!("Error parsing request: {:?}", e);
+            warp::reject::custom(ParseError)
+        })?,
+        ses_with_store,
+    ))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+enum EncryptionKeys {
+    None,
+    AEAD(Vec<u8>),
+    Separate(Vec<u8>, Vec<u8>),
 }
 
 async fn store_session<IM, OM, SST>(
     response: OM,
     ses_with_store: SessionWithStore<SST>,
-) -> Result<(OM, Option<String>), warp::Rejection>
+) -> Result<(OM, Option<String>, EncryptionKeys), warp::Rejection>
 where
     IM: Message,
     SST: SessionStore,
 {
+    let keys = ses_with_store
+        .session
+        .get("encryption_keys")
+        .unwrap_or(EncryptionKeys::None);
+
     Ok((
         response,
         ses_with_store
@@ -95,7 +125,38 @@ where
                     "Error storing session",
                 )
             })?,
+        keys,
     ))
+}
+
+fn to_response<MT>(val: Vec<u8>, token: Option<String>) -> warp::reply::Response
+where
+    MT: Message,
+{
+    let mut builder = warp::http::response::Response::builder()
+        .status(MT::status_code())
+        .header("Message-Type", MT::message_type().to_string());
+
+    if let Some(token) = token {
+        if !token.is_empty() {
+            builder = builder.header("Authorization", token);
+        }
+    }
+
+    builder.body(val.into()).unwrap()
+}
+
+async fn encrypt_and_generate_response<OM>(
+    val: Vec<u8>,
+    token: Option<String>,
+    enc_keys: EncryptionKeys,
+) -> Result<warp::reply::Response, warp::Rejection>
+where
+    OM: Message,
+{
+    // TODO: Possibly encrypt
+
+    Ok(to_response::<OM>(val, token))
 }
 
 pub fn fdo_request_filter<UDT, IM, OM, F, FR, SST>(
@@ -121,12 +182,11 @@ where
         .and(warp::body::content_length_limit(1024 * 16))
         .and(warp::body::bytes())
         .and(warp::header::exact("Content-Type", "application/cbor"))
-        .and_then(parse_request)
         // Process "session" (i.e. Authorization header) retrieval
         .and(warp::header::optional("Authorization"))
         .map(move |req, hdr| (req, hdr, session_store.clone()))
         .and_then(
-            |(req, hdr, ses_store): (IM, Option<String>, SST)| async move {
+            |(req, hdr, ses_store): (warp::hyper::body::Bytes, Option<String>, SST)| async move {
                 let ses = match hdr {
                     Some(val) => match ses_store.load_session(val).await {
                         Ok(Some(ses)) => ses,
@@ -151,6 +211,12 @@ where
                 ))
             },
         )
+        .map(|(req, ses_with_store)| {
+            // TODO: Decrypt
+            (req, ses_with_store)
+        })
+        .untuple_one()
+        .and_then(parse_request)
         // Insert the user data
         .map(move |(req, ses)| (user_data.clone(), req, ses))
         // Move the request message to the end
@@ -158,13 +224,16 @@ where
         // Call the handler
         .untuple_one()
         .and_then(handler)
-        // Process "session" storage
         .untuple_one()
+        // Process "session" storage
         .and_then(store_session::<IM, _, _>)
-        // Process response
-        .map(|(res, ses_token): (OM, Option<String>)| {
-            res.to_response(&ses_token.unwrap_or_else(|| "".to_string()))
-        })
+        .map(
+            |(res, ses_token, enc_keys): (OM, Option<String>, EncryptionKeys)| {
+                (res.to_response(), ses_token, enc_keys)
+            },
+        )
+        .untuple_one()
+        .and_then(encrypt_and_generate_response::<OM>)
         .recover(handle_rejection::<IM>)
         .unify()
         .boxed()
