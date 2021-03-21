@@ -114,7 +114,7 @@ impl Deref for Nonce {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Hash, Eq)]
 pub struct Guid([u8; 16]);
 
 impl Guid {

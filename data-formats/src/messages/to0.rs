@@ -1,13 +1,13 @@
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 use serde_tuple::Serialize_tuple;
 
 use super::{Message, ParseError};
 
 use crate::{
     types::Nonce,
-}
+};
 
-#[derive(Debug, Serialize_tuple, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Hello {}
 
 impl Hello {
@@ -19,6 +19,18 @@ impl Hello {
 impl Message for Hello {
     fn message_type() -> u8 {
         20
+    }
+}
+
+impl Serialize for Hello {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeSeq;
+
+        let seq = serializer.serialize_seq(Some(0))?;
+        seq.end()
     }
 }
 
@@ -48,6 +60,7 @@ impl Message for HelloAck {
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct OwnerSign {
     // TODO
+    data: u8,
 }
 
 impl OwnerSign {
