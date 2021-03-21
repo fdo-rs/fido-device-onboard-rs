@@ -1,11 +1,9 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use serde_tuple::Serialize_tuple;
 
 use super::{Message, ParseError};
 
-use crate::{
-    types::Nonce,
-};
+use crate::types::Nonce;
 
 #[derive(Debug, Deserialize)]
 pub struct Hello {}
@@ -41,9 +39,7 @@ pub struct HelloAck {
 
 impl HelloAck {
     pub fn new(nonce3: Nonce) -> Self {
-        HelloAck {
-            nonce3,
-        }
+        HelloAck { nonce3 }
     }
 
     pub fn nonce3(&self) -> &Nonce {
@@ -63,9 +59,7 @@ pub struct OwnerSign {
     data: u8,
 }
 
-impl OwnerSign {
-
-}
+impl OwnerSign {}
 
 impl Message for OwnerSign {
     fn message_type() -> u8 {
@@ -80,9 +74,7 @@ pub struct AcceptOwner {
 
 impl AcceptOwner {
     pub fn new(wait_seconds: u32) -> Self {
-        AcceptOwner {
-            wait_seconds,
-        }
+        AcceptOwner { wait_seconds }
     }
 
     pub fn wait_seconds(&self) -> u32 {

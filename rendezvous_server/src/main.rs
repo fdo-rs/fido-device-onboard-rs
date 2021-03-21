@@ -1,24 +1,23 @@
 use anyhow::{bail, Context, Result};
-use serde::Deserialize;
 use openssl::x509::X509;
+use serde::Deserialize;
 use warp::Filter;
 
 use std::sync::{Arc, RwLock};
 
-use fdo_data_formats::{
-    types::Guid,
-};
+use fdo_data_formats::types::Guid;
+use fdo_http_wrapper::server::SessionStoreDriver;
 
 mod handlers {
     use fdo_data_formats::{constants::ErrorCode, messages};
 
     use fdo_http_wrapper::server::{Error, SessionStore, SessionWithStore};
 
-    pub(super) async fn hello<ST: SessionStore>(
+    pub(super) async fn hello(
         _user_data: super::RendezvousUDT,
-        mut ses_with_store: SessionWithStore<ST>,
+        mut ses_with_store: SessionWithStore,
         msg: messages::to0::Hello,
-    ) -> Result<(messages::to0::HelloAck, SessionWithStore<ST>), warp::Rejection> {
+    ) -> Result<(messages::to0::HelloAck, SessionWithStore), warp::Rejection> {
         todo!();
     }
 }
@@ -47,11 +46,9 @@ mod in_memory_storage {
     }
 
     pub(super) fn initialize(_cfg: Option<config::Value>) -> Result<Box<dyn RendezvousStorage>> {
-        Ok(Box::new(
-            InMemoryRendezvousStorage {
-                data: RwLock::new(std::collections::HashMap::new()),
-            }
-        ))
+        Ok(Box::new(InMemoryRendezvousStorage {
+            data: RwLock::new(std::collections::HashMap::new()),
+        }))
     }
 
     impl RendezvousStorage for InMemoryRendezvousStorage {
@@ -64,9 +61,7 @@ mod in_memory_storage {
 
         fn lookup(&self, guid: Guid) -> Result<Option<Vec<u8>>, RendezvousStorageError> {
             let data = self.data.read().unwrap();
-            Ok(
-                data.get(&guid).cloned()
-            )
+            Ok(data.get(&guid).cloned())
         }
     }
 }
@@ -100,6 +95,10 @@ struct Settings {
     storage_driver: StorageDriver,
     storage_config: Option<config::Value>,
 
+    // Session store info
+    session_store_driver: SessionStoreDriver,
+    session_store_config: Option<config::Value>,
+
     // Trusted keys
     trusted_keys_path: String,
 }
@@ -111,19 +110,22 @@ fn main() -> Result<()> {
         .context("Loading configuration files")?
         .merge(config::Environment::with_prefix("rendezvous"))
         .context("Loading configuration from environment variables")?;
-    let settings: Settings = settings.try_into()
-    .context("Error parsing configuration")?;
+    let settings: Settings = settings.try_into().context("Error parsing configuration")?;
 
     // Initialize storage
-    let storage = settings.storage_driver.initialize(settings.storage_config)?;
+    let storage = settings
+        .storage_driver
+        .initialize(settings.storage_config)?;
+    let session_store = settings
+        .session_store_driver
+        .initialize(settings.session_store_config)?;
 
     // Load X509 certs
     let trusted_keys = {
         let trusted_keys_path = settings.trusted_keys_path;
         let contents = std::fs::read(&trusted_keys_path)
             .with_context(|| format!("Error reading trusted keys at {}", &trusted_keys_path))?;
-        X509::stack_from_pem(&contents)
-        .context("Error parsing trusted keys")?
+        X509::stack_from_pem(&contents).context("Error parsing trusted keys")?
     };
 
     // Initialize handler stores
@@ -132,11 +134,8 @@ fn main() -> Result<()> {
         trusted_keys,
     });
 
-
     // Install handlers
     let hello = warp::get().map(|| "Hello from the rendezvous server");
-
-
 
     println!("User data: {:?}", user_data);
 

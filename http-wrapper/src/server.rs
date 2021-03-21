@@ -1,4 +1,7 @@
+use core::future::Future;
+use core::pin::Pin;
 use std::convert::Infallible;
+use std::sync::Arc;
 
 use super::EncryptionKeys;
 use fdo_data_formats::{
@@ -6,9 +9,134 @@ use fdo_data_formats::{
     messages::{self, Message},
 };
 
+use serde::Deserialize;
+use thiserror::Error;
 use warp::{Filter, Rejection};
-pub use warp_sessions::MemoryStore;
-pub use warp_sessions::{Session, SessionStore, SessionWithStore};
+pub use warp_sessions::Session;
+
+pub type SessionStoreT = Arc<Box<dyn SessionStore>>;
+
+pub struct SessionWithStore {
+    pub session: Session,
+    session_store: SessionStoreT,
+}
+
+#[derive(Debug, Error)]
+pub enum SessionError {
+    #[error("Unspecified error: {0}")]
+    Unspecified(String),
+}
+
+pub trait SessionStore: Send + Sync {
+    fn load_session<'life0, 'async_trait>(
+        &'life0 self,
+        token: String,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<Session>, SessionError>> + 'async_trait + Send>>
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait;
+    fn store_session<'life0, 'async_trait>(
+        &'life0 self,
+        session: Session,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<String>, SessionError>> + 'async_trait + Send>>
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait;
+    fn destroy_session<'life0, 'async_trait>(
+        &'life0 self,
+        session: Session,
+    ) -> Pin<Box<dyn Future<Output = Result<(), SessionError>> + 'async_trait + Send>>
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait;
+    fn clean_expired_sessions<'life0, 'async_trait>(
+        &'life0 self,
+    ) -> Pin<Box<dyn Future<Output = Result<(), SessionError>> + 'async_trait + Send>>
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait;
+}
+
+#[derive(Debug, Deserialize)]
+pub enum SessionStoreDriver {
+    #[cfg(feature = "in_memory_session_store")]
+    InMemory,
+}
+
+impl SessionStoreDriver {
+    pub fn initialize(
+        &self,
+        cfg: Option<config::Value>,
+    ) -> Result<Box<dyn SessionStore>, SessionError> {
+        match self {
+            #[cfg(feature = "in_memory_session_store")]
+            SessionStoreDriver::InMemory => memory_store::initialize(cfg),
+        }
+    }
+}
+
+mod memory_store {
+    use async_std::sync::{Arc, RwLock};
+
+    use std::collections::HashMap;
+
+    use async_trait::async_trait;
+
+    use super::Session;
+    use super::SessionError;
+    use super::SessionStore;
+
+    #[derive(Debug)]
+    struct MemoryStore {
+        store: Arc<RwLock<HashMap<String, Session>>>,
+    }
+
+    pub(super) fn initialize(
+        _cfg: Option<config::Value>,
+    ) -> Result<Box<dyn SessionStore>, SessionError> {
+        Ok(Box::new(MemoryStore {
+            store: Arc::new(RwLock::new(HashMap::new())),
+        }))
+    }
+
+    #[async_trait]
+    impl SessionStore for MemoryStore {
+        async fn load_session(&self, token: String) -> Result<Option<Session>, SessionError> {
+            let id = Session::id_from_cookie_value(&token)
+                .map_err(|_| SessionError::Unspecified("Invalid cookie token".to_string()))?;
+            log::trace!("Session id {} loading", id);
+            Ok(self
+                .store
+                .read()
+                .await
+                .get(&id)
+                .cloned()
+                .and_then(Session::validate))
+        }
+
+        async fn store_session(&self, session: Session) -> Result<Option<String>, SessionError> {
+            log::trace!("Storing session with id {}", session.id());
+            self.store
+                .write()
+                .await
+                .insert(session.id().to_string(), session.clone());
+
+            session.reset_data_changed();
+            Ok(session.into_cookie_value())
+        }
+
+        async fn destroy_session(&self, session: Session) -> Result<(), SessionError> {
+            log::trace!("Deleting session with id {}", session.id());
+            self.store.write().await.remove(session.id());
+            Ok(())
+        }
+
+        async fn clean_expired_sessions(&self) -> Result<(), SessionError> {
+            // TODO
+            Ok(())
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct Error(messages::ErrorMessage);
@@ -71,13 +199,12 @@ impl warp::reject::Reject for ParseError {}
 
 const ENCRYPTION_KEYS_SES_KEY: &str = "_encryption_keys_";
 
-async fn parse_request<IM, SST>(
+async fn parse_request<IM>(
     inbound: warp::hyper::body::Bytes,
-    ses_with_store: SessionWithStore<SST>,
-) -> Result<(IM, SessionWithStore<SST>), warp::Rejection>
+    ses_with_store: SessionWithStore,
+) -> Result<(IM, SessionWithStore), warp::Rejection>
 where
     IM: messages::Message,
-    SST: SessionStore,
 {
     let keys: EncryptionKeys = ses_with_store
         .session
@@ -122,13 +249,12 @@ where
     })
 }
 
-async fn store_session<IM, OM, SST>(
+async fn store_session<IM, OM>(
     response: OM,
-    ses_with_store: SessionWithStore<SST>,
+    ses_with_store: SessionWithStore,
 ) -> Result<(OM, Option<String>, EncryptionKeys), warp::Rejection>
 where
     IM: Message,
-    SST: SessionStore,
 {
     let keys = ses_with_store
         .session
@@ -193,16 +319,15 @@ where
     Ok(to_response::<OM>(val, token))
 }
 
-pub fn fdo_request_filter<UDT, IM, OM, F, FR, SST>(
+pub fn fdo_request_filter<UDT, IM, OM, F, FR>(
     user_data: UDT,
-    session_store: SST,
+    session_store: SessionStoreT,
     handler: F,
 ) -> warp::filters::BoxedFilter<(warp::reply::Response,)>
 where
     UDT: Clone + Send + Sync + 'static,
-    F: Fn(UDT, SessionWithStore<SST>, IM) -> FR + Clone + Send + Sync + 'static,
-    SST: SessionStore,
-    FR: futures::Future<Output = Result<(OM, SessionWithStore<SST>), warp::Rejection>> + Send,
+    F: Fn(UDT, SessionWithStore, IM) -> FR + Clone + Send + Sync + 'static,
+    FR: futures::Future<Output = Result<(OM, SessionWithStore), warp::Rejection>> + Send,
     IM: messages::Message + 'static,
     OM: messages::Message + 'static,
 {
@@ -220,7 +345,7 @@ where
         .and(warp::header::optional("Authorization"))
         .map(move |req, hdr| (req, hdr, session_store.clone()))
         .and_then(
-            |(req, hdr, ses_store): (warp::hyper::body::Bytes, Option<String>, SST)| async move {
+            |(req, hdr, ses_store): (warp::hyper::body::Bytes, Option<String>, SessionStoreT)| async move {
                 let ses = match hdr {
                     Some(val) => match ses_store.load_session(val).await {
                         Ok(Some(ses)) => ses,
@@ -240,15 +365,10 @@ where
                     SessionWithStore {
                         session: ses,
                         session_store: ses_store,
-                        cookie_options: Default::default(),
                     },
                 ))
             },
         )
-        .map(|(req, ses_with_store)| {
-            // TODO: Decrypt
-            (req, ses_with_store)
-        })
         .untuple_one()
         .and_then(parse_request)
         // Insert the user data
@@ -260,7 +380,7 @@ where
         .and_then(handler)
         .untuple_one()
         // Process "session" storage
-        .and_then(store_session::<IM, _, _>)
+        .and_then(store_session::<IM, _>)
         .map(
             |(res, ses_token, enc_keys): (OM, Option<String>, EncryptionKeys)| {
                 (res.to_response(), ses_token, enc_keys)

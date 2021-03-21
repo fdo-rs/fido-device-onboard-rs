@@ -11,11 +11,11 @@ mod handlers {
 
     use fdo_http_wrapper::server::{SessionStore, SessionWithStore};
 
-    pub(super) async fn appstart<ST: SessionStore>(
+    pub(super) async fn appstart(
         user_data: super::MfgUDT,
-        mut ses_with_store: SessionWithStore<ST>,
+        mut ses_with_store: SessionWithStore,
         msg: messages::di::AppStart,
-    ) -> Result<(messages::di::SetCredentials, SessionWithStore<ST>), warp::Rejection> {
+    ) -> Result<(messages::di::SetCredentials, SessionWithStore), warp::Rejection> {
         let mut session = ses_with_store.session;
 
         println!("DI Appstart: {:?}", msg);
@@ -64,13 +64,17 @@ async fn main() {
 
     let hello = warp::get().map(|| "Hello from the MFG Station");
 
-    let ses_store = fdo_http_wrapper::server::MemoryStore::new();
+    let ses_store = Arc::new(
+        fdo_http_wrapper::server::SessionStoreDriver::InMemory
+            .initialize(None)
+            .unwrap(),
+    );
 
     let routes = warp::any()
         .and(hello)
         .or(fdo_http_wrapper::server::fdo_request_filter(
             user_data.clone(),
-            ses_store.clone(),
+            ses_store,
             handlers::appstart,
         ));
 
