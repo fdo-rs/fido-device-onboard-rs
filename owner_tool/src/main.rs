@@ -1,4 +1,4 @@
-use std::{fs, path::Path, str::FromStr, convert::TryFrom};
+use std::{convert::TryFrom, fs, path::Path, str::FromStr};
 
 use anyhow::{bail, Context, Error, Result};
 use aws_nitro_enclaves_cose::COSESign1;
@@ -20,10 +20,13 @@ use serde_yaml::Value;
 
 use fdo_data_formats::{
     constants::{HashType, PublicKeyType, RendezvousVariable, TransportProtocol},
+    messages,
     ownershipvoucher::{OwnershipVoucher, OwnershipVoucherHeader},
     publickey::{PublicKey, PublicKeyBody, X5Chain},
-    types::{DeviceCredential, Guid, HMac, Hash, RendezvousInfo, TO2AddressEntry, RendezvousDirective, TO0Data, TO1DataPayload},
-    messages,
+    types::{
+        DeviceCredential, Guid, HMac, Hash, RendezvousDirective, RendezvousInfo, TO0Data,
+        TO1DataPayload, TO2AddressEntry,
+    },
 };
 use fdo_http_wrapper::client::RequestResult;
 
@@ -618,22 +621,20 @@ impl TryFrom<RemoteConnection> for TO2AddressEntry {
             RemoteTransport::CoAPS => TransportProtocol::CoAPS,
         };
         let ip_address = match &rc.address {
-            RemoteAddress::IP {ip_address} => Some(std::net::IpAddr::from_str(&ip_address).with_context(|| format!("Error parsing IP address '{}'", ip_address))?),
+            RemoteAddress::IP { ip_address } => Some(
+                std::net::IpAddr::from_str(&ip_address)
+                    .with_context(|| format!("Error parsing IP address '{}'", ip_address))?,
+            ),
             _ => None,
         };
         let dns_name = match rc.address {
-            RemoteAddress::DNS {dns_name} => Some(dns_name),
+            RemoteAddress::DNS { dns_name } => Some(dns_name),
             _ => None,
         };
 
-        Ok(
-            TO2AddressEntry::new(
-                ip_address,
-                dns_name,
-                rc.port,
-                transport,
-            )
-        )
+        Ok(TO2AddressEntry::new(
+            ip_address, dns_name, rc.port, transport,
+        ))
     }
 }
 
@@ -642,7 +643,9 @@ async fn report_to_rendezvous(matches: &ArgMatches<'_>) -> Result<(), Error> {
     let owner_private_key_path = matches.value_of("owner-private-key").unwrap();
     let owner_addresses_path = matches.value_of("owner-addresses-path").unwrap();
     let wait_time = matches.value_of("wait-time").unwrap();
-    let wait_time = wait_time.parse::<u32>().with_context(|| format!("Error parsing wait time '{}'", wait_time))?;
+    let wait_time = wait_time
+        .parse::<u32>()
+        .with_context(|| format!("Error parsing wait time '{}'", wait_time))?;
 
     let ov: OwnershipVoucher = {
         let ov_file = fs::File::open(&ownershipvoucher_path).with_context(|| {
@@ -653,17 +656,27 @@ async fn report_to_rendezvous(matches: &ArgMatches<'_>) -> Result<(), Error> {
         })?;
         serde_cbor::from_reader(ov_file).context("Error loading ownership voucher")?
     };
-    let owner_private_key = load_private_key(&owner_private_key_path)
-    .with_context(|| format!("Error loading owner private key from {}", owner_private_key_path))?;
+    let owner_private_key = load_private_key(&owner_private_key_path).with_context(|| {
+        format!(
+            "Error loading owner private key from {}",
+            owner_private_key_path
+        )
+    })?;
 
     let mut owner_addresses: Vec<RemoteConnection> = {
         let f = fs::File::open(&owner_addresses_path)?;
         serde_yaml::from_reader(f)
     }
-    .with_context(|| format!("Error reading owner addresses from {}", owner_addresses_path))?;
-    let owner_addresses: Result<Vec<TO2AddressEntry>> = owner_addresses.drain(..)
-    .map(TO2AddressEntry::try_from)
-    .collect();
+    .with_context(|| {
+        format!(
+            "Error reading owner addresses from {}",
+            owner_addresses_path
+        )
+    })?;
+    let owner_addresses: Result<Vec<TO2AddressEntry>> = owner_addresses
+        .drain(..)
+        .map(TO2AddressEntry::try_from)
+        .collect();
     let owner_addresses = owner_addresses.context("Error parsing owner addresses")?;
 
     // Determine the RV IP
@@ -672,46 +685,34 @@ async fn report_to_rendezvous(matches: &ArgMatches<'_>) -> Result<(), Error> {
 
     // Send: Hello, Receive: HelloAck
     let hello_ack: RequestResult<messages::to0::HelloAck> = rv_client
-        .send_request(
-            messages::to0::Hello::new(),
-            None,
-        )
+        .send_request(messages::to0::Hello::new(), None)
         .await;
     let hello_ack = hello_ack.context("Error requesting nonce from rendezvous server")?;
-    println!("Got hello_ack: {:?}", hello_ack);
 
     // Build to0d and to1d
-    let to0d = TO0Data::new(
-        ov,
-        wait_time,
-        hello_ack.nonce3().clone(),
-    );
+    let to0d = TO0Data::new(ov, wait_time, hello_ack.nonce3().clone());
     let to0d_vec = serde_cbor::to_vec(&to0d).context("Error serializing to0d")?;
     let to0d_hash = Hash::new(None, &to0d_vec).context("Error hashing to0d")?;
-    let to1d_payload = TO1DataPayload::new(
-        owner_addresses,
-        to0d_hash,
-    );
+    let to1d_payload = TO1DataPayload::new(owner_addresses, to0d_hash);
     let to1d_payload = serde_cbor::to_vec(&to1d_payload).context("Error serializing to1d")?;
     let to1d = COSESign1::new(
         &to1d_payload,
         &aws_nitro_enclaves_cose::sign::HeaderMap::new(),
         &owner_private_key,
-    ).context("Error signing to1d")?;
+    )
+    .context("Error signing to1d")?;
 
     // Send: OwnerSign, Receive: AcceptOwner
     let accept_owner: RequestResult<messages::to0::AcceptOwner> = rv_client
-        .send_request(
-            messages::to0::OwnerSign::new(
-                to0d,
-                to1d,
-            ),
-            None,
-        ).await;
+        .send_request(messages::to0::OwnerSign::new(to0d, to1d), None)
+        .await;
     let accept_owner = accept_owner.context("Error registering self to rendezvous server")?;
 
     // Done!
-    println!("Rendezvous server registered us for {} seconds", accept_owner.wait_seconds());
+    println!(
+        "Rendezvous server registered us for {} seconds",
+        accept_owner.wait_seconds()
+    );
 
     Ok(())
 }

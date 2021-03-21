@@ -20,7 +20,7 @@ pub enum Error {
     InvalidMessageType(String),
     #[error("Invalid message type {0} encountered, expected {1}")]
     InvalidMessage(u8, u8),
-    #[error("Error returned by server")]
+    #[error("Error returned by server: {0:?}")]
     Error(ErrorMessage),
 }
 

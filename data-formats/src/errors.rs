@@ -13,6 +13,8 @@ pub enum Error {
     Cose(#[from] aws_nitro_enclaves_cose::error::COSEError),
     #[error("Invalid hash value")]
     IncorrectHash,
+    #[error("Incorrect nonce value")]
+    IncorrectNonce,
     #[error("Unsupported algorithm used")]
     UnsupportedAlgorithm,
     #[error("Non-owner key attempted to sign")]

@@ -1,8 +1,8 @@
-use core::pin::Pin;
 use core::future::Future;
+use core::pin::Pin;
 use core::time::Duration;
 
-use serde::{Serialize, Deserialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -26,7 +26,7 @@ pub trait Store<K, V>: Send + Sync {
         key: K,
         ttl: Option<Duration>,
         value: V,
-    ) -> Pin<Box<dyn Future<Output=Result<(), StoreError>> + 'async_trait + Send>>
+    ) -> Pin<Box<dyn Future<Output = Result<(), StoreError>> + 'async_trait + Send>>
     where
         'life0: 'async_trait,
         Self: 'async_trait;
@@ -49,12 +49,13 @@ pub trait Store<K, V>: Send + Sync {
 }
 
 mod in_memory {
-    use std::collections::HashMap;
     use core::time::Duration;
-    use std::time::SystemTime;
+    use std::collections::HashMap;
     use std::sync::Arc;
+    use std::time::SystemTime;
 
     use async_trait::async_trait;
+    use log::trace;
     use tokio::sync::RwLock;
 
     use super::Store;
@@ -63,9 +64,7 @@ mod in_memory {
     type ValueT<V> = (Option<SystemTime>, V);
 
     #[derive(Debug)]
-    struct MemoryStore<K, V>
-    where
-    {
+    struct MemoryStore<K, V> {
         store: Arc<RwLock<HashMap<K, ValueT<V>>>>,
     }
 
@@ -88,20 +87,31 @@ mod in_memory {
         V: Send + Sync + Clone,
     {
         async fn load_data(&self, key: &K) -> Result<Option<V>, StoreError> {
+            trace!("Looking for entry");
+            let store = self.store.read().await;
+            let data = store.get(key);
 
-            Ok(
-                self
-                .store
-                .read()
-                .await
-                .get(key)
-                .filter(|(ttl, _)| ttl.is_none() || ttl.unwrap() < SystemTime::now())
-                .map(|(_, v)| v)
-                .cloned()
-            )
+            if data.is_none() {
+                trace!("Entry not found");
+                return Ok(None);
+            }
+            let (ttl, data) = data.unwrap();
+            if ttl.is_some() && ttl.unwrap() < SystemTime::now() {
+                trace!("Entry had expired");
+                return Ok(None);
+            }
+            trace!("Returning data");
+            return Ok(Some(data.clone()));
         }
 
-        async fn store_data(&self, key: K, ttl: Option<Duration>, value: V) -> Result<(), StoreError> {
+        async fn store_data(
+            &self,
+            key: K,
+            ttl: Option<Duration>,
+            value: V,
+        ) -> Result<(), StoreError> {
+            trace!("Storing entry, TTL {:?}", ttl);
+
             let ttl = ttl.map(|d| SystemTime::now() + d);
 
             self.store.write().await.insert(key, (ttl, value));
@@ -109,6 +119,8 @@ mod in_memory {
         }
 
         async fn destroy_data(&self, key: &K) -> Result<(), StoreError> {
+            trace!("Destroying entry");
+
             self.store.write().await.remove(key);
             Ok(())
         }
@@ -127,7 +139,10 @@ pub enum StoreDriver {
 }
 
 impl StoreDriver {
-    pub fn initialize<K, V>(&self, cfg: Option<config::Value>) -> Result<Box<dyn Store<K, V>>, StoreError>
+    pub fn initialize<K, V>(
+        &self,
+        cfg: Option<config::Value>,
+    ) -> Result<Box<dyn Store<K, V>>, StoreError>
     where
         K: Eq + std::hash::Hash + Send + Sync + 'static,
         V: Send + Sync + Clone + Serialize + DeserializeOwned + 'static,

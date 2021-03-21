@@ -103,8 +103,21 @@ impl Nonce {
         Ok(Nonce(new_nonce_or_guid_val()?))
     }
 
-    pub fn value(&self) -> &[u8] {
-        &self.0
+    pub fn from_encoded(encoded: &str) -> Self {
+        Nonce(base64::decode(encoded).unwrap().try_into().unwrap())
+    }
+
+    pub fn to_encoded(&self) -> String {
+        base64::encode(&self.0)
+    }
+
+    pub fn compare(&self, other: &Nonce) -> Result<(), Error> {
+        // Compare
+        if openssl::memcmp::eq(&self.0, &other.0) {
+            Ok(())
+        } else {
+            Err(Error::IncorrectHash)
+        }
     }
 }
 
@@ -174,7 +187,12 @@ pub struct TO2AddressEntry {
 }
 
 impl TO2AddressEntry {
-    pub fn new(ip: Option<IPAddress>, dns: Option<DNSAddress>, port: Port, protocol: TransportProtocol) -> Self {
+    pub fn new(
+        ip: Option<IPAddress>,
+        dns: Option<DNSAddress>,
+        port: Port,
+        protocol: TransportProtocol,
+    ) -> Self {
         TO2AddressEntry {
             ip,
             dns,

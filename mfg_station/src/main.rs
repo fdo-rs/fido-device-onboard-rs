@@ -75,5 +75,6 @@ async fn main() {
             handlers::appstart,
         ));
 
+    println!("Listening on :8080");
     warp::serve(routes).run(([0, 0, 0, 0], 8080)).await;
 }

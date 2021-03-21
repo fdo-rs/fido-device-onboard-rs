@@ -25,9 +25,7 @@ pub struct SessionStore {
 
 impl SessionStore {
     pub fn new(store: Box<dyn Store<String, Session>>) -> Arc<Self> {
-        Arc::new(SessionStore {
-            store,
-        })
+        Arc::new(SessionStore { store })
     }
 }
 
@@ -39,7 +37,9 @@ impl SessionStore {
     }
 
     async fn store_session(&self, session: Session) -> Result<Option<String>, SessionError> {
-        self.store.store_data(session.id().to_string(), None, session.clone()).await?;
+        self.store
+            .store_data(session.id().to_string(), None, session.clone())
+            .await?;
         session.reset_data_changed();
         Ok(session.into_cookie_value())
     }
@@ -73,36 +73,42 @@ impl Error {
             new_uuid.to_u128_le() & 0xFFFFFFFFFFFFFFFF,
         ))
     }
+
+    pub fn from_error<M, ET>(err: ET) -> Self
+    where
+        M: Message,
+        ET: std::error::Error,
+    {
+        log::error!(
+            "Error occured while processing message type {}: {:?}",
+            M::message_type(),
+            err
+        );
+        Error::new(
+            ErrorCode::InternalServerError,
+            M::message_type(),
+            "Internal server error",
+        )
+    }
 }
 
 impl warp::reject::Reject for Error {}
 
-async fn handle_rejection<IM>(err: Rejection) -> Result<warp::reply::Response, Infallible>
-where
-    IM: Message,
-{
+pub async fn handle_rejection(err: Rejection) -> Result<warp::reply::Response, Infallible> {
     let local_err: Error;
 
     let err = if let Some(err) = err.find::<Error>() {
         err
     } else if let Some(ParseError) = err.find() {
-        local_err = Error::new(
-            ErrorCode::MessageBodyError,
-            IM::message_type(),
-            "Invalid request body",
-        );
+        local_err = Error::new(ErrorCode::MessageBodyError, 0, "Invalid request body");
         &local_err
     } else if err.is_not_found() {
-        local_err = Error::new(
-            ErrorCode::MessageBodyError,
-            IM::message_type(),
-            "Invalid request type",
-        );
+        local_err = Error::new(ErrorCode::MessageBodyError, 0, "Invalid request type");
         &local_err
     } else {
         local_err = Error::new(
             ErrorCode::InternalServerError,
-            IM::message_type(),
+            0,
             "Error processing response",
         );
         &local_err
@@ -145,7 +151,7 @@ where
 
     Ok((
         serde_cbor::from_slice(&inbound).map_err(|e| {
-            println!("Error parsing request: {:?}", e);
+            log::info!("Error parsing request: {:?}", e);
             warp::reject::custom(ParseError)
         })?,
         ses_with_store,
@@ -160,7 +166,7 @@ where
     IM: Message,
 {
     ses.insert(ENCRYPTION_KEYS_SES_KEY, new_keys).map_err(|e| {
-        println!("Error setting session encryption keys: {:?}", e);
+        log::error!("Error setting encryption keys on session: {:?}", e);
         Error::new(
             ErrorCode::InternalServerError,
             IM::message_type(),
@@ -309,7 +315,7 @@ where
         )
         .untuple_one()
         .and_then(encrypt_and_generate_response::<IM, OM>)
-        .recover(handle_rejection::<IM>)
-        .unify()
+        //.recover(handle_rejection::<IM>)
+        //.unify()
         .boxed()
 }
