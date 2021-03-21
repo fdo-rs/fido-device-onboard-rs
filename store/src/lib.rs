@@ -52,9 +52,10 @@ mod in_memory {
     use std::collections::HashMap;
     use core::time::Duration;
     use std::time::SystemTime;
+    use std::sync::Arc;
 
     use async_trait::async_trait;
-    use async_std::sync::{Arc, RwLock};
+    use tokio::sync::RwLock;
 
     use super::Store;
     use super::StoreError;
