@@ -14,6 +14,8 @@ use serde::de::{self, SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+use crate::ownershipvoucher::OwnershipVoucher;
+
 #[derive(Debug, Serialize_tuple, Deserialize, Clone)]
 pub struct Hash {
     hash_type: HashType, // hashtype
@@ -88,20 +90,20 @@ impl SigInfo {
 fn new_nonce_or_guid_val() -> Result<[u8; 16], Error> {
     let mut val = [0u8; 16];
 
-    openssl::rand::rand_bytes(&mut val);
+    openssl::rand::rand_bytes(&mut val)?;
 
     Ok(val)
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Nonce([u8; 16]);
 
 impl Nonce {
-    fn new() -> Result<Nonce, Error> {
+    pub fn new() -> Result<Nonce, Error> {
         Ok(Nonce(new_nonce_or_guid_val()?))
     }
 
-    fn value(&self) -> &[u8] {
+    pub fn value(&self) -> &[u8] {
         &self.0
     }
 }
@@ -144,14 +146,24 @@ pub use std::net::{IpAddr as IPAddress, Ipv4Addr as IP4, Ipv6Addr as IP6};
 pub type DNSAddress = String;
 pub type Port = u16;
 
-pub type RendezvousInfo = Vec<RendezvousDirective>;
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RendezvousInfo(Vec<RendezvousDirective>);
+
+impl RendezvousInfo {
+    pub fn new(directives: Vec<RendezvousDirective>) -> RendezvousInfo {
+        RendezvousInfo(directives)
+    }
+
+    pub fn values(&self) -> &[RendezvousDirective] {
+        &self.0
+    }
+}
+
 pub type RendezvousDirective = Vec<RendezvousInstruction>;
 pub type RendezvousInstruction = (RendezvousVariable, CborSimpleType);
 
 // TODO: This sends serde_cbor outwards. Possibly re-do this
 pub type CborSimpleType = serde_cbor::Value;
-
-pub type TO2Address = Vec<TO2AddressEntry>;
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct TO2AddressEntry {
@@ -159,6 +171,85 @@ pub struct TO2AddressEntry {
     dns: Option<DNSAddress>,     // RVDNS
     port: Port,                  // RVPort
     protocol: TransportProtocol, // RVProtocol
+}
+
+impl TO2AddressEntry {
+    pub fn new(ip: Option<IPAddress>, dns: Option<DNSAddress>, port: Port, protocol: TransportProtocol) -> Self {
+        TO2AddressEntry {
+            ip,
+            dns,
+            port,
+            protocol,
+        }
+    }
+
+    pub fn ip(&self) -> Option<&IPAddress> {
+        self.ip.as_ref()
+    }
+
+    pub fn dns(&self) -> Option<&DNSAddress> {
+        self.dns.as_ref()
+    }
+
+    pub fn port(&self) -> Port {
+        self.port
+    }
+
+    pub fn protocol(&self) -> TransportProtocol {
+        self.protocol
+    }
+}
+
+#[derive(Debug, Serialize_tuple, Deserialize)]
+pub struct TO0Data {
+    ownership_voucher: OwnershipVoucher,
+    wait_seconds: u32,
+    nonce: Nonce,
+}
+
+impl TO0Data {
+    pub fn new(ownership_voucher: OwnershipVoucher, wait_seconds: u32, nonce: Nonce) -> Self {
+        TO0Data {
+            ownership_voucher,
+            wait_seconds,
+            nonce,
+        }
+    }
+
+    pub fn ownership_voucher(&self) -> &OwnershipVoucher {
+        &self.ownership_voucher
+    }
+
+    pub fn wait_seconds(&self) -> u32 {
+        self.wait_seconds
+    }
+
+    pub fn nonce(&self) -> &Nonce {
+        &self.nonce
+    }
+}
+
+#[derive(Debug, Serialize_tuple, Deserialize)]
+pub struct TO1DataPayload {
+    to2_addresses: Vec<TO2AddressEntry>,
+    to1d_to_to0d_hash: Hash,
+}
+
+impl TO1DataPayload {
+    pub fn new(to2_addresses: Vec<TO2AddressEntry>, to1d_to_to0d_hash: Hash) -> Self {
+        TO1DataPayload {
+            to2_addresses,
+            to1d_to_to0d_hash,
+        }
+    }
+
+    pub fn to2_addresses(&self) -> &[TO2AddressEntry] {
+        &self.to2_addresses
+    }
+
+    pub fn to1d_to_to0d_hash(&self) -> &Hash {
+        &self.to1d_to_to0d_hash
+    }
 }
 
 type MAROEPrefix = Vec<u8>;
