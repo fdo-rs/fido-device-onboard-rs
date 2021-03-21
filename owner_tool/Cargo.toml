@@ -10,7 +10,11 @@ edition = "2018"
 anyhow = "1.0"
 clap = "2"
 openssl = "0.10"
+serde = { version = "1", features = ["derive"] }
 serde_cbor = "0.11"
 serde_yaml = "0.8"
+tokio = { version = "1", features = ["full"] }
+aws-nitro-enclaves-cose = { git = "https://github.com/awslabs/aws-nitro-enclaves-cose.git", branch = "main" }
 
 fdo-data-formats = { path = "../data-formats" }
+fdo_http_wrapper = { path = "../http-wrapper", features = ["client"] }

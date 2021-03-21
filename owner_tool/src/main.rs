@@ -1,6 +1,7 @@
-use std::{fs, path::Path, str::FromStr};
+use std::{fs, path::Path, str::FromStr, convert::TryFrom};
 
 use anyhow::{bail, Context, Error, Result};
+use aws_nitro_enclaves_cose::COSESign1;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use openssl::{
     asn1::{Asn1Integer, Asn1Time},
@@ -13,17 +14,21 @@ use openssl::{
     sign::Signer,
     x509::{X509Builder, X509NameBuilder, X509NameRef, X509},
 };
+use serde::Deserialize;
 use serde_cbor::Value as CborValue;
 use serde_yaml::Value;
 
 use fdo_data_formats::{
-    constants::{HashType, PublicKeyType, RendezvousVariable},
+    constants::{HashType, PublicKeyType, RendezvousVariable, TransportProtocol},
     ownershipvoucher::{OwnershipVoucher, OwnershipVoucherHeader},
     publickey::{PublicKey, PublicKeyBody, X5Chain},
-    types::{DeviceCredential, Guid, HMac, Hash, RendezvousInfo},
+    types::{DeviceCredential, Guid, HMac, Hash, RendezvousInfo, TO2AddressEntry, RendezvousDirective, TO0Data, TO1DataPayload},
+    messages,
 };
+use fdo_http_wrapper::client::RequestResult;
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let matches = App::new("owner_tool")
         .version("0.1")
         .subcommand(
@@ -120,6 +125,38 @@ fn main() -> Result<()> {
                         .long("new-owner-cert"),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("report-to-rendezvous")
+                .about("Report to the rendezvous server, from when on it should send clients to where we want them")
+                .arg(
+                    Arg::with_name("ownership-voucher")
+                        .required(true)
+                        .takes_value(true)
+                        .help("Path to the ownership voucher")
+                        .long("ownership-voucher")
+                )
+                .arg(
+                    Arg::with_name("owner-private-key")
+                        .required(true)
+                        .takes_value(true)
+                        .help("Path to the owner private key")
+                        .long("owner-private-key")
+                )
+                .arg(
+                    Arg::with_name("owner-addresses-path")
+                        .required(true)
+                        .takes_value(true)
+                        .help("Path to the yaml describing the addresses for the ownership server")
+                        .long("owner-addresses-path")
+                )
+                .arg(
+                    Arg::with_name("wait-time")
+                        .takes_value(true)
+                        .help("Wait time (in seconds) for the rendezvous server to remember this owner information")
+                        .long("wait-time")
+                        .default_value("2592000")
+                )
+        )
         .get_matches();
 
     match matches.subcommand() {
@@ -127,6 +164,7 @@ fn main() -> Result<()> {
         ("dump-ownership-voucher", Some(sub_m)) => dump_voucher(sub_m),
         ("dump-device-credential", Some(sub_m)) => dump_devcred(sub_m),
         ("extend-ownership-voucher", Some(sub_m)) => extend_voucher(sub_m),
+        ("report-to-rendezvous", Some(sub_m)) => report_to_rendezvous(sub_m).await,
         _ => {
             println!("{}", matches.usage());
             Ok(())
@@ -180,7 +218,7 @@ fn yaml_to_cbor(val: &Value) -> Result<CborValue, Error> {
 
 fn load_rendezvous_info(path: &str) -> Result<RendezvousInfo, Error> {
     let contents = fs::read(path)?;
-    let mut info: RendezvousInfo = Vec::new();
+    let mut info: Vec<RendezvousDirective> = Vec::new();
 
     let value: Value =
         serde_yaml::from_slice(&contents).context("Error parsing rendezvous info")?;
@@ -213,7 +251,7 @@ fn load_rendezvous_info(path: &str) -> Result<RendezvousInfo, Error> {
         info.push(entry);
     }
 
-    Ok(info)
+    Ok(RendezvousInfo::new(info))
 }
 
 fn build_device_cert<T: openssl::pkey::HasPublic>(
@@ -439,7 +477,7 @@ fn dump_voucher(matches: &ArgMatches) -> Result<(), Error> {
     println!("\tProtocol Version: {}", ov_header.protocol_version);
     println!("\tDevice GUID: {}", ov_header.guid.as_uuid());
     println!("\tRendezvous Info:");
-    for rv_entry in ov_header.rendezvous_info {
+    for rv_entry in ov_header.rendezvous_info.values() {
         println!("\t\t- {:?}", rv_entry);
     }
     println!("\tDevice Info: {}", ov_header.device_info);
@@ -479,7 +517,7 @@ fn dump_devcred(matches: &ArgMatches) -> Result<(), Error> {
     println!("Device Info: {}", dc.device_info);
     println!("Device GUID: {}", dc.guid.as_uuid());
     println!("Rendezvous Info:");
-    for rv_entry in dc.rvinfo {
+    for rv_entry in dc.rvinfo.values() {
         println!("\t- {:?}", rv_entry);
     }
     println!("Public key hash: {}", dc.pubkey_hash);
@@ -537,6 +575,143 @@ fn extend_voucher(matches: &ArgMatches) -> Result<(), Error> {
 
     fs::rename(newname, ownershipvoucher_path)
         .context("Error moving new ownership voucher in place")?;
+
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+enum RemoteTransport {
+    TCP,
+    TLS,
+    HTTP,
+    CoAP,
+    HTTPS,
+    CoAPS,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum RemoteAddress {
+    IP { ip_address: String },
+    DNS { dns_name: String },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+struct RemoteConnection {
+    transport: RemoteTransport,
+    #[serde(flatten)]
+    address: RemoteAddress,
+    port: u16,
+}
+
+impl TryFrom<RemoteConnection> for TO2AddressEntry {
+    type Error = Error;
+
+    fn try_from(rc: RemoteConnection) -> Result<TO2AddressEntry> {
+        let transport = match rc.transport {
+            RemoteTransport::TCP => TransportProtocol::TCP,
+            RemoteTransport::TLS => TransportProtocol::TLS,
+            RemoteTransport::HTTP => TransportProtocol::HTTP,
+            RemoteTransport::CoAP => TransportProtocol::CoAP,
+            RemoteTransport::HTTPS => TransportProtocol::HTTPS,
+            RemoteTransport::CoAPS => TransportProtocol::CoAPS,
+        };
+        let ip_address = match &rc.address {
+            RemoteAddress::IP {ip_address} => Some(std::net::IpAddr::from_str(&ip_address).with_context(|| format!("Error parsing IP address '{}'", ip_address))?),
+            _ => None,
+        };
+        let dns_name = match rc.address {
+            RemoteAddress::DNS {dns_name} => Some(dns_name),
+            _ => None,
+        };
+
+        Ok(
+            TO2AddressEntry::new(
+                ip_address,
+                dns_name,
+                rc.port,
+                transport,
+            )
+        )
+    }
+}
+
+async fn report_to_rendezvous(matches: &ArgMatches<'_>) -> Result<(), Error> {
+    let ownershipvoucher_path = matches.value_of("ownership-voucher").unwrap();
+    let owner_private_key_path = matches.value_of("owner-private-key").unwrap();
+    let owner_addresses_path = matches.value_of("owner-addresses-path").unwrap();
+    let wait_time = matches.value_of("wait-time").unwrap();
+    let wait_time = wait_time.parse::<u32>().with_context(|| format!("Error parsing wait time '{}'", wait_time))?;
+
+    let ov: OwnershipVoucher = {
+        let ov_file = fs::File::open(&ownershipvoucher_path).with_context(|| {
+            format!(
+                "Error opening ownership voucher at {}",
+                ownershipvoucher_path
+            )
+        })?;
+        serde_cbor::from_reader(ov_file).context("Error loading ownership voucher")?
+    };
+    let owner_private_key = load_private_key(&owner_private_key_path)
+    .with_context(|| format!("Error loading owner private key from {}", owner_private_key_path))?;
+
+    let mut owner_addresses: Vec<RemoteConnection> = {
+        let f = fs::File::open(&owner_addresses_path)?;
+        serde_yaml::from_reader(f)
+    }
+    .with_context(|| format!("Error reading owner addresses from {}", owner_addresses_path))?;
+    let owner_addresses: Result<Vec<TO2AddressEntry>> = owner_addresses.drain(..)
+    .map(TO2AddressEntry::try_from)
+    .collect();
+    let owner_addresses = owner_addresses.context("Error parsing owner addresses")?;
+
+    // Determine the RV IP
+    // TODO
+    let mut rv_client = fdo_http_wrapper::client::ServiceClient::new("http://localhost:8081/");
+
+    // Send: Hello, Receive: HelloAck
+    let hello_ack: RequestResult<messages::to0::HelloAck> = rv_client
+        .send_request(
+            messages::to0::Hello::new(),
+            None,
+        )
+        .await;
+    let hello_ack = hello_ack.context("Error requesting nonce from rendezvous server")?;
+    println!("Got hello_ack: {:?}", hello_ack);
+
+    // Build to0d and to1d
+    let to0d = TO0Data::new(
+        ov,
+        wait_time,
+        hello_ack.nonce3().clone(),
+    );
+    let to0d_vec = serde_cbor::to_vec(&to0d).context("Error serializing to0d")?;
+    let to0d_hash = Hash::new(None, &to0d_vec).context("Error hashing to0d")?;
+    let to1d_payload = TO1DataPayload::new(
+        owner_addresses,
+        to0d_hash,
+    );
+    let to1d_payload = serde_cbor::to_vec(&to1d_payload).context("Error serializing to1d")?;
+    let to1d = COSESign1::new(
+        &to1d_payload,
+        &aws_nitro_enclaves_cose::sign::HeaderMap::new(),
+        &owner_private_key,
+    ).context("Error signing to1d")?;
+
+    // Send: OwnerSign, Receive: AcceptOwner
+    let accept_owner: RequestResult<messages::to0::AcceptOwner> = rv_client
+        .send_request(
+            messages::to0::OwnerSign::new(
+                to0d,
+                to1d,
+            ),
+            None,
+        ).await;
+    let accept_owner = accept_owner.context("Error registering self to rendezvous server")?;
+
+    // Done!
+    println!("Rendezvous server registered us for {} seconds", accept_owner.wait_seconds());
 
     Ok(())
 }
