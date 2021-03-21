@@ -8,7 +8,6 @@ edition = "2018"
 
 [dependencies]
 async-std = "1.9"
-config = "0.11"
 futures = "0.3"
 thiserror = "1"
 async-trait = "0.1"
@@ -19,6 +18,7 @@ serde = { version = "1", features = ["derive"] }
 openssl = "0.10"
 
 fdo-data-formats = { path = "../data-formats" }
+fdo-store = { path = "../store" }
 
 # Server-side
 uuid = { version = "0.8", features = ["v4"], optional = true }
@@ -31,6 +31,3 @@ reqwest = { version = "0.11", optional = true }
 [features]
 server = ["warp", "warp-sessions", "uuid"]
 client = ["reqwest"]
-
-in_memory_session_store = []
-default = ["in_memory_session_store"]

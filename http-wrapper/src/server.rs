@@ -1,5 +1,3 @@
-use core::future::Future;
-use core::pin::Pin;
 use std::convert::Infallible;
 use std::sync::Arc;
 
@@ -8,134 +6,57 @@ use fdo_data_formats::{
     constants::ErrorCode,
     messages::{self, Message},
 };
+use fdo_store::Store;
 
-use serde::Deserialize;
 use thiserror::Error;
 use warp::{Filter, Rejection};
 pub use warp_sessions::Session;
-
-pub type SessionStoreT = Arc<Box<dyn SessionStore>>;
 
 pub struct SessionWithStore {
     pub session: Session,
     session_store: SessionStoreT,
 }
 
+type SessionStoreT = Arc<SessionStore>;
+
+pub struct SessionStore {
+    store: Box<dyn Store<String, Session>>,
+}
+
+impl SessionStore {
+    pub fn new(store: Box<dyn Store<String, Session>>) -> Arc<Self> {
+        Arc::new(SessionStore {
+            store,
+        })
+    }
+}
+
+impl SessionStore {
+    async fn load_session(&self, token: String) -> Result<Option<Session>, SessionError> {
+        let id = Session::id_from_cookie_value(&token)
+            .map_err(|_| SessionError::Unspecified("Invalid cookie token".to_string()))?;
+        Ok(self.store.load_data(&id).await?.and_then(Session::validate))
+    }
+
+    async fn store_session(&self, session: Session) -> Result<Option<String>, SessionError> {
+        self.store.store_data(session.id().to_string(), None, session.clone()).await?;
+        session.reset_data_changed();
+        Ok(session.into_cookie_value())
+    }
+
+    pub async fn destroy_session(&self, session: Session) -> Result<(), SessionError> {
+        let id = session.id().to_string();
+        self.store.destroy_data(&id).await?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum SessionError {
     #[error("Unspecified error: {0}")]
     Unspecified(String),
-}
-
-pub trait SessionStore: Send + Sync {
-    fn load_session<'life0, 'async_trait>(
-        &'life0 self,
-        token: String,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<Session>, SessionError>> + 'async_trait + Send>>
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait;
-    fn store_session<'life0, 'async_trait>(
-        &'life0 self,
-        session: Session,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<String>, SessionError>> + 'async_trait + Send>>
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait;
-    fn destroy_session<'life0, 'async_trait>(
-        &'life0 self,
-        session: Session,
-    ) -> Pin<Box<dyn Future<Output = Result<(), SessionError>> + 'async_trait + Send>>
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait;
-    fn clean_expired_sessions<'life0, 'async_trait>(
-        &'life0 self,
-    ) -> Pin<Box<dyn Future<Output = Result<(), SessionError>> + 'async_trait + Send>>
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait;
-}
-
-#[derive(Debug, Deserialize)]
-pub enum SessionStoreDriver {
-    #[cfg(feature = "in_memory_session_store")]
-    InMemory,
-}
-
-impl SessionStoreDriver {
-    pub fn initialize(
-        &self,
-        cfg: Option<config::Value>,
-    ) -> Result<Box<dyn SessionStore>, SessionError> {
-        match self {
-            #[cfg(feature = "in_memory_session_store")]
-            SessionStoreDriver::InMemory => memory_store::initialize(cfg),
-        }
-    }
-}
-
-mod memory_store {
-    use async_std::sync::{Arc, RwLock};
-
-    use std::collections::HashMap;
-
-    use async_trait::async_trait;
-
-    use super::Session;
-    use super::SessionError;
-    use super::SessionStore;
-
-    #[derive(Debug)]
-    struct MemoryStore {
-        store: Arc<RwLock<HashMap<String, Session>>>,
-    }
-
-    pub(super) fn initialize(
-        _cfg: Option<config::Value>,
-    ) -> Result<Box<dyn SessionStore>, SessionError> {
-        Ok(Box::new(MemoryStore {
-            store: Arc::new(RwLock::new(HashMap::new())),
-        }))
-    }
-
-    #[async_trait]
-    impl SessionStore for MemoryStore {
-        async fn load_session(&self, token: String) -> Result<Option<Session>, SessionError> {
-            let id = Session::id_from_cookie_value(&token)
-                .map_err(|_| SessionError::Unspecified("Invalid cookie token".to_string()))?;
-            log::trace!("Session id {} loading", id);
-            Ok(self
-                .store
-                .read()
-                .await
-                .get(&id)
-                .cloned()
-                .and_then(Session::validate))
-        }
-
-        async fn store_session(&self, session: Session) -> Result<Option<String>, SessionError> {
-            log::trace!("Storing session with id {}", session.id());
-            self.store
-                .write()
-                .await
-                .insert(session.id().to_string(), session.clone());
-
-            session.reset_data_changed();
-            Ok(session.into_cookie_value())
-        }
-
-        async fn destroy_session(&self, session: Session) -> Result<(), SessionError> {
-            log::trace!("Deleting session with id {}", session.id());
-            self.store.write().await.remove(session.id());
-            Ok(())
-        }
-
-        async fn clean_expired_sessions(&self) -> Result<(), SessionError> {
-            // TODO
-            Ok(())
-        }
-    }
+    #[error("Store error")]
+    Store(#[from] fdo_store::StoreError),
 }
 
 #[derive(Debug)]

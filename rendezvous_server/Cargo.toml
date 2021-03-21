@@ -17,6 +17,7 @@ warp = "0.3"
 
 fdo-data-formats = { path = "../data-formats" }
 fdo_http_wrapper = { path = "../http-wrapper", features = ["server"] }
+fdo-store = { path = "../store" }
 
 
 [features]

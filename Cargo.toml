@@ -2,6 +2,8 @@
 members = [
     "data-formats",
     "http-wrapper",
+    "store",
+
     "mfg_station",
     "owner_onboarding_service",
     "rendezvous_server",

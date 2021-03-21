@@ -64,11 +64,8 @@ async fn main() {
 
     let hello = warp::get().map(|| "Hello from the MFG Station");
 
-    let ses_store = Arc::new(
-        fdo_http_wrapper::server::SessionStoreDriver::InMemory
-            .initialize(None)
-            .unwrap(),
-    );
+    let ses_store = fdo_store::StoreDriver::InMemory.initialize(None).unwrap();
+    let ses_store = fdo_http_wrapper::server::SessionStore::new(ses_store);
 
     let routes = warp::any()
         .and(hello)
