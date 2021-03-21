@@ -122,7 +122,7 @@ pub enum RendezvousVariable {
     OwnerPort = 4,
     Dns = 5,
     ServerCertHash = 6,
-    ClientCertHash = 7,
+    CaCertHash = 7,
     UserInput = 8,
     WifiSsid = 9,
     WifiPw = 10,
@@ -130,7 +130,69 @@ pub enum RendezvousVariable {
     Protocol = 12,
     Delaysec = 13,
     Bypass = 14,
-    Extended = 15,
+    //Extended = 15,
+}
+
+impl RendezvousVariable {
+    fn name(&self) -> &'static str {
+        match self {
+            RendezvousVariable::DeviceOnly => "device-only",
+            RendezvousVariable::OwnerOnly => "owner-only",
+            RendezvousVariable::IPAddress => "ip-address",
+            RendezvousVariable::DevicePort => "device-port",
+            RendezvousVariable::OwnerPort => "owner-port",
+            RendezvousVariable::Dns => "dns",
+            RendezvousVariable::ServerCertHash => "server-cert-hash",
+            RendezvousVariable::CaCertHash => "ca-cert-hash",
+            RendezvousVariable::UserInput => "user-input",
+            RendezvousVariable::WifiSsid => "wifi-ssid",
+            RendezvousVariable::WifiPw => "wifi-pw",
+            RendezvousVariable::Medium => "medium",
+            RendezvousVariable::Protocol => "protocol",
+            RendezvousVariable::Delaysec => "delay-sec",
+            RendezvousVariable::Bypass => "bypass",
+        }
+    }
+
+    pub fn value_from_human_to_machine(&self, val: serde_cbor::Value) -> Result<serde_cbor::Value> {
+        Ok(match self {
+            // These are just markers: their existance means they're true
+            RendezvousVariable::DeviceOnly
+            | RendezvousVariable::OwnerOnly
+            | RendezvousVariable::UserInput
+            | RendezvousVariable::Bypass => serde_cbor::Value::Null,
+
+            // These are integers
+            RendezvousVariable::DevicePort
+            | RendezvousVariable::OwnerPort
+            | RendezvousVariable::Delaysec => match val {
+                serde_cbor::Value::Integer(i) => serde_cbor::Value::Integer(i),
+                _ => return Err(Error::InconsistentValue(self.name())),
+            },
+
+            // These are strings
+            RendezvousVariable::Dns | RendezvousVariable::WifiSsid | RendezvousVariable::WifiPw => {
+                match val {
+                    serde_cbor::Value::Text(t) => serde_cbor::Value::Text(t),
+                    _ => return Err(Error::InconsistentValue(self.name())),
+                }
+            }
+
+            // Slightly more complicated values
+            RendezvousVariable::Protocol => match val {
+                serde_cbor::Value::Text(v) => {
+                    serde_cbor::value::to_value(RendezvousProtocolValue::from_str(&v)?)?
+                }
+                _ => return Err(Error::InconsistentValue("protocol (type)")),
+            },
+
+            // TODO
+            RendezvousVariable::IPAddress => todo!(),
+            RendezvousVariable::ServerCertHash => todo!(),
+            RendezvousVariable::CaCertHash => todo!(),
+            RendezvousVariable::Medium => todo!(),
+        })
+    }
 }
 
 impl FromStr for RendezvousVariable {
@@ -145,7 +207,7 @@ impl FromStr for RendezvousVariable {
             "ownerport" | "owner_port" => RendezvousVariable::OwnerPort,
             "dns" => RendezvousVariable::Dns,
             "servercerthash" | "server_cert_hash" => RendezvousVariable::ServerCertHash,
-            "clientcerthash" | "client_cert_hash" => RendezvousVariable::ClientCertHash,
+            "cacerthash" | "ca_cert_hash" => RendezvousVariable::CaCertHash,
             "userinput" | "user_input" => RendezvousVariable::UserInput,
             "wifissid" | "wifi_ssid" => RendezvousVariable::WifiSsid,
             "wifipw" | "wifi_pw" => RendezvousVariable::WifiPw,
@@ -153,8 +215,8 @@ impl FromStr for RendezvousVariable {
             "protocol" => RendezvousVariable::Protocol,
             "delaysec" | "delay_sec" | "delay" => RendezvousVariable::Delaysec,
             "bypass" => RendezvousVariable::Bypass,
-            "extended" => RendezvousVariable::Extended,
-            _ => return Err(Error::InconsistentValue),
+            //"extended" => RendezvousVariable::Extended,
+            _ => return Err(Error::InconsistentValue("variable-name")),
         })
     }
 }
@@ -170,6 +232,33 @@ pub enum RendezvousProtocolValue {
     TLS = 4,
     CoAPTCP = 5,
     CoAPUDP = 6,
+}
+
+impl FromStr for RendezvousProtocolValue {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        Ok(match &s.to_lowercase()[..] {
+            "rest" => RendezvousProtocolValue::Rest,
+            "http" => RendezvousProtocolValue::HTTP,
+            "https" => RendezvousProtocolValue::HTTPS,
+            "tcp" => RendezvousProtocolValue::TCP,
+            "tls" => RendezvousProtocolValue::TLS,
+            "coaptcp" => RendezvousProtocolValue::CoAPTCP,
+            "coapudp" => RendezvousProtocolValue::CoAPUDP,
+            _ => return Err(Error::InconsistentValue("protocol")),
+        })
+    }
+}
+
+impl RendezvousProtocolValue {
+    pub(crate) fn default_port(&self) -> u32 {
+        match self {
+            RendezvousProtocolValue::HTTP => 80,
+            RendezvousProtocolValue::HTTPS => 443,
+            _ => todo!(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr)]

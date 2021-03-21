@@ -21,8 +21,8 @@ pub enum Error {
     NonOwnerKey,
     #[error("A previouw entry in the ownership voucher failed to validate")]
     PreviousEntryFailed,
-    #[error("Inconsistent values were used")]
-    InconsistentValue,
+    #[error("Inconsistent values were used for '{0}'")]
+    InconsistentValue(&'static str),
     #[error("An invalid state machine transition was attempted")]
     InvalidTransition,
 }

@@ -64,7 +64,7 @@ impl OwnershipVoucher {
             // Check whether the hash_type passed is identical to the previous entry, or is not passed at all.
             let hash_type = if let Some(hash_type) = hash_type {
                 if lastentry.hash_previous_entry.get_type() != hash_type {
-                    return Err(Error::InconsistentValue);
+                    return Err(Error::InconsistentValue("hash-type"));
                 }
                 hash_type
             } else {

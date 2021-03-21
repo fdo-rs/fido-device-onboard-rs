@@ -9,6 +9,8 @@ pub mod constants;
 
 pub mod types;
 
+pub mod enhanced_types;
+
 pub mod ownershipvoucher;
 
 pub mod publickey;

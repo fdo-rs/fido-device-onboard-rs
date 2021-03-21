@@ -20,6 +20,7 @@ use serde_yaml::Value;
 
 use fdo_data_formats::{
     constants::{HashType, PublicKeyType, RendezvousVariable, TransportProtocol},
+    enhanced_types::RendezvousInterpreterSide,
     messages,
     ownershipvoucher::{OwnershipVoucher, OwnershipVoucherHeader},
     publickey::{PublicKey, PublicKeyBody, X5Chain},
@@ -247,6 +248,9 @@ fn load_rendezvous_info(path: &str) -> Result<RendezvousInfo, Error> {
                 .with_context(|| format!("Error parsing rendezvous key '{}'", key))?;
 
             let val = yaml_to_cbor(val)?;
+            let val = key
+                .value_from_human_to_machine(val)
+                .with_context(|| format!("Error parsing value for key '{:?}'", key))?;
 
             entry.push((key, val));
         }
@@ -680,8 +684,26 @@ async fn report_to_rendezvous(matches: &ArgMatches<'_>) -> Result<(), Error> {
     let owner_addresses = owner_addresses.context("Error parsing owner addresses")?;
 
     // Determine the RV IP
-    // TODO
-    let mut rv_client = fdo_http_wrapper::client::ServiceClient::new("http://localhost:8081/");
+    let rv_info = ov
+        .get_header()
+        .context("Error getting OV header")?
+        .rendezvous_info
+        .to_interpreted(RendezvousInterpreterSide::Owner)
+        .context("Error parsing rendezvous directives")?;
+    if rv_info.is_empty() {
+        bail!("No rendezvous information found that's usable for the owner");
+    }
+    // Use the first entry
+    let rv_info = rv_info.first().unwrap();
+    let rv_urls = rv_info.get_urls();
+    if rv_urls.is_empty() {
+        bail!("No usable rendezvous URLs were found");
+    }
+    let rv_url = rv_urls.first().unwrap();
+
+    println!("Using rendezvous server at url {}", rv_url);
+
+    let mut rv_client = fdo_http_wrapper::client::ServiceClient::new(&rv_url);
 
     // Send: Hello, Receive: HelloAck
     let hello_ack: RequestResult<messages::to0::HelloAck> = rv_client
