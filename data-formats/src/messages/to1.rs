@@ -2,9 +2,9 @@ use aws_nitro_enclaves_cose::COSESign1;
 use serde::{Deserialize, Serialize};
 use serde_tuple::Serialize_tuple;
 
-use super::{Message, ParseError};
+use super::Message;
 
-use crate::types::{Guid, Nonce, SigInfo, TO0Data, TO1DataPayload};
+use crate::types::{Guid, Nonce, SigInfo};
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct HelloRV {

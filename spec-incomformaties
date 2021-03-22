@@ -1,2 +1,3 @@
-- In TO0, the TO1D structure is sent without COSE tag 18
+- In TO0, the to1d structure is sent without COSE tag 18
 - In Rendezvous Info, IP addresses are not encoded correctly
+- Client right now just tries everything once, and if it fails, aborts. It should fall over to next entries, and automatically retry
