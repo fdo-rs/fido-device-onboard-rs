@@ -15,5 +15,10 @@ log = "0.4"
 serde = { version = "1", features = ["derive"] }
 tokio = "1"
 
+# feature-specific dependencies
+# directory
+xattr = { version = "0.2", optional = true }
+serde_cbor = { version = "0.11", optional = true }
+
 [features]
-directory = []
+directory = ["xattr", "serde_cbor"]

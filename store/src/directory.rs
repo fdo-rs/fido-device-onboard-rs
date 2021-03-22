@@ -1,17 +1,15 @@
-use core::time::Duration;
-use std::collections::HashMap;
+use std::convert::TryInto;
+use std::fs::{self, File};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
+use xattr::FileExt;
 
 use super::Store;
 use super::StoreError;
-
-type ValueT<V> = (Option<SystemTime>, V);
 
 pub(super) fn initialize<K, V>(
     cfg: Option<config::Value>,
@@ -53,6 +51,17 @@ struct DirectoryStore<K, V> {
     directory: PathBuf,
 }
 
+impl<K, V> DirectoryStore<K, V>
+where
+    K: std::string::ToString,
+{
+    fn get_path(&self, key: &K) -> PathBuf {
+        self.directory.join(key.to_string())
+    }
+}
+
+const XATTR_NAME_TTL: &str = "store_ttl";
+
 #[async_trait]
 impl<K, V> Store<K, V> for DirectoryStore<K, V>
 where
@@ -60,15 +69,97 @@ where
     V: Serialize + DeserializeOwned + Send + Sync + Clone + 'static,
 {
     async fn load_data(&self, key: &K) -> Result<Option<V>, StoreError> {
-        todo!();
+        let path = self.get_path(&key);
+        log::trace!("Attempting to load data from {}", path.display());
+
+        let file = match File::open(&path) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => {
+                return Err(StoreError::Unspecified(format!(
+                    "Error opening file: {}",
+                    e.to_string()
+                )))
+            }
+            Ok(f) => f,
+        };
+        match file.get_xattr(XATTR_NAME_TTL) {
+            Ok(Some(ttl)) => {
+                if ttl.len() != 16 {
+                    return Err(StoreError::Unspecified(format!(
+                        "TTL length is not u128: {:?}",
+                        ttl
+                    )));
+                }
+                let ttl = u128::from_le_bytes(ttl.try_into().unwrap());
+                let ttl = Duration::from_secs(ttl as u64);
+                let ttl = SystemTime::UNIX_EPOCH + ttl;
+                if ttl > SystemTime::now() {
+                    log::trace!("Item has expired, attempting removal");
+                    if let Err(e) = fs::remove_file(&path) {
+                        log::info!("Error deleting expired file {}: {}", path.display(), e);
+                    }
+                    return Ok(None);
+                }
+            }
+            Ok(None) => {}
+            Err(e) => {
+                return Err(StoreError::Unspecified(format!(
+                    "Error checking TTL: {}",
+                    e
+                )))
+            }
+        }
+
+        Ok(Some(serde_cbor::from_reader(&file).map_err(|e| {
+            StoreError::Unspecified(format!("Error deserializing value: {:?}", e))
+        })?))
     }
 
     async fn store_data(&self, key: K, ttl: Option<Duration>, value: V) -> Result<(), StoreError> {
-        todo!();
+        let path = self.get_path(&key);
+        log::trace!("Attempting to store data to {}", path.display());
+
+        let ttl = match ttl {
+            None => None,
+            Some(ttl) => Some(u128::to_le_bytes(
+                (SystemTime::now() + ttl)
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .map_err(|e| {
+                        StoreError::Unspecified(format!(
+                            "Error determining time from epoch to TTL: {:?}",
+                            e
+                        ))
+                    })?
+                    .as_secs() as u128,
+            )),
+        };
+
+        let file = File::create(&path).map_err(|e| {
+            StoreError::Unspecified(format!("Error creating file {}: {:?}", path.display(), e))
+        })?;
+        if let Some(ttl) = ttl {
+            file.set_xattr(XATTR_NAME_TTL, &ttl).map_err(|e| {
+                StoreError::Unspecified(format!(
+                    "Error creating xattr on {}: {:?}",
+                    path.display(),
+                    e
+                ))
+            })?;
+        }
+        serde_cbor::to_writer(&file, &value).map_err(|e| {
+            StoreError::Unspecified(format!("Error writing file {}: {:?}", path.display(), e))
+        })?;
+
+        Ok(())
     }
 
     async fn destroy_data(&self, key: &K) -> Result<(), StoreError> {
-        todo!();
+        let path = self.get_path(&key);
+        log::trace!("Attempting to delete data at {}", path.display());
+
+        fs::remove_file(&path).map_err(|e| {
+            StoreError::Unspecified(format!("Error removing '{}': {:?}", path.display(), e))
+        })
     }
 
     async fn perform_maintenance(&self) -> Result<(), StoreError> {
