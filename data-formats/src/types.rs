@@ -4,6 +4,7 @@ use std::{convert::TryInto, ops::Deref};
 use crate::{
     constants::{DeviceSigType, HashType, RendezvousVariable, TransportProtocol},
     errors::Error,
+    ownershipvoucher::{OwnershipVoucher, OwnershipVoucherHeader},
     publickey::PublicKey,
     PROTOCOL_VERSION,
 };
@@ -13,8 +14,6 @@ use openssl::hash::{hash, MessageDigest};
 use serde::de::{self, SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-use crate::ownershipvoucher::OwnershipVoucher;
 
 #[derive(Debug, Serialize_tuple, Deserialize, Clone)]
 pub struct Hash {
@@ -286,15 +285,117 @@ impl TO1DataPayload {
     }
 }
 
-type MAROEPrefix = Vec<u8>;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct KeyExchange {
-    a_key_exchange: Vec<u8>, // xAKeyExchange
-    b_key_exchange: Vec<u8>, // xBKeyExchange
+#[derive(Debug, Serialize_tuple, Deserialize)]
+pub struct TO2ProveDevicePayload {
+    b_key_exchange: KeyExchange,
 }
 
-type IVData = Vec<u8>;
+impl TO2ProveDevicePayload {
+    pub fn new(b_key_exchange: KeyExchange) -> Self {
+        TO2ProveDevicePayload { b_key_exchange }
+    }
+
+    pub fn b_key_exchange(&self) -> &KeyExchange {
+        &self.b_key_exchange
+    }
+}
+
+#[derive(Default, Debug, Serialize, Deserialize)]
+pub struct ServiceInfo(Vec<(String, CborSimpleType)>);
+
+impl ServiceInfo {
+    pub fn new() -> Self {
+        ServiceInfo(Vec::new())
+    }
+
+    pub fn add(&mut self, key: String, value: CborSimpleType) {
+        self.0.push((key, value));
+    }
+
+    pub fn values(&self) -> &[(String, CborSimpleType)] {
+        &self.0
+    }
+}
+
+#[derive(Debug, Serialize_tuple, Deserialize)]
+pub struct TO2ProveOVHdrPayload {
+    ov_header: OwnershipVoucherHeader,
+    num_ov_entries: u16,
+    hmac: HMac,
+    nonce5: Nonce,
+    b_signature_info: SigInfo,
+    a_key_exchange: KeyExchange,
+}
+
+impl TO2ProveOVHdrPayload {
+    pub fn new(
+        ov_header: OwnershipVoucherHeader,
+        num_ov_entries: u16,
+        hmac: HMac,
+        nonce5: Nonce,
+        b_signature_info: SigInfo,
+        a_key_exchange: KeyExchange,
+    ) -> Self {
+        TO2ProveOVHdrPayload {
+            ov_header,
+            num_ov_entries,
+            hmac,
+            nonce5,
+            b_signature_info,
+            a_key_exchange,
+        }
+    }
+
+    pub fn ov_header(&self) -> &OwnershipVoucherHeader {
+        &self.ov_header
+    }
+
+    pub fn num_ov_entries(&self) -> u16 {
+        self.num_ov_entries
+    }
+
+    pub fn hmac(&self) -> &HMac {
+        &self.hmac
+    }
+
+    pub fn nonce5(&self) -> &Nonce {
+        &self.nonce5
+    }
+
+    pub fn b_signature_info(&self) -> &SigInfo {
+        &self.b_signature_info
+    }
+
+    pub fn a_key_exchange(&self) -> &KeyExchange {
+        &self.a_key_exchange
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MAROEPrefix(Vec<u8>);
+
+impl MAROEPrefix {
+    pub fn new(data: Vec<u8>) -> Self {
+        MAROEPrefix(data)
+    }
+
+    pub fn data(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct KeyExchange(Vec<u8>);
+
+impl KeyExchange {
+    pub fn new(value: Vec<u8>) -> Self {
+        KeyExchange(value)
+    }
+
+    pub fn value(&self) -> &[u8] {
+        &self.0
+    }
+}
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct DeviceCredential {
