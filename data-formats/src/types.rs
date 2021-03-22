@@ -13,8 +13,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize_tuple, Deserialize, Clone)]
 pub struct Hash {
-    hash_type: HashType, // hashtype
-    value: Vec<u8>,      // hash
+    hash_type: HashType,
+    value: Vec<u8>,
 }
 
 impl Hash {
