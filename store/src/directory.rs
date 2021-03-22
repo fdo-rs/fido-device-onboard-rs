@@ -60,7 +60,7 @@ where
     }
 }
 
-const XATTR_NAME_TTL: &str = "store_ttl";
+const XATTR_NAME_TTL: &str = "user.store_ttl";
 
 #[async_trait]
 impl<K, V> Store<K, V> for DirectoryStore<K, V>
@@ -93,7 +93,7 @@ where
                 let ttl = u128::from_le_bytes(ttl.try_into().unwrap());
                 let ttl = Duration::from_secs(ttl as u64);
                 let ttl = SystemTime::UNIX_EPOCH + ttl;
-                if ttl > SystemTime::now() {
+                if SystemTime::now() > ttl {
                     log::trace!("Item has expired, attempting removal");
                     if let Err(e) = fs::remove_file(&path) {
                         log::info!("Error deleting expired file {}: {}", path.display(), e);
@@ -116,8 +116,17 @@ where
     }
 
     async fn store_data(&self, key: K, ttl: Option<Duration>, value: V) -> Result<(), StoreError> {
-        let path = self.get_path(&key);
-        log::trace!("Attempting to store data to {}", path.display());
+        let finalpath = self.get_path(&key);
+        let mut path = finalpath.clone();
+        path.set_file_name(format!(
+            ".{}.tmp",
+            finalpath.file_name().unwrap().to_str().unwrap()
+        ));
+        log::trace!(
+            "Attempting to store data to {} (temporary at {})",
+            finalpath.display(),
+            path.display()
+        );
 
         let ttl = match ttl {
             None => None,
@@ -150,7 +159,14 @@ where
             StoreError::Unspecified(format!("Error writing file {}: {:?}", path.display(), e))
         })?;
 
-        Ok(())
+        fs::rename(&path, &finalpath).map_err(|e| {
+            StoreError::Unspecified(format!(
+                "Error moving temporary file {} to {}: {:?}",
+                path.display(),
+                finalpath.display(),
+                e
+            ))
+        })
     }
 
     async fn destroy_data(&self, key: &K) -> Result<(), StoreError> {
