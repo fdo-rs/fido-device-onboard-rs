@@ -16,7 +16,7 @@ use crate::{
     Error,
 };
 
-#[derive(Debug, Serialize_tuple, Deserialize)]
+#[derive(Debug, Serialize_tuple, Deserialize, Clone)]
 pub struct OwnershipVoucher {
     // A lot of this is kept as u8 vectors, because they'll need to be cryptographically
     //  validated (digests or signature)

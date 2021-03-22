@@ -20,7 +20,7 @@ pub(super) async fn hello(
     let mut session = ses_with_store.session;
 
     let nonce3 = Nonce::new().map_err(Error::from_error::<messages::to0::Hello, _>)?;
-    let nonce3_encoded = nonce3.to_encoded();
+    let nonce3_encoded = nonce3.to_string();
 
     session
         .insert("nonce3", nonce3_encoded)
@@ -52,7 +52,7 @@ pub(super) async fn ownersign(
             .into())
         }
     };
-    let correct_nonce = Nonce::from_encoded(&correct_nonce);
+    let correct_nonce: Nonce = correct_nonce.parse().unwrap();
     log::trace!(
         "Matching correct nonce {:?} to received {:?}",
         correct_nonce,

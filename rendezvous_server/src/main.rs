@@ -47,7 +47,7 @@ async fn main() -> Result<()> {
 
     let mut settings = config::Config::default();
     settings
-        .merge(config::File::with_name("rendezvous_config"))
+        .merge(config::File::with_name("rendezvous_service"))
         .context("Loading configuration files")?
         .merge(config::Environment::with_prefix("rendezvous"))
         .context("Loading configuration from environment variables")?;
@@ -59,10 +59,12 @@ async fn main() -> Result<()> {
     // Initialize stores
     let store = settings
         .storage_driver
-        .initialize(settings.storage_config)?;
+        .initialize(settings.storage_config)
+        .context("Error initializing store")?;
     let session_store = settings
         .session_store_driver
-        .initialize(settings.session_store_config)?;
+        .initialize(settings.session_store_config)
+        .context("Error initializing session store")?;
     let session_store = fdo_http_wrapper::server::SessionStore::new(session_store);
 
     // Load X509 certs

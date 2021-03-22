@@ -22,8 +22,3 @@ aws-nitro-enclaves-cose = { git = "https://github.com/awslabs/aws-nitro-enclaves
 fdo-data-formats = { path = "../data-formats" }
 fdo_http_wrapper = { path = "../http-wrapper", features = ["server"] }
 fdo-store = { path = "../store" }
-
-
-[features]
-default = ["storage_driver_in_memory"]
-storage_driver_in_memory = []

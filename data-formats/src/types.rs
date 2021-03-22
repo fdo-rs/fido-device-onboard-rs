@@ -1,5 +1,6 @@
+use std::{convert::TryInto, ops::Deref, str::FromStr, string::ToString};
+
 use serde_tuple::Serialize_tuple;
-use std::{convert::TryInto, ops::Deref};
 
 use crate::{
     constants::{DeviceSigType, HashType, RendezvousVariable, TransportProtocol},
@@ -102,14 +103,6 @@ impl Nonce {
         Ok(Nonce(new_nonce_or_guid_val()?))
     }
 
-    pub fn from_encoded(encoded: &str) -> Self {
-        Nonce(base64::decode(encoded).unwrap().try_into().unwrap())
-    }
-
-    pub fn to_encoded(&self) -> String {
-        base64::encode(&self.0)
-    }
-
     pub fn from_value(val: &[u8]) -> Result<Self, Error> {
         Ok(Nonce(val.try_into().map_err(|_| Error::IncorrectNonce)?))
     }
@@ -125,6 +118,20 @@ impl Nonce {
         } else {
             Err(Error::IncorrectHash)
         }
+    }
+}
+
+impl ToString for Nonce {
+    fn to_string(&self) -> String {
+        base64::encode(&self.0)
+    }
+}
+
+impl FromStr for Nonce {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Error> {
+        Ok(Nonce(base64::decode(s).unwrap().try_into().unwrap()))
     }
 }
 
@@ -151,12 +158,18 @@ impl Guid {
     pub fn as_uuid(&self) -> uuid::Uuid {
         uuid::Uuid::from_bytes(self.0)
     }
+}
 
-    pub fn from_encoded(encoded: &str) -> Self {
-        Guid(base64::decode(encoded).unwrap().try_into().unwrap())
+impl FromStr for Guid {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Guid, Error> {
+        Ok(Guid(base64::decode(s).unwrap().try_into().unwrap()))
     }
+}
 
-    pub fn to_encoded(&self) -> String {
+impl ToString for Guid {
+    fn to_string(&self) -> String {
         base64::encode(&self.0)
     }
 }

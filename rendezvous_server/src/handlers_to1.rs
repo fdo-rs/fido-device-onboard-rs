@@ -57,13 +57,13 @@ pub(super) async fn hello_rv(
 
     // Create new nonce
     let nonce4 = Nonce::new().map_err(Error::from_error::<messages::to1::HelloRV, _>)?;
-    let nonce4_encoded = nonce4.to_encoded();
+    let nonce4_encoded = nonce4.to_string();
 
     session
         .insert("nonce4", nonce4_encoded)
         .map_err(Error::from_error::<messages::to1::HelloRV, _>)?;
     session
-        .insert("device_guid", msg.guid().to_encoded())
+        .insert("device_guid", msg.guid().to_string())
         .map_err(Error::from_error::<messages::to1::HelloRV, _>)?;
 
     // Build return message
@@ -94,7 +94,7 @@ pub(super) async fn prove_to_rv(
             .into())
         }
     };
-    let nonce4 = Nonce::from_encoded(&nonce4);
+    let nonce4: Nonce = nonce4.parse().unwrap();
 
     let device_guid: String = match session.get("device_guid") {
         Some(v) => v,
@@ -107,7 +107,7 @@ pub(super) async fn prove_to_rv(
             .into())
         }
     };
-    let device_guid = Guid::from_encoded(&device_guid);
+    let device_guid = &device_guid.parse().unwrap();
 
     let (dev_pkey, to1d) = match user_data.store.load_data(&device_guid).await {
         Ok(Some(dev)) => dev,

@@ -16,3 +16,4 @@ serde = { version = "1", features = ["derive"] }
 tokio = "1"
 
 [features]
+directory = []
