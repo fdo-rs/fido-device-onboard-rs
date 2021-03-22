@@ -58,7 +58,7 @@ impl OwnershipVoucher {
             )
         } else {
             let lastrawentry = &self.entries[self.entries.len() - 1];
-            let lastsignedentry: COSESign1 = serde_cbor::from_slice(&lastrawentry)?;
+            let lastsignedentry = COSESign1::from_bytes(&lastrawentry)?;
             let lastentry: OwnershipVoucherEntry =
                 serde_cbor::from_slice(&lastsignedentry.get_payload(None)?)?;
             // Check whether the hash_type passed is identical to the previous entry, or is not passed at all.

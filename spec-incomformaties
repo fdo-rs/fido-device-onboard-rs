@@ -1,0 +1,2 @@
+- In TO0, the TO1D structure is sent without COSE tag 18
+- In Rendezvous Info, IP addresses are not encoded correctly
