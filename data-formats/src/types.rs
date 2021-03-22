@@ -123,7 +123,7 @@ impl Nonce {
 
 impl ToString for Nonce {
     fn to_string(&self) -> String {
-        base64::encode(&self.0)
+        hex::encode(&self.0)
     }
 }
 
@@ -131,7 +131,7 @@ impl FromStr for Nonce {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Error> {
-        Ok(Nonce(base64::decode(s).unwrap().try_into().unwrap()))
+        Ok(Nonce(hex::decode(s).unwrap().try_into().unwrap()))
     }
 }
 
@@ -151,26 +151,22 @@ impl Guid {
         Ok(Guid(new_nonce_or_guid_val()?))
     }
 
-    fn value(&self) -> &[u8] {
-        &self.0
-    }
-
-    pub fn as_uuid(&self) -> uuid::Uuid {
+    fn as_uuid(&self) -> uuid::Uuid {
         uuid::Uuid::from_bytes(self.0)
     }
 }
 
 impl FromStr for Guid {
-    type Err = Error;
+    type Err = uuid::Error;
 
-    fn from_str(s: &str) -> Result<Guid, Error> {
-        Ok(Guid(base64::decode(s).unwrap().try_into().unwrap()))
+    fn from_str(s: &str) -> Result<Guid, uuid::Error> {
+        Ok(Guid(uuid::Uuid::from_str(s)?.as_bytes().to_owned()))
     }
 }
 
 impl ToString for Guid {
     fn to_string(&self) -> String {
-        base64::encode(&self.0)
+        self.as_uuid().to_string()
     }
 }
 

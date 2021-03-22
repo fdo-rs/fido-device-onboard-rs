@@ -7,9 +7,9 @@ use openssl::{
     asn1::{Asn1Integer, Asn1Time},
     bn::BigNum,
     ec::{EcGroup, EcKey},
-    hash::{hash, MessageDigest},
+    hash::MessageDigest,
     nid::Nid,
-    pkey::{PKey, PKeyRef, Private, Public},
+    pkey::{PKey, PKeyRef, Private},
     rand::rand_bytes,
     sign::Signer,
     x509::{X509Builder, X509NameBuilder, X509NameRef, X509},
@@ -434,7 +434,7 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
     // Construct Ownership Voucher Header
     let ov_header = OwnershipVoucherHeader::new(
         PROTOCOL_VERSION,
-        device_guid,
+        device_guid.clone(),
         rendezvous_info,
         device_id.to_string(),
         manufacturer_pubkey,
@@ -463,6 +463,11 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
     serde_cbor::to_writer(ov_out, &ov).context("Error writing ownership voucher")?;
     serde_cbor::to_writer(devcred_out, &devcred).context("Error writing device credential")?;
 
+    println!(
+        "Created ownership voucher for device {}",
+        device_guid.to_string()
+    );
+
     Ok(())
 }
 
@@ -490,7 +495,7 @@ fn dump_voucher(matches: &ArgMatches) -> Result<(), Error> {
 
     println!("Header:");
     println!("\tProtocol Version: {}", ov_header.protocol_version);
-    println!("\tDevice GUID: {}", ov_header.guid.as_uuid());
+    println!("\tDevice GUID: {}", ov_header.guid.to_string());
     println!("\tRendezvous Info:");
     for rv_entry in ov_header.rendezvous_info.values() {
         println!("\t\t- {:?}", rv_entry);
@@ -538,7 +543,7 @@ fn dump_devcred(matches: &ArgMatches) -> Result<(), Error> {
     println!("Protocol Version: {}", dc.protver);
     println!("HMAC key: <secret>");
     println!("Device Info: {}", dc.device_info);
-    println!("Device GUID: {}", dc.guid.as_uuid());
+    println!("Device GUID: {}", dc.guid.to_string());
     println!("Rendezvous Info:");
     for rv_entry in dc.rvinfo.values() {
         println!("\t- {:?}", rv_entry);
