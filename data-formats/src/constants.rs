@@ -43,7 +43,7 @@ impl TryFrom<MessageDigest> for HashType {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr)]
+#[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, Eq, PartialEq)]
 #[repr(i8)]
 #[non_exhaustive]
 pub enum DeviceSigType {

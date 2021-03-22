@@ -94,6 +94,10 @@ impl RVRedirect {
     pub fn to1d(&self) -> &COSESign1 {
         &self.0
     }
+
+    pub fn into_to1d(self) -> COSESign1 {
+        self.0
+    }
 }
 
 impl Message for RVRedirect {

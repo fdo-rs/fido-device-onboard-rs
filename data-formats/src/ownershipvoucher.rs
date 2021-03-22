@@ -1,14 +1,17 @@
 use std::convert::TryFrom;
 
 use aws_nitro_enclaves_cose::COSESign1;
-use openssl::pkey::{PKeyRef, Private};
-use serde::{Deserialize, Serialize};
+use openssl::{
+    pkey::{PKey, PKeyRef, Private, Public},
+    x509::X509,
+};
+use serde::Deserialize;
 use serde_tuple::Serialize_tuple;
 
 use crate::{
     constants::HashType,
     errors::Result,
-    publickey::PublicKey,
+    publickey::{PublicKey, X5Chain},
     types::{Guid, HMac, Hash, RendezvousInfo},
     Error,
 };
@@ -42,6 +45,31 @@ impl OwnershipVoucher {
         hdr_hash.extend_from_slice(&self.header);
         hdr_hash.extend_from_slice(&self.header_hmac.value());
         hdr_hash
+    }
+
+    pub fn device_cert_signers(&self) -> Result<Vec<X509>> {
+        if self.device_certificate_chain.is_none() {
+            return Ok(Vec::new());
+        }
+        Ok(
+            X5Chain::from_slice(&self.device_certificate_chain.as_ref().unwrap())?
+                .into_chain()
+                .drain(..)
+                .skip(1)
+                .collect(),
+        )
+    }
+
+    pub fn device_certificate(&self) -> Result<Option<X509>> {
+        if self.device_certificate_chain.is_none() {
+            return Ok(None);
+        }
+        Ok(
+            X5Chain::from_slice(&self.device_certificate_chain.as_ref().unwrap())?
+                .into_chain()
+                .drain(..)
+                .next(),
+        )
     }
 
     pub fn extend(

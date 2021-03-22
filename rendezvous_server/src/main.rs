@@ -1,19 +1,21 @@
+use std::sync::Arc;
+
 use anyhow::{Context, Result};
 use openssl::x509::X509;
 use serde::Deserialize;
 use warp::Filter;
 
-use std::sync::Arc;
-
-use fdo_data_formats::types::Guid;
+use fdo_data_formats::{enhanced_types::X5Bag, publickey::PublicKey, types::Guid};
 use fdo_store::{Store, StoreDriver};
 
 mod handlers_to0;
+mod handlers_to1;
 
 struct RendezvousUD {
     max_wait_seconds: u32,
-    trusted_keys: Vec<X509>,
-    store: Box<dyn Store<Guid, Vec<u8>>>,
+    trusted_manufacturer_keys: X5Bag,
+    trusted_device_keys: X5Bag,
+    store: Box<dyn Store<Guid, (PublicKey, Vec<u8>)>>,
 }
 
 type RendezvousUDT = Arc<RendezvousUD>;
@@ -29,7 +31,8 @@ struct Settings {
     session_store_config: Option<config::Value>,
 
     // Trusted keys
-    trusted_keys_path: String,
+    trusted_manufacturer_keys_path: String,
+    trusted_device_keys_path: String,
 
     // Other info
     max_wait_seconds: Option<u32>,
@@ -62,36 +65,74 @@ async fn main() -> Result<()> {
     let session_store = fdo_http_wrapper::server::SessionStore::new(session_store);
 
     // Load X509 certs
-    let trusted_keys = {
-        let trusted_keys_path = settings.trusted_keys_path;
-        let contents = std::fs::read(&trusted_keys_path)
-            .with_context(|| format!("Error reading trusted keys at {}", &trusted_keys_path))?;
-        X509::stack_from_pem(&contents).context("Error parsing trusted keys")?
+    let trusted_manufacturer_keys = {
+        let trusted_keys_path = settings.trusted_manufacturer_keys_path;
+        let contents = std::fs::read(&trusted_keys_path).with_context(|| {
+            format!(
+                "Error reading trusted manufacturer keys at {}",
+                &trusted_keys_path
+            )
+        })?;
+        X509::stack_from_pem(&contents).context("Error parsing trusted manufacturer keys")?
     };
+    let trusted_manufacturer_keys = X5Bag::new(trusted_manufacturer_keys);
+    let trusted_device_keys = {
+        let trusted_keys_path = settings.trusted_device_keys_path;
+        let contents = std::fs::read(&trusted_keys_path).with_context(|| {
+            format!(
+                "Error reading trusted device keys at {}",
+                &trusted_keys_path
+            )
+        })?;
+        X509::stack_from_pem(&contents).context("Error parsing trusted device keys")?
+    };
+    let trusted_device_keys = X5Bag::new(trusted_device_keys);
 
     // Initialize handler stores
     let user_data = Arc::new(RendezvousUD {
         max_wait_seconds,
         store,
-        trusted_keys,
+        trusted_manufacturer_keys,
+        trusted_device_keys,
     });
 
     // Install handlers
     let hello = warp::get().map(|| "Hello from the rendezvous server");
 
-    let handler_hello = fdo_http_wrapper::server::fdo_request_filter(
+    // TO0
+    let handler_to0_hello = fdo_http_wrapper::server::fdo_request_filter(
         user_data.clone(),
         session_store.clone(),
         handlers_to0::hello,
     );
-    let handler_ownersign = fdo_http_wrapper::server::fdo_request_filter(
+    let handler_to0_ownersign = fdo_http_wrapper::server::fdo_request_filter(
         user_data.clone(),
         session_store.clone(),
         handlers_to0::ownersign,
     );
 
+    // TO1
+    let handler_to1_hello_rv = fdo_http_wrapper::server::fdo_request_filter(
+        user_data.clone(),
+        session_store.clone(),
+        handlers_to1::hello_rv,
+    );
+    let handler_to1_prove_to_rv = fdo_http_wrapper::server::fdo_request_filter(
+        user_data.clone(),
+        session_store.clone(),
+        handlers_to1::prove_to_rv,
+    );
+
     let routes = warp::post()
-        .and(hello.or(handler_hello).or(handler_ownersign))
+        .and(
+            hello
+                // TO0
+                .or(handler_to0_hello)
+                .or(handler_to0_ownersign)
+                // TO1
+                .or(handler_to1_hello_rv)
+                .or(handler_to1_prove_to_rv),
+        )
         .recover(fdo_http_wrapper::server::handle_rejection)
         .with(warp::log("rendezvous_server"));
 

@@ -3,10 +3,11 @@ use std::fmt;
 use std::fmt::Display;
 
 use openssl::{
+    nid::Nid,
     pkey::{PKey, PKeyRef, Public},
-    x509::{X509Ref, X509},
+    x509::X509,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_tuple::Serialize_tuple;
 
 use crate::{
@@ -104,6 +105,28 @@ impl TryFrom<&PublicKey> for PublicKeyBody {
     }
 }
 
+impl TryFrom<PublicKeyBody> for PublicKey {
+    type Error = Error;
+
+    fn try_from(pkb: PublicKeyBody) -> Result<Self> {
+        match &pkb {
+            PublicKeyBody::X509(cert) => {
+                let algo = match cert.public_key()?.ec_key()?.group().curve_name() {
+                    Some(Nid::X9_62_PRIME256V1) => PublicKeyType::SECP256R1,
+                    Some(Nid::SECP384R1) => PublicKeyType::SECP384R1,
+                    other => {
+                        log::error!("Unsupported EC group encountered: {:?}", other);
+                        return Err(Error::UnsupportedAlgorithm);
+                    }
+                };
+
+                PublicKey::new(algo, pkb)
+            }
+            _ => Err(Error::UnsupportedAlgorithm),
+        }
+    }
+}
+
 impl PublicKeyBody {
     pub fn as_pkey(&self) -> Result<PKey<Public>> {
         match self {
@@ -139,5 +162,13 @@ impl X5Chain {
             .map(|cert| X509::from_der(&cert).map_err(Error::from))
             .collect::<Result<Vec<X509>>>()?;
         Ok(X5Chain { chain })
+    }
+
+    pub fn chain(&self) -> &[X509] {
+        &self.chain
+    }
+
+    pub fn into_chain(self) -> Vec<X509> {
+        self.chain
     }
 }

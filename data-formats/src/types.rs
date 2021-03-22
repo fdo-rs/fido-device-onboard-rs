@@ -78,11 +78,11 @@ impl SigInfo {
         }
     }
 
-    pub fn get_sig_type(&self) -> DeviceSigType {
+    pub fn sig_type(&self) -> DeviceSigType {
         self.sig_type
     }
 
-    pub fn get_info(&self) -> &[u8] {
+    pub fn info(&self) -> &[u8] {
         &self.info
     }
 }
@@ -109,6 +109,10 @@ impl Nonce {
 
     pub fn to_encoded(&self) -> String {
         base64::encode(&self.0)
+    }
+
+    pub fn value(&self) -> &[u8] {
+        &self.0
     }
 
     pub fn compare(&self, other: &Nonce) -> Result<(), Error> {

@@ -1,6 +1,5 @@
 use core::time::Duration;
-
-use openssl::x509::{X509VerifyResult, X509};
+use std::convert::TryFrom;
 
 use fdo_data_formats::messages;
 use fdo_data_formats::{
@@ -32,51 +31,6 @@ pub(super) async fn hello(
     ses_with_store.session = session;
 
     Ok((res, ses_with_store))
-}
-
-fn is_trusted_cert(trusted_certs: &[X509], under_consideration: &PublicKey) -> Result<(), Error> {
-    let (_, under_consideration) = under_consideration
-        .get_body()
-        .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
-    let under_consideration = match under_consideration {
-        PublicKeyBody::X509(cert) => cert,
-        _ => {
-            return Err(Error::new(
-                ErrorCode::InternalServerError,
-                messages::to0::OwnerSign::message_type(),
-                "Unsupported public key type",
-            ))
-        }
-    };
-
-    for trusted_cert in trusted_certs {
-        if trusted_cert.issued(&under_consideration) == X509VerifyResult::OK {
-            let trusted_key = trusted_cert
-                .public_key()
-                .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
-            let verify_result = under_consideration
-                .verify(&trusted_key)
-                .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
-            if verify_result {
-                log::trace!(
-                    "Valid signature on {:?} by {:?}",
-                    under_consideration,
-                    trusted_cert
-                );
-                return Ok(());
-            } else {
-                log::error!(
-                    "Certificate validation failed for {:?}",
-                    under_consideration
-                );
-            }
-        }
-    }
-    Err(Error::new(
-        ErrorCode::InvalidOwnershipVoucher,
-        messages::to0::OwnerSign::message_type(),
-        "Ownership voucher manufacturer not trusted",
-    ))
 }
 
 pub(super) async fn ownersign(
@@ -129,7 +83,18 @@ pub(super) async fn ownersign(
         "Checking whether manufacturer key {:?} is trusted",
         manufacturer_pubkey
     );
-    is_trusted_cert(&user_data.trusted_keys, &manufacturer_pubkey)?;
+    if user_data
+        .trusted_manufacturer_keys
+        .validate(&manufacturer_pubkey, &[])
+        .is_err()
+    {
+        return Err(Error::new(
+            ErrorCode::InvalidOwnershipVoucher,
+            messages::to0::OwnerSign::message_type(),
+            "Ownership voucher manufacturer not trusted",
+        )
+        .into());
+    }
 
     // Now, get the final owner key
     let ov_iter = msg
@@ -195,15 +160,50 @@ pub(super) async fn ownersign(
     let to0d_ser = serde_cbor::to_vec(&msg.to0d())
         .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
     log::trace!(
-        "Checking whether to1d->to1d hash {:?} matches data {:?}",
+        "Checking whether to1d->to1d hash {:?} matches data",
         to1d.to1d_to_to0d_hash(),
-        to0d_ser
     );
     to1d.to1d_to_to0d_hash()
         .compare_data(&to0d_ser)
         .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
 
     // Okay, wew! We can now trust the to1d payload, and the other data!
+    // First, verify the device certificate chain
+    let device_cert_signers = msg
+        .to0d()
+        .ownership_voucher()
+        .device_cert_signers()
+        .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
+    let device_cert = msg
+        .to0d()
+        .ownership_voucher()
+        .device_certificate()
+        .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
+    if device_cert.is_none() {
+        return Err(Error::new(
+            ErrorCode::InvalidOwnershipVoucher,
+            messages::to0::OwnerSign::message_type(),
+            "No device certificate",
+        )
+        .into());
+    }
+    let device_pubkey = PublicKeyBody::X509(device_cert.unwrap());
+    let device_pubkey = PublicKey::try_from(device_pubkey)
+        .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
+    if user_data
+        .trusted_device_keys
+        .validate(&device_pubkey, &device_cert_signers)
+        .is_err()
+    {
+        return Err(Error::new(
+            ErrorCode::InvalidOwnershipVoucher,
+            messages::to0::OwnerSign::message_type(),
+            "Device certificate not trusted",
+        )
+        .into());
+    }
+
+    // Now compute the new wait_seconds and stuff to store
     let mut wait_seconds = msg.to0d().wait_seconds();
     if wait_seconds > user_data.max_wait_seconds {
         wait_seconds = user_data.max_wait_seconds;
@@ -222,7 +222,7 @@ pub(super) async fn ownersign(
     );
     user_data
         .store
-        .store_data(device_guid, Some(ttl), to1d)
+        .store_data(device_guid, Some(ttl), (device_pubkey, to1d))
         .await
         .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
 

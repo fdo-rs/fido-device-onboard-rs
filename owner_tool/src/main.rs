@@ -28,6 +28,7 @@ use fdo_data_formats::{
         DeviceCredential, Guid, HMac, Hash, RendezvousDirective, RendezvousInfo, TO0Data,
         TO1DataPayload, TO2AddressEntry,
     },
+    PROTOCOL_VERSION,
 };
 use fdo_http_wrapper::client::RequestResult;
 
@@ -419,7 +420,7 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
     let device_guid = Guid::new().context("Error generating guid")?;
     let devcred = DeviceCredential {
         active: true,
-        protver: 100,
+        protver: PROTOCOL_VERSION,
         hmac_secret: hmac_key_buf.to_vec(),
         device_info: device_id.to_string(),
         guid: device_guid.clone(),
@@ -432,7 +433,7 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
 
     // Construct Ownership Voucher Header
     let ov_header = OwnershipVoucherHeader::new(
-        100,
+        PROTOCOL_VERSION,
         device_guid,
         rendezvous_info,
         device_id.to_string(),
@@ -479,6 +480,13 @@ fn dump_voucher(matches: &ArgMatches) -> Result<(), Error> {
     };
 
     let ov_header = ov.get_header().context("Error loading OV header")?;
+    if ov_header.protocol_version != PROTOCOL_VERSION {
+        bail!(
+            "Protocol version in OV ({}) not supported ({})",
+            ov_header.protocol_version,
+            PROTOCOL_VERSION
+        );
+    }
 
     println!("Header:");
     println!("\tProtocol Version: {}", ov_header.protocol_version);
@@ -518,6 +526,14 @@ fn dump_devcred(matches: &ArgMatches) -> Result<(), Error> {
         serde_cbor::from_reader(dc_file).context("Error loading device credential")?
     };
 
+    if dc.protver != PROTOCOL_VERSION {
+        bail!(
+            "Protocol version in OV ({}) not supported ({})",
+            dc.protver,
+            PROTOCOL_VERSION
+        );
+    }
+
     println!("Active: {}", dc.active);
     println!("Protocol Version: {}", dc.protver);
     println!("HMAC key: <secret>");
@@ -549,6 +565,15 @@ fn extend_voucher(matches: &ArgMatches) -> Result<(), Error> {
         })?;
         serde_cbor::from_reader(ov_file).context("Error loading ownership voucher")?
     };
+
+    let ov_header = ov.get_header().context("Error loading OV header")?;
+    if ov_header.protocol_version != PROTOCOL_VERSION {
+        bail!(
+            "Protocol version in OV ({}) not supported ({})",
+            ov_header.protocol_version,
+            PROTOCOL_VERSION
+        );
+    }
 
     let current_owner_private_key = load_private_key(&current_owner_private_key_path)
         .with_context(|| {
@@ -660,6 +685,16 @@ async fn report_to_rendezvous(matches: &ArgMatches<'_>) -> Result<(), Error> {
         })?;
         serde_cbor::from_reader(ov_file).context("Error loading ownership voucher")?
     };
+
+    let ov_header = ov.get_header().context("Error loading OV header")?;
+    if ov_header.protocol_version != PROTOCOL_VERSION {
+        bail!(
+            "Protocol version in OV ({}) not supported ({})",
+            ov_header.protocol_version,
+            PROTOCOL_VERSION
+        );
+    }
+
     let owner_private_key = load_private_key(&owner_private_key_path).with_context(|| {
         format!(
             "Error loading owner private key from {}",
