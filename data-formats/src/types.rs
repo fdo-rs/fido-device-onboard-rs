@@ -6,15 +6,10 @@ use crate::{
     constants::{DeviceSigType, HashType, RendezvousVariable, TransportProtocol},
     errors::Error,
     ownershipvoucher::{OwnershipVoucher, OwnershipVoucherHeader},
-    publickey::PublicKey,
-    PROTOCOL_VERSION,
 };
 
-use aws_nitro_enclaves_cose::sign::HeaderMap;
-use openssl::hash::{hash, MessageDigest};
-use serde::de::{self, SeqAccess, Visitor};
-use serde::ser::SerializeSeq;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use openssl::hash::hash;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize_tuple, Deserialize, Clone)]
 pub struct Hash {
@@ -317,12 +312,57 @@ impl ServiceInfo {
         ServiceInfo(Vec::new())
     }
 
-    pub fn add(&mut self, key: String, value: CborSimpleType) {
-        self.0.push((key, value));
+    pub fn add(&mut self, module: String, key: String, value: CborSimpleType) {
+        self.0.push((format!("{}:{}", module, key), value));
     }
 
-    pub fn values(&self) -> &[(String, CborSimpleType)] {
-        &self.0
+    pub fn iter(&self) -> ServiceInfoIter {
+        ServiceInfoIter { info: self, pos: 0 }
+    }
+
+    pub fn values(&self) -> Result<Vec<(String, String, CborSimpleType)>, Error> {
+        self.0
+            .iter()
+            .map(|(k, v)| match k.find(':') {
+                None => Err(Error::InconsistentValue(
+                    "ServiceInfo key missing module separation",
+                )),
+                Some(pos) => {
+                    let (module, key) = k.split_at(pos);
+                    Ok((module.to_string(), key.to_string(), v.clone()))
+                }
+            })
+            .collect()
+    }
+}
+
+#[derive(Debug)]
+pub struct ServiceInfoIter<'a> {
+    info: &'a ServiceInfo,
+    pos: usize,
+}
+
+impl Iterator for ServiceInfoIter<'_> {
+    type Item = (String, String, CborSimpleType);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.pos >= self.info.0.len() {
+            return None;
+        }
+        let (module_key, val) = &self.info.0[self.pos];
+        self.pos += 1;
+
+        // When it's stable, use str.split_once
+        let split_pos = match module_key.find(':') {
+            None => {
+                log::error!("ServiceInfo module_key missing colon: {}", module_key);
+                return None;
+            }
+            Some(v) => v,
+        };
+
+        let (module, key) = module_key.split_at(split_pos);
+        Some((module.to_string(), key.to_string(), val.clone()))
     }
 }
 
