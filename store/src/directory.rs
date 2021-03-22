@@ -60,6 +60,26 @@ where
     }
 }
 
+fn ttl_from_disk(ttl: &[u8]) -> Result<SystemTime, StoreError> {
+    if ttl.len() != 8 {
+        return Err(StoreError::Unspecified(format!(
+            "TTL length is not u128: {:?}",
+            ttl
+        )));
+    }
+    let ttl = u64::from_le_bytes(ttl.try_into().unwrap());
+    let ttl = Duration::from_secs(ttl as u64);
+    Ok(SystemTime::UNIX_EPOCH + ttl)
+}
+
+fn ttl_to_disk(ttl: SystemTime) -> Result<Vec<u8>, StoreError> {
+    let ttl = ttl.duration_since(SystemTime::UNIX_EPOCH).map_err(|e| {
+        StoreError::Unspecified(format!("Error determining time from epoch to TTL: {:?}", e))
+    })?;
+    let ttl = ttl.as_secs();
+    Ok(u64::to_le_bytes(ttl).into())
+}
+
 const XATTR_NAME_TTL: &str = "user.store_ttl";
 
 #[async_trait]
@@ -84,15 +104,7 @@ where
         };
         match file.get_xattr(XATTR_NAME_TTL) {
             Ok(Some(ttl)) => {
-                if ttl.len() != 16 {
-                    return Err(StoreError::Unspecified(format!(
-                        "TTL length is not u128: {:?}",
-                        ttl
-                    )));
-                }
-                let ttl = u128::from_le_bytes(ttl.try_into().unwrap());
-                let ttl = Duration::from_secs(ttl as u64);
-                let ttl = SystemTime::UNIX_EPOCH + ttl;
+                let ttl = ttl_from_disk(&ttl)?;
                 if SystemTime::now() > ttl {
                     log::trace!("Item has expired, attempting removal");
                     if let Err(e) = fs::remove_file(&path) {
@@ -130,17 +142,7 @@ where
 
         let ttl = match ttl {
             None => None,
-            Some(ttl) => Some(u128::to_le_bytes(
-                (SystemTime::now() + ttl)
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .map_err(|e| {
-                        StoreError::Unspecified(format!(
-                            "Error determining time from epoch to TTL: {:?}",
-                            e
-                        ))
-                    })?
-                    .as_secs() as u128,
-            )),
+            Some(ttl) => Some(ttl_to_disk(SystemTime::now() + ttl)?),
         };
 
         let file = File::create(&path).map_err(|e| {
@@ -179,6 +181,55 @@ where
     }
 
     async fn perform_maintenance(&self) -> Result<(), StoreError> {
+        let dir_entries = match fs::read_dir(&self.directory) {
+            Err(e) => {
+                log::trace!(
+                    "Error during maintenance: unable to list directory {}: {:?}",
+                    &self.directory.display(),
+                    e
+                );
+                return Ok(());
+            }
+            Ok(v) => v,
+        };
+        for entry in dir_entries {
+            let entry = match entry {
+                Ok(v) => v,
+                Err(e) => {
+                    log::trace!("Error during maintenance: unable to process entry: {:?}", e);
+                    continue;
+                }
+            };
+            let path = entry.path();
+            match entry.file_type() {
+                Err(e) => {
+                    log::trace!(
+                        "Error during maintenance: Unable to determine file type of {}: {:?}",
+                        path.display(),
+                        e
+                    );
+                    continue;
+                }
+                Ok(v) if v.is_file() => {}
+                Ok(_) => continue,
+            }
+            let ttl = match xattr::get(&path, XATTR_NAME_TTL) {
+                Err(e) => {
+                    log::trace!("Error looking up TTL xattr for {}: {:?}", path.display(), e);
+                    continue;
+                }
+                Ok(None) => continue,
+                Ok(Some(val)) => ttl_from_disk(&val)?,
+            };
+            if SystemTime::now() < ttl {
+                continue;
+            }
+            log::trace!("File at {} has expired, attempting removal", path.display());
+            if let Err(e) = fs::remove_file(&path) {
+                log::info!("Error deleting expired file {}: {}", path.display(), e);
+            }
+        }
+
         Ok(())
     }
 }
