@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use aws_nitro_enclaves_cose::COSESign1;
 use openssl::x509::X509;
 use serde::Deserialize;
 use warp::Filter;
@@ -15,7 +16,7 @@ struct RendezvousUD {
     max_wait_seconds: u32,
     trusted_manufacturer_keys: X5Bag,
     trusted_device_keys: X5Bag,
-    store: Box<dyn Store<Guid, (PublicKey, Vec<u8>)>>,
+    store: Box<dyn Store<Guid, (PublicKey, COSESign1)>>,
 }
 
 type RendezvousUDT = Arc<RendezvousUD>;

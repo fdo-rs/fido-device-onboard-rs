@@ -111,6 +111,10 @@ impl Nonce {
         base64::encode(&self.0)
     }
 
+    pub fn from_value(val: &[u8]) -> Result<Self, Error> {
+        Ok(Nonce(val.try_into().map_err(|_| Error::IncorrectNonce)?))
+    }
+
     pub fn value(&self) -> &[u8] {
         &self.0
     }
@@ -147,6 +151,14 @@ impl Guid {
 
     pub fn as_uuid(&self) -> uuid::Uuid {
         uuid::Uuid::from_bytes(self.0)
+    }
+
+    pub fn from_encoded(encoded: &str) -> Self {
+        Guid(base64::decode(encoded).unwrap().try_into().unwrap())
+    }
+
+    pub fn to_encoded(&self) -> String {
+        base64::encode(&self.0)
     }
 }
 

@@ -210,8 +210,6 @@ pub(super) async fn ownersign(
     }
     let wait_seconds = wait_seconds;
     let device_guid = msg.to0d().ownership_voucher().get_header().unwrap().guid;
-    let to1d = serde_cbor::to_vec(&msg.to1d())
-        .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
 
     // Actually store the data here
     let ttl = Duration::from_secs(wait_seconds as u64);
@@ -222,7 +220,7 @@ pub(super) async fn ownersign(
     );
     user_data
         .store
-        .store_data(device_guid, Some(ttl), (device_pubkey, to1d))
+        .store_data(device_guid, Some(ttl), (device_pubkey, msg.to1d().clone()))
         .await
         .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
 
