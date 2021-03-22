@@ -1,13 +1,7 @@
-use core::time::Duration;
-
-use openssl::x509::{X509VerifyResult, X509};
-
-use fdo_data_formats::messages;
 use fdo_data_formats::{
     constants::{DeviceSigType, ErrorCode},
-    messages::Message,
-    publickey::{PublicKey, PublicKeyBody},
-    types::{Guid, Nonce, SigInfo, TO1DataPayload},
+    messages::{self, Message},
+    types::{Guid, Nonce, SigInfo},
 };
 
 use fdo_http_wrapper::server::Error;
@@ -118,12 +112,13 @@ pub(super) async fn prove_to_rv(
     let (dev_pkey, to1d) = match user_data.store.load_data(&device_guid).await {
         Ok(Some(dev)) => dev,
         Err(e) => {
+            log::trace!("Error getting device entry: {:?}", e);
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
                 messages::to1::ProveToRV::message_type(),
                 "Request sequence failure",
             )
-            .into())
+            .into());
         }
         Ok(None) => {
             return Err(Error::new(
