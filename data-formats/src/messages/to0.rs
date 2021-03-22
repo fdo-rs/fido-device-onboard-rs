@@ -27,7 +27,6 @@ impl Serialize for Hello {
         S: serde::Serializer,
     {
         use serde::ser::SerializeSeq;
-
         let seq = serializer.serialize_seq(Some(0))?;
         seq.end()
     }
