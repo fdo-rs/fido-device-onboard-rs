@@ -4,10 +4,7 @@ use serde_tuple::Serialize_tuple;
 
 use super::{ClientMessage, Message, ServerMessage};
 
-use crate::{
-    ownershipvoucher::OwnershipVoucherEntry,
-    types::{CipherSuite, Guid, HMac, KexSuite, Nonce, ServiceInfo, SigInfo},
-};
+use crate::types::{CipherSuite, Guid, HMac, KexSuite, Nonce, ServiceInfo, SigInfo};
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct HelloDevice {
@@ -111,11 +108,11 @@ impl ClientMessage for GetOVNextEntry {}
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct OVNextEntry {
     entry_num: u16,
-    entry: OwnershipVoucherEntry,
+    entry: COSESign1,
 }
 
 impl OVNextEntry {
-    pub fn new(entry_num: u16, entry: OwnershipVoucherEntry) -> Self {
+    pub fn new(entry_num: u16, entry: COSESign1) -> Self {
         OVNextEntry { entry_num, entry }
     }
 
@@ -123,7 +120,7 @@ impl OVNextEntry {
         self.entry_num
     }
 
-    pub fn entry(&self) -> &OwnershipVoucherEntry {
+    pub fn entry(&self) -> &COSESign1 {
         &self.entry
     }
 }

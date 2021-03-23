@@ -11,7 +11,7 @@ anyhow = "1"
 log = "0.4"
 pretty_env_logger = "0.4"
 openssl = "0.10"
-aws-nitro-enclaves-cose = { git = "https://github.com/awslabs/aws-nitro-enclaves-cose.git", branch = "main" }
+aws-nitro-enclaves-cose = { git = "https://github.com/puiterwijk/aws-nitro-enclaves-cose.git", branch = "unprotected" }
 reqwest = "0.11"
 serde_cbor = "0.11"
 tokio = { version = "1", features = ["full"] }

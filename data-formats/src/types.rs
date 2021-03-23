@@ -51,6 +51,12 @@ impl Hash {
     }
 }
 
+impl PartialEq for Hash {
+    fn eq(&self, other: &Self) -> bool {
+        openssl::memcmp::eq(&self.value, &other.value)
+    }
+}
+
 impl std::fmt::Display for Hash {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} ({:?})", hex::encode(&self.value), self.hash_type)
@@ -105,14 +111,11 @@ impl Nonce {
     pub fn value(&self) -> &[u8] {
         &self.0
     }
+}
 
-    pub fn compare(&self, other: &Nonce) -> Result<(), Error> {
-        // Compare
-        if openssl::memcmp::eq(&self.0, &other.0) {
-            Ok(())
-        } else {
-            Err(Error::IncorrectHash)
-        }
+impl PartialEq for Nonce {
+    fn eq(&self, other: &Self) -> bool {
+        openssl::memcmp::eq(&self.0, &other.0)
     }
 }
 
@@ -433,16 +436,34 @@ impl MAROEPrefix {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+pub enum DerivedKeys {
+    SEVK(Vec<u8>),
+    Split { sek: Vec<u8>, svk: Vec<u8> },
+}
+
+impl std::fmt::Debug for DerivedKeys {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("[[ DERIVEDKEYS: REDACTED ]]")
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct KeyExchange(Vec<u8>);
 
 impl KeyExchange {
-    pub fn new(value: Vec<u8>) -> Self {
-        KeyExchange(value)
+    pub fn new(suite: KexSuite) -> Self {
+        //todo!();
+        KeyExchange(vec![])
     }
 
-    pub fn value(&self) -> &[u8] {
-        &self.0
+    pub fn derive_key(&self, other: &KeyExchange) -> Vec<u8> {
+        todo!();
+    }
+}
+
+impl std::fmt::Debug for KeyExchange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("[[ KEYEXCHANGE: REDACTED ]]")
     }
 }
 

@@ -1,19 +1,20 @@
 use std::env;
 use std::fs;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use aws_nitro_enclaves_cose::COSESign1;
-use openssl::pkey::PKey;
+use openssl::{hash::MessageDigest, pkey::PKey, sign::Signer};
 
 use fdo_data_formats::{
-    constants::{DeviceSigType, TransportProtocol},
+    constants::{DeviceSigType, HashType, HeaderKeys, TransportProtocol},
     enhanced_types::{RendezvousInterpretedDirective, RendezvousInterpreterSide},
     messages,
+    ownershipvoucher::OwnershipVoucher,
     types::{
-        CipherSuite, DeviceCredential, KexSuite, Nonce, SigInfo, TO1DataPayload, TO2AddressEntry,
+        CipherSuite, DeviceCredential, HMac, KexSuite, Nonce, SigInfo, TO1DataPayload,
+        TO2AddressEntry, TO2ProveOVHdrPayload,
     },
 };
-
 use fdo_http_wrapper::client::{RequestResult, ServiceClient};
 
 fn get_to2_urls(entries: &[TO2AddressEntry]) -> Vec<String> {
@@ -138,11 +139,40 @@ async fn get_to1d_from_rv(devcred: &DeviceCredential) -> Result<COSESign1> {
         .context("Error performing TO1")
 }
 
+async fn get_ov_entries(client: &mut ServiceClient, num_entries: u16) -> Result<Vec<Vec<u8>>> {
+    let mut entries = Vec::new();
+
+    for entry_num in 0..num_entries {
+        let entry_result: RequestResult<messages::to2::OVNextEntry> = client
+            .send_request(messages::to2::GetOVNextEntry::new(entry_num as u8), None)
+            .await;
+        let entry_result =
+            entry_result.with_context(|| format!("Error getting OV entry num {}", entry_num))?;
+
+        if entry_result.entry_num() != entry_num {
+            bail!(
+                "Owner onboarding service returned OV entry {}, when we asked for {}",
+                entry_result.entry_num(),
+                entry_num
+            );
+        }
+
+        entries.push(entry_result.entry().as_bytes(true).with_context(|| {
+            format!("Error serializing entry {} of ownership voucher", entry_num)
+        })?);
+    }
+
+    Ok(entries)
+}
+
 async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> {
     log::info!("Performing TO2 protocol, URLs: {:?}", urls);
     let url = urls.first().unwrap();
 
     let nonce5 = Nonce::new().context("Error generating nonce5")?;
+    let sigtype = DeviceSigType::StSECP384R1;
+    let kexsuite = KexSuite::ECDH384;
+    let ciphersuite = CipherSuite::A256GCM;
 
     let mut client = fdo_http_wrapper::client::ServiceClient::new(&url);
 
@@ -151,15 +181,112 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
         .send_request(
             messages::to2::HelloDevice::new(
                 devcred.guid.clone(),
-                nonce5,
-                KexSuite::ECDH384,
-                CipherSuite::A256GCM,
-                SigInfo::new(DeviceSigType::StSECP384R1, vec![]),
+                nonce5.clone(),
+                kexsuite,
+                ciphersuite,
+                SigInfo::new(sigtype, vec![]),
             ),
             None,
         )
         .await;
     let prove_ov_hdr = prove_ov_hdr.context("Error sending HelloDevice")?;
+    let prove_ov_hdr = prove_ov_hdr.into_token();
+
+    // NOTE: At this moment, we have not yet validated the signature on it...
+    // We can only do so after we got all of the OV parts..
+    let untrusted_prove_ov_hdr_payload = prove_ov_hdr.get_payload(None).unwrap();
+    let untrusted_prove_ov_hdr_payload: TO2ProveOVHdrPayload =
+        serde_cbor::from_slice(&untrusted_prove_ov_hdr_payload)
+            .context("Error parsing ProveOVHdr")?;
+
+    log::trace!(
+        "Got an (UNTRUSTED!) prove OV hdr payload: {:?}",
+        untrusted_prove_ov_hdr_payload
+    );
+
+    // Verify the nonce5 value
+    if &nonce5 != untrusted_prove_ov_hdr_payload.nonce5() {
+        bail!("Nonce5 value is mismatched");
+    }
+
+    // Check the bSigInfo is what we expect it to be
+    {
+        let b_signature_info = untrusted_prove_ov_hdr_payload.b_signature_info();
+        if b_signature_info.sig_type() != sigtype {
+            bail!("Invalid signature type returned");
+        }
+        if !b_signature_info.info().is_empty() {
+            bail!("Non-empty signature info returned");
+        }
+    }
+
+    // Verify the HMAC, we do this in an extra scope to not leak anything untrusted out
+    let header_hmac = {
+        let ov_hdr_vec = serde_cbor::to_vec(&untrusted_prove_ov_hdr_payload.ov_header())
+            .context("Error parsing Ownership Voucher header")?;
+        let hmac_key = PKey::hmac(&devcred.hmac_secret).context("Error building hmac key")?;
+        let mut hmac_signer = Signer::new(MessageDigest::sha384(), &hmac_key)
+            .context("Error creating hmac signer")?;
+        hmac_signer
+            .update(&ov_hdr_vec)
+            .context("Error feeding OV into hmac")?;
+        let ov_hmac = hmac_signer
+            .sign_to_vec()
+            .context("Error computing OV HMac")?;
+        let ov_hmac = HMac::new_from_data(HashType::Sha384, ov_hmac);
+
+        if &ov_hmac != untrusted_prove_ov_hdr_payload.hmac() {
+            bail!("HMac over ownership voucher was invalid");
+        }
+        log::trace!("Ownership Voucher HMAC validated");
+        ov_hmac
+    };
+
+    // Get nonce6
+    let nonce6 = {
+        prove_ov_hdr
+            .get_unprotected()
+            .get(&HeaderKeys::CUPHNonce.cbor_value())
+            .ok_or_else(|| anyhow!("Missing nonce6"))
+    }?;
+
+    // Get the other OV entries
+    let ov_entries = get_ov_entries(&mut client, untrusted_prove_ov_hdr_payload.num_ov_entries())
+        .await
+        .context("Error getting remaining OV entries")?;
+
+    // At this moment, we have validated all we can, we'll check the signature later (After we get the final bits of the OV)
+    let ownership_voucher = {
+        let header = serde_cbor::to_vec(&untrusted_prove_ov_hdr_payload.ov_header())
+            .context("Error serializing the OV header")?;
+        OwnershipVoucher::from_parts(header, header_hmac, ov_entries)
+    };
+    log::trace!(
+        "Reconstructed full ownership voucher: {:?}",
+        ownership_voucher
+    );
+
+    // Get the last entry of the ownership voucher, this automatically validates everything (yay abstraction!)
+    let ov_owner_entry = ownership_voucher
+        .iter_entries()
+        .context("Error initializing iterator")?
+        .last()
+        .context("Error validating ownership voucher")?
+        .context("Last entry on ownership voucher was wrong")?;
+    log::trace!("Got owner entry: {:?}", ov_owner_entry);
+
+    // Now, we can finally verify the OV Header signature we got at the top!
+    let owner_pubkey = ov_owner_entry
+        .public_key
+        .as_pkey()
+        .context("Error parsing owner public key")?;
+    if !prove_ov_hdr
+        .verify_signature(&owner_pubkey)
+        .context("Error validating ProveOVHdr signature")?
+    {
+        bail!("Invalid ProveOVHdr signature");
+    }
+    log::trace!("ProveOVHdr validated with public key: {:?}", owner_pubkey);
 
     todo!();
 }

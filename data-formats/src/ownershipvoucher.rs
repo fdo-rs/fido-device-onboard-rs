@@ -40,6 +40,19 @@ impl OwnershipVoucher {
         }
     }
 
+    pub fn from_parts(header: Vec<u8>, header_hmac: HMac, entries: Vec<Vec<u8>>) -> Self {
+        OwnershipVoucher {
+            header,
+            header_hmac,
+            device_certificate_chain: None,
+            entries,
+        }
+    }
+
+    pub fn header_hmac(&self) -> &HMac {
+        &self.header_hmac
+    }
+
     fn hdr_hash(&self) -> Vec<u8> {
         let mut hdr_hash = Vec::with_capacity(self.header.len() + self.header_hmac.value().len());
         hdr_hash.extend_from_slice(&self.header);
@@ -58,6 +71,17 @@ impl OwnershipVoucher {
                 .skip(1)
                 .collect(),
         )
+    }
+
+    pub fn num_entries(&self) -> u16 {
+        self.entries.len() as u16
+    }
+
+    pub fn entry(&self, entry_num: u16) -> Result<Option<COSESign1>> {
+        match self.entries.get(entry_num as usize) {
+            None => Ok(None),
+            Some(v) => Ok(Some(COSESign1::from_bytes(&v)?)),
+        }
     }
 
     pub fn device_certificate(&self) -> Result<Option<X509>> {
@@ -87,7 +111,7 @@ impl OwnershipVoucher {
         } else {
             let lastrawentry = &self.entries[self.entries.len() - 1];
             let lastsignedentry = COSESign1::from_bytes(&lastrawentry)?;
-            let lastentry: OwnershipVoucherEntry =
+            let lastentry: OwnershipVoucherEntryPayload =
                 serde_cbor::from_slice(&lastsignedentry.get_payload(None)?)?;
             // Check whether the hash_type passed is identical to the previous entry, or is not passed at all.
             let hash_type = if let Some(hash_type) = hash_type {
@@ -109,7 +133,7 @@ impl OwnershipVoucher {
 
         // Create new entry
         let hdrinfo_hash = Hash::new(hash_type, &self.get_header()?.get_info()?)?;
-        let new_entry = OwnershipVoucherEntry {
+        let new_entry = OwnershipVoucherEntryPayload {
             hash_previous_entry: last_hash,
             hash_header_info: hdrinfo_hash,
             public_key: next_party.clone(),
@@ -161,11 +185,12 @@ pub struct EntryIter<'a> {
 }
 
 impl<'a> Iterator for EntryIter<'a> {
-    type Item = Result<OwnershipVoucherEntry>;
+    type Item = Result<OwnershipVoucherEntryPayload>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.errored {
-            return Some(Err(Error::PreviousEntryFailed));
+            log::warn!("Previous entry validation failed");
+            return None;
         }
         if self.index >= self.voucher.entries.len() {
             return None;
@@ -173,7 +198,8 @@ impl<'a> Iterator for EntryIter<'a> {
 
         let entry = self.process_element(&self.voucher.entries[self.index]);
 
-        if !entry.is_ok() {
+        if entry.is_err() {
+            log::warn!("Error validating ownership voucher: {:?}", entry);
             self.errored = true;
         }
 
@@ -188,12 +214,12 @@ impl<'a> EntryIter<'a> {
         &self.pubkey
     }
 
-    fn process_element(&mut self, element: &'a [u8]) -> Result<OwnershipVoucherEntry> {
+    fn process_element(&mut self, element: &'a [u8]) -> Result<OwnershipVoucherEntryPayload> {
         let entry = aws_nitro_enclaves_cose::COSESign1::from_bytes(element)?;
         let key = self.pubkey.as_pkey()?;
         let payload = entry.get_payload(Some(&key))?;
 
-        let entry: OwnershipVoucherEntry = serde_cbor::from_slice(&payload)?;
+        let entry: OwnershipVoucherEntryPayload = serde_cbor::from_slice(&payload)?;
 
         // Compare the HashPreviousEntry to either (HeaderTag || HeaderHmac) or the previous entry
         let mut hdr_hash =
@@ -265,11 +291,8 @@ impl TryFrom<&OwnershipVoucherHeader> for Vec<u8> {
     }
 }
 
-// TODO: From COSE_X509
-type OwnershipVoucherDeviceCertificate = Vec<u8>;
-
 #[derive(Debug, Deserialize, Serialize_tuple)]
-pub struct OwnershipVoucherEntry {
+pub struct OwnershipVoucherEntryPayload {
     pub hash_previous_entry: Hash,
     pub hash_header_info: Hash,
     pub public_key: PublicKey,

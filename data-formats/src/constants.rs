@@ -86,7 +86,12 @@ pub enum HeaderKeys {
 }
 
 impl HeaderKeys {
-    pub const EUPHNonce: HeaderKeys = HeaderKeys::CUPHNonce;
+    pub fn cbor_value(&self) -> serde_cbor::Value {
+        match self {
+            HeaderKeys::CUPHNonce => serde_cbor::Value::Integer(-17760701),
+            HeaderKeys::CUPHOwnerPubKey => serde_cbor::Value::Integer(-17760702),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr)]

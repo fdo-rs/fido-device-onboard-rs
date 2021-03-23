@@ -19,12 +19,12 @@ pub enum Error {
     UnsupportedAlgorithm,
     #[error("Non-owner key attempted to sign")]
     NonOwnerKey,
-    #[error("A previouw entry in the ownership voucher failed to validate")]
-    PreviousEntryFailed,
     #[error("Inconsistent values were used for '{0}'")]
     InconsistentValue(&'static str),
     #[error("An invalid state machine transition was attempted")]
     InvalidTransition,
     #[error("Invalid cryptographic suite name requested: {0}")]
     InvalidSuiteName(String),
+    #[error("Invalid entry number requested")]
+    InvalidEntryNum,
 }

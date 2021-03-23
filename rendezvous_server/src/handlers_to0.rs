@@ -58,13 +58,14 @@ pub(super) async fn ownersign(
         correct_nonce,
         msg.to0d().nonce()
     );
-    correct_nonce.compare(msg.to0d().nonce()).map_err(|_| {
-        Error::new(
+    if &correct_nonce != msg.to0d().nonce() {
+        return Err(Error::new(
             ErrorCode::InvalidMessageError,
             messages::to0::OwnerSign::message_type(),
             "Invalid nonce3",
         )
-    })?;
+        .into());
+    }
 
     // Now check the OV first public key: is it one we trust?
     let manufacturer_pubkey = msg

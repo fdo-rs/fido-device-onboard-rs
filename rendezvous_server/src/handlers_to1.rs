@@ -149,13 +149,14 @@ pub(super) async fn prove_to_rv(
         )
     })?;
 
-    nonce4.compare(&signed_nonce).map_err(|_| {
-        Error::new(
+    if nonce4 != signed_nonce {
+        return Err(Error::new(
             ErrorCode::InvalidMessageError,
             messages::to1::ProveToRV::message_type(),
             "Nonce invaid",
         )
-    })?;
+        .into());
+    }
 
     // Okay, device is trusted! Now return their owner information
     let rv_redirect = messages::to1::RVRedirect::new(to1d);

@@ -1,17 +1,34 @@
 use openssl::symm::{encrypt, Cipher};
 use serde::{Deserialize, Serialize};
 
+use fdo_data_formats::types::DerivedKeys;
+
 #[cfg(feature = "server")]
 pub mod server;
 
 #[cfg(feature = "client")]
 pub mod client;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub enum EncryptionKeys {
     None,
     AEAD(Vec<u8>),
     Separate(Vec<u8>, Vec<u8>),
+}
+
+impl From<DerivedKeys> for EncryptionKeys {
+    fn from(dk: DerivedKeys) -> Self {
+        match dk {
+            DerivedKeys::SEVK(sevk) => EncryptionKeys::AEAD(sevk),
+            DerivedKeys::Split { sek, svk } => EncryptionKeys::Separate(sek, svk),
+        }
+    }
+}
+
+impl std::fmt::Debug for EncryptionKeys {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("[[ ENCRYPTIONKEYS: REDACTED ]]")
+    }
 }
 
 #[derive(Debug)]
