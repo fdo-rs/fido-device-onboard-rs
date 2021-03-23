@@ -49,6 +49,10 @@ impl SessionStore {
         self.store.destroy_data(&id).await?;
         Ok(())
     }
+
+    pub async fn perform_maintenance(&self) -> Result<(), SessionError> {
+        Ok(self.store.perform_maintenance().await?)
+    }
 }
 
 #[derive(Debug, Error)]

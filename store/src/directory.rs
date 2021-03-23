@@ -63,7 +63,7 @@ where
 fn ttl_from_disk(ttl: &[u8]) -> Result<SystemTime, StoreError> {
     if ttl.len() != 8 {
         return Err(StoreError::Unspecified(format!(
-            "TTL length is not u128: {:?}",
+            "TTL length is not u64: {:?}",
             ttl
         )));
     }

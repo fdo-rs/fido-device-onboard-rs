@@ -17,6 +17,8 @@ struct RendezvousUD {
     trusted_manufacturer_keys: X5Bag,
     trusted_device_keys: X5Bag,
     store: Box<dyn Store<Guid, (PublicKey, COSESign1)>>,
+
+    session_store: Arc<fdo_http_wrapper::server::SessionStore>,
 }
 
 type RendezvousUDT = Arc<RendezvousUD>;
@@ -37,6 +39,30 @@ struct Settings {
 
     // Other info
     max_wait_seconds: Option<u32>,
+}
+
+const MAINTENANCE_INTERVAL: u64 = 60;
+
+async fn perform_maintenance(udt: RendezvousUDT) {
+    log::trace!("Scheduling maintenance every {} seconds", MAINTENANCE_INTERVAL);
+
+    loop {
+        tokio::time::sleep(tokio::time::Duration::from_secs(MAINTENANCE_INTERVAL)).await;
+        log::info!("Maintenance starting");
+
+        let store_maint = udt.store.perform_maintenance();
+        let ses_maint = udt.session_store.perform_maintenance();
+
+        let (store_res, ses_res) = tokio::join!(store_maint, ses_maint);
+        if let Err(e) = store_res {
+            log::warn!("Error during store maintenance: {:?}", e);
+        }
+        if let Err(e) = ses_res {
+            log::warn!("Error during session store maintenance: {:?}", e);
+        }
+
+        log::info!("Maintenance finished");
+    }
 }
 
 const DEFAULT_MAX_WAIT_SECONDS: u32 = 2592000;
@@ -97,6 +123,8 @@ async fn main() -> Result<()> {
         store,
         trusted_manufacturer_keys,
         trusted_device_keys,
+
+        session_store: session_store.clone(),
     });
 
     // Install handlers
@@ -140,6 +168,12 @@ async fn main() -> Result<()> {
         .with(warp::log("rendezvous_server"));
 
     println!("Listening on :8081");
-    warp::serve(routes).run(([0, 0, 0, 0], 8081)).await;
+    let server = warp::serve(routes).run(([0, 0, 0, 0], 8081));
+    let maintenance_runner = tokio::spawn(async move {
+        perform_maintenance(user_data.clone()).await
+    });
+
+    tokio::join!(server, maintenance_runner);
+
     Ok(())
 }
