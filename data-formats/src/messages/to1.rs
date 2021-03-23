@@ -2,7 +2,7 @@ use aws_nitro_enclaves_cose::COSESign1;
 use serde::{Deserialize, Serialize};
 use serde_tuple::Serialize_tuple;
 
-use super::Message;
+use super::{ClientMessage, Message, ServerMessage};
 
 use crate::types::{Guid, Nonce, SigInfo};
 
@@ -35,6 +35,8 @@ impl Message for HelloRV {
     }
 }
 
+impl ClientMessage for HelloRV {}
+
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct HelloRVAck {
     nonce4: Nonce,
@@ -64,6 +66,8 @@ impl Message for HelloRVAck {
     }
 }
 
+impl ServerMessage for HelloRVAck {}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProveToRV(COSESign1);
 
@@ -82,6 +86,8 @@ impl Message for ProveToRV {
         32
     }
 }
+
+impl ClientMessage for ProveToRV {}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RVRedirect(COSESign1);
@@ -105,3 +111,5 @@ impl Message for RVRedirect {
         33
     }
 }
+
+impl ServerMessage for RVRedirect {}

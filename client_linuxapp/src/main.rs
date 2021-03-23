@@ -6,13 +6,45 @@ use aws_nitro_enclaves_cose::COSESign1;
 use openssl::pkey::PKey;
 
 use fdo_data_formats::{
-    constants::DeviceSigType,
+    constants::{DeviceSigType, TransportProtocol},
     enhanced_types::{RendezvousInterpretedDirective, RendezvousInterpreterSide},
     messages,
-    types::{DeviceCredential, SigInfo, TO1DataPayload},
+    types::{
+        CipherSuite, DeviceCredential, KexSuite, Nonce, SigInfo, TO1DataPayload, TO2AddressEntry,
+    },
 };
 
 use fdo_http_wrapper::client::{RequestResult, ServiceClient};
+
+fn get_to2_urls(entries: &[TO2AddressEntry]) -> Vec<String> {
+    let mut urls = Vec::new();
+
+    for addr_entry in entries {
+        let prot_text = match addr_entry.protocol() {
+            TransportProtocol::HTTP => "http",
+            TransportProtocol::HTTPS => "https",
+            _ => continue,
+        };
+        if let Some(dns_name) = addr_entry.dns() {
+            urls.push(format!(
+                "{}://{}:{}",
+                prot_text,
+                dns_name,
+                addr_entry.port()
+            ));
+        }
+        if let Some(ip_address) = addr_entry.ip() {
+            urls.push(format!(
+                "{}://{}:{}",
+                prot_text,
+                ip_address,
+                addr_entry.port()
+            ));
+        }
+    }
+
+    urls
+}
 
 async fn get_client(rv_info: Vec<RendezvousInterpretedDirective>) -> Result<ServiceClient> {
     for rv_entry in rv_info {
@@ -106,6 +138,32 @@ async fn get_to1d_from_rv(devcred: &DeviceCredential) -> Result<COSESign1> {
         .context("Error performing TO1")
 }
 
+async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> {
+    log::info!("Performing TO2 protocol, URLs: {:?}", urls);
+    let url = urls.first().unwrap();
+
+    let nonce5 = Nonce::new().context("Error generating nonce5")?;
+
+    let mut client = fdo_http_wrapper::client::ServiceClient::new(&url);
+
+    // Send: HelloDevice, Receive: ProveOVHdr
+    let prove_ov_hdr: RequestResult<messages::to2::ProveOVHdr> = client
+        .send_request(
+            messages::to2::HelloDevice::new(
+                devcred.guid.clone(),
+                nonce5,
+                KexSuite::ECDH384,
+                CipherSuite::A256GCM,
+                SigInfo::new(DeviceSigType::StSECP384R1, vec![]),
+            ),
+            None,
+        )
+        .await;
+    let prove_ov_hdr = prove_ov_hdr.context("Error sending HelloDevice")?;
+
+    todo!();
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     pretty_env_logger::init();
@@ -137,31 +195,14 @@ async fn main() -> Result<()> {
     let to1d_payload: TO1DataPayload = serde_cbor::from_slice(&to1d_payload)
         .context("Error loading the TO1DataPayload out of TO1D")?;
     let to2_addresses = to1d_payload.to2_addresses();
+    let to2_addresses = get_to2_urls(&to2_addresses);
     log::info!("Got TO2 addresses: {:?}", to2_addresses);
 
-    todo!();
+    if to2_addresses.is_empty() {
+        bail!("No valid TO2 addresses received");
+    }
 
-    /*let mut di_client = fdo_http_wrapper::client::ServiceClient::new("http://localhost:8080/");
-
-    println!("CLient: {:?}", di_client);
-
-    let mut i: u8 = 0;
-    while i < 6 {
-        println!("Performing request nr {}", i);
-        let appstart = messages::di::AppStart::new(CborSimpleType::Text("testing".to_string()));
-        let response: RequestResult<messages::di::SetCredentials> = di_client
-            .send_request(
-                appstart,
-                if i == 1 {
-                    Some(EncryptionKeys::AEAD(vec![1, 2, 3, 4]))
-                } else {
-                    None
-                },
-            )
-            .await;
-
-        println!("Response: {:?}", response);
-
-        i += 1
-    }*/
+    perform_to2(&dc, &to2_addresses)
+        .await
+        .context("Error performing TO2 ownership protocol")
 }

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::Message;
+use super::{ClientMessage, Message, ServerMessage};
 
 use crate::constants::ErrorCode;
 
@@ -53,3 +53,6 @@ impl Message for ErrorMessage {
         http::StatusCode::INTERNAL_SERVER_ERROR
     }
 }
+
+impl ClientMessage for ErrorMessage {}
+impl ServerMessage for ErrorMessage {}

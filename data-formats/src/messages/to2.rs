@@ -2,7 +2,7 @@ use aws_nitro_enclaves_cose::COSESign1;
 use serde::{Deserialize, Serialize};
 use serde_tuple::Serialize_tuple;
 
-use super::Message;
+use super::{ClientMessage, Message, ServerMessage};
 
 use crate::{
     ownershipvoucher::OwnershipVoucherEntry,
@@ -62,6 +62,8 @@ impl Message for HelloDevice {
     }
 }
 
+impl ClientMessage for HelloDevice {}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProveOVHdr(COSESign1);
 
@@ -80,6 +82,8 @@ impl Message for ProveOVHdr {
         61
     }
 }
+
+impl ServerMessage for ProveOVHdr {}
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct GetOVNextEntry {
@@ -101,6 +105,8 @@ impl Message for GetOVNextEntry {
         62
     }
 }
+
+impl ClientMessage for GetOVNextEntry {}
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct OVNextEntry {
@@ -128,6 +134,8 @@ impl Message for OVNextEntry {
     }
 }
 
+impl ServerMessage for OVNextEntry {}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProveDevice(COSESign1);
 
@@ -147,6 +155,8 @@ impl Message for ProveDevice {
     }
 }
 
+impl ClientMessage for ProveDevice {}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SetupDevice(COSESign1);
 
@@ -165,6 +175,8 @@ impl Message for SetupDevice {
         65
     }
 }
+
+impl ServerMessage for SetupDevice {}
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct DeviceServiceInfoReady {
@@ -195,6 +207,8 @@ impl Message for DeviceServiceInfoReady {
     }
 }
 
+impl ClientMessage for DeviceServiceInfoReady {}
+
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct OwnerServiceInfoReady {
     max_device_service_info_size: Option<u64>,
@@ -217,6 +231,8 @@ impl Message for OwnerServiceInfoReady {
         67
     }
 }
+
+impl ServerMessage for OwnerServiceInfoReady {}
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct DeviceServiceInfo {
@@ -246,6 +262,8 @@ impl Message for DeviceServiceInfo {
         68
     }
 }
+
+impl ClientMessage for DeviceServiceInfo {}
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct OwnerServiceInfo {
@@ -282,6 +300,8 @@ impl Message for OwnerServiceInfo {
     }
 }
 
+impl ServerMessage for OwnerServiceInfo {}
+
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct Done {
     nonce6: Nonce,
@@ -303,6 +323,8 @@ impl Message for Done {
     }
 }
 
+impl ClientMessage for Done {}
+
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct Done2 {
     nonce7: Nonce,
@@ -323,3 +345,5 @@ impl Message for Done2 {
         71
     }
 }
+
+impl ServerMessage for Done2 {}

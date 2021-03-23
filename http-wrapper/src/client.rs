@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use fdo_data_formats::messages::{ErrorMessage, Message};
+use fdo_data_formats::messages::{ClientMessage, ErrorMessage, Message, ServerMessage};
 
 use crate::{CryptoError, EncryptionKeys};
 
@@ -56,8 +56,8 @@ impl ServiceClient {
         new_keys: Option<EncryptionKeys>,
     ) -> RequestResult<SM>
     where
-        OM: Message,
-        SM: Message,
+        OM: Message + ClientMessage,
+        SM: Message + ServerMessage,
     {
         let to_send = to_send.to_wire()?;
         let to_send = self.encryption_keys.encrypt(&to_send)?;

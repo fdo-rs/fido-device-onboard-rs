@@ -2,7 +2,7 @@ use aws_nitro_enclaves_cose::COSESign1;
 use serde::{Deserialize, Serialize};
 use serde_tuple::Serialize_tuple;
 
-use super::{Message, ParseError};
+use super::{ClientMessage, Message, ServerMessage};
 
 use crate::types::{Nonce, TO0Data, TO1DataPayload};
 
@@ -32,6 +32,8 @@ impl Serialize for Hello {
     }
 }
 
+impl ClientMessage for Hello {}
+
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct HelloAck {
     nonce3: Nonce,
@@ -52,6 +54,8 @@ impl Message for HelloAck {
         21
     }
 }
+
+impl ServerMessage for HelloAck {}
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct OwnerSign {
@@ -79,6 +83,8 @@ impl Message for OwnerSign {
     }
 }
 
+impl ClientMessage for OwnerSign {}
+
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct AcceptOwner {
     wait_seconds: u32,
@@ -99,3 +105,5 @@ impl Message for AcceptOwner {
         23
     }
 }
+
+impl ServerMessage for AcceptOwner {}

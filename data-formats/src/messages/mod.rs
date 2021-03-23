@@ -12,6 +12,9 @@ pub mod to0;
 pub mod to1;
 pub mod to2;
 
+pub trait ClientMessage: Message {}
+pub trait ServerMessage: Message {}
+
 #[derive(Debug, Error)]
 pub enum ParseError {
     #[error("Serialization error")]

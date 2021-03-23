@@ -4,7 +4,7 @@ use std::sync::Arc;
 use super::EncryptionKeys;
 use fdo_data_formats::{
     constants::ErrorCode,
-    messages::{self, Message},
+    messages::{self, ClientMessage, Message, ServerMessage},
 };
 use fdo_store::Store;
 
@@ -211,7 +211,7 @@ where
 
 fn to_response<MT>(val: Vec<u8>, token: Option<String>) -> warp::reply::Response
 where
-    MT: Message,
+    MT: Message + ServerMessage,
 {
     let mut builder = warp::http::response::Response::builder()
         .status(MT::status_code())
@@ -232,8 +232,8 @@ async fn encrypt_and_generate_response<IM, OM>(
     enc_keys: EncryptionKeys,
 ) -> Result<warp::reply::Response, warp::Rejection>
 where
-    IM: Message,
-    OM: Message,
+    IM: Message + ClientMessage,
+    OM: Message + ServerMessage,
 {
     let val = match enc_keys.encrypt(&val) {
         Ok(v) => v,
@@ -259,8 +259,8 @@ where
     UDT: Clone + Send + Sync + 'static,
     F: Fn(UDT, SessionWithStore, IM) -> FR + Clone + Send + Sync + 'static,
     FR: futures::Future<Output = Result<(OM, SessionWithStore), warp::Rejection>> + Send,
-    IM: messages::Message + 'static,
-    OM: messages::Message + 'static,
+    IM: messages::Message + ClientMessage + 'static,
+    OM: messages::Message + ServerMessage + 'static,
 {
     warp::post()
         // Construct expected HTTP path
