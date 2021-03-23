@@ -25,4 +25,6 @@ pub enum Error {
     InconsistentValue(&'static str),
     #[error("An invalid state machine transition was attempted")]
     InvalidTransition,
+    #[error("Invalid cryptographic suite name requested: {0}")]
+    InvalidSuiteName(String),
 }

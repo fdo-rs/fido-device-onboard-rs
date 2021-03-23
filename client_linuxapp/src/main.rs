@@ -9,7 +9,7 @@ use fdo_data_formats::{
     constants::DeviceSigType,
     enhanced_types::{RendezvousInterpretedDirective, RendezvousInterpreterSide},
     messages,
-    types::{DeviceCredential, SigInfo},
+    types::{DeviceCredential, SigInfo, TO1DataPayload},
 };
 
 use fdo_http_wrapper::client::{RequestResult, ServiceClient};
@@ -130,6 +130,14 @@ async fn main() -> Result<()> {
         .await
         .context("Error getting to1d from rendezvous server")?;
     log::trace!("Received a usable to1d structure:: {:?}", to1d);
+
+    let to1d_payload = to1d
+        .get_payload(None)
+        .context("Error getting the TO2 payload")?;
+    let to1d_payload: TO1DataPayload = serde_cbor::from_slice(&to1d_payload)
+        .context("Error loading the TO1DataPayload out of TO1D")?;
+    let to2_addresses = to1d_payload.to2_addresses();
+    log::info!("Got TO2 addresses: {:?}", to2_addresses);
 
     todo!();
 

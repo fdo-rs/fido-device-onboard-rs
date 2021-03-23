@@ -466,10 +466,144 @@ pub struct MessageProtocolInfo {
 }
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
-pub struct Message {
+pub struct SizedMessage {
     msglen: u16,
     msgtype: crate::constants::MessageType,
     protver: u16,
     protocol_info: MessageProtocolInfo,
     body: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum KexSuite {
+    ECDH256,
+    ECDH384,
+}
+
+impl FromStr for KexSuite {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Error> {
+        match &s.to_lowercase()[..] {
+            "ecdh256" => Ok(KexSuite::ECDH256),
+            "ecdh384" => Ok(KexSuite::ECDH384),
+            other => Err(Error::InvalidSuiteName(other.to_string())),
+        }
+    }
+}
+
+impl ToString for KexSuite {
+    fn to_string(&self) -> String {
+        match self {
+            KexSuite::ECDH256 => "ECDH256".to_string(),
+            KexSuite::ECDH384 => "ECDH384".to_string(),
+        }
+    }
+}
+
+impl Serialize for KexSuite {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for KexSuite {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct KexSuiteVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for KexSuiteVisitor {
+            type Value = KexSuite;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a kexsuite string")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                KexSuite::from_str(v).map_err(|_| {
+                    serde::de::Error::invalid_value(
+                        serde::de::Unexpected::Str(v),
+                        &"a valid kex suite",
+                    )
+                })
+            }
+        }
+
+        deserializer.deserialize_str(KexSuiteVisitor)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum CipherSuite {
+    A128GCM,
+    A256GCM,
+}
+
+impl FromStr for CipherSuite {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Error> {
+        match &s.to_lowercase()[..] {
+            "a128gcm" => Ok(CipherSuite::A128GCM),
+            "a256gcm" => Ok(CipherSuite::A256GCM),
+            other => Err(Error::InvalidSuiteName(other.to_string())),
+        }
+    }
+}
+
+impl ToString for CipherSuite {
+    fn to_string(&self) -> String {
+        match self {
+            CipherSuite::A128GCM => "A128GCM".to_string(),
+            CipherSuite::A256GCM => "A256GCM".to_string(),
+        }
+    }
+}
+
+impl Serialize for CipherSuite {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for CipherSuite {
+    fn deserialize<D>(deserializer: D) -> Result<CipherSuite, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct CipherSuiteVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for CipherSuiteVisitor {
+            type Value = CipherSuite;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a ciphersuite string")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                CipherSuite::from_str(v).map_err(|_| {
+                    serde::de::Error::invalid_value(
+                        serde::de::Unexpected::Str(v),
+                        &"a valid cipher suite",
+                    )
+                })
+            }
+        }
+
+        deserializer.deserialize_str(CipherSuiteVisitor)
+    }
 }

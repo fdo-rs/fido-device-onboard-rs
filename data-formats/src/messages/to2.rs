@@ -6,15 +6,15 @@ use super::Message;
 
 use crate::{
     ownershipvoucher::OwnershipVoucherEntry,
-    types::{Guid, HMac, Nonce, ServiceInfo, SigInfo},
+    types::{CipherSuite, Guid, HMac, KexSuite, Nonce, ServiceInfo, SigInfo},
 };
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct HelloDevice {
     guid: Guid,
     nonce5: Nonce,
-    kex_suite_name: String,
-    cipher_suite_name: String,
+    kex_suite: KexSuite,
+    cipher_suite: CipherSuite,
     a_signature_info: SigInfo,
 }
 
@@ -22,15 +22,15 @@ impl HelloDevice {
     pub fn new(
         guid: Guid,
         nonce5: Nonce,
-        kex_suite_name: &str,
-        cipher_suite_name: &str,
+        kex_suite: KexSuite,
+        cipher_suite: CipherSuite,
         a_signature_info: SigInfo,
     ) -> Self {
         HelloDevice {
             guid,
             nonce5,
-            kex_suite_name: kex_suite_name.to_string(),
-            cipher_suite_name: cipher_suite_name.to_string(),
+            kex_suite,
+            cipher_suite,
             a_signature_info,
         }
     }
@@ -43,12 +43,12 @@ impl HelloDevice {
         &self.nonce5
     }
 
-    pub fn kex_suite_name(&self) -> &str {
-        &self.kex_suite_name
+    pub fn kex_suite(&self) -> KexSuite {
+        self.kex_suite
     }
 
-    pub fn cipher_suite_name(&self) -> &str {
-        &self.cipher_suite_name
+    pub fn cipher_suite(&self) -> CipherSuite {
+        self.cipher_suite
     }
 
     pub fn a_signature_info(&self) -> &SigInfo {

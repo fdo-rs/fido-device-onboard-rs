@@ -1,20 +1,35 @@
+use std::fs;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use aws_nitro_enclaves_cose::COSESign1;
-use openssl::x509::X509;
+use openssl::{
+    pkey::{PKey, Private},
+    x509::X509,
+};
 use serde::Deserialize;
 use warp::Filter;
 
 use fdo_data_formats::{
-    enhanced_types::X5Bag, ownershipvoucher::OwnershipVoucher, publickey::PublicKey, types::Guid,
+    enhanced_types::X5Bag,
+    ownershipvoucher::OwnershipVoucher,
+    publickey::PublicKey,
+    types::{Guid, RendezvousInfo},
 };
 use fdo_store::{Store, StoreDriver};
 
 mod handlers;
 
 struct OwnerServiceUD {
+    // Trusted keys
+    trusted_device_keys: X5Bag,
+
+    // Stores
     ownership_voucher_store: Box<dyn Store<Guid, OwnershipVoucher>>,
+    session_store: Arc<fdo_http_wrapper::server::SessionStore>,
+
+    // Our keys
+    owner_key: PKey<Private>,
 }
 
 type OwnerServiceUDT = Arc<OwnerServiceUD>;
@@ -28,6 +43,44 @@ struct Settings {
     // Session store info
     session_store_driver: StoreDriver,
     session_store_config: Option<config::Value>,
+
+    // Trusted keys
+    trusted_device_keys_path: String,
+
+    // Our private owner key
+    owner_private_key_path: String,
+}
+
+fn load_private_key(path: &str) -> Result<PKey<Private>> {
+    let contents = fs::read(path)?;
+    Ok(PKey::private_key_from_der(&contents)?)
+}
+
+const MAINTENANCE_INTERVAL: u64 = 60;
+
+async fn perform_maintenance(udt: OwnerServiceUDT) {
+    log::trace!(
+        "Scheduling maintenance every {} seconds",
+        MAINTENANCE_INTERVAL
+    );
+
+    loop {
+        tokio::time::sleep(tokio::time::Duration::from_secs(MAINTENANCE_INTERVAL)).await;
+        log::debug!("Maintenance starting");
+
+        let ov_maint = udt.ownership_voucher_store.perform_maintenance();
+        let ses_maint = udt.session_store.perform_maintenance();
+
+        let (ov_res, ses_res) = tokio::join!(ov_maint, ses_maint);
+        if let Err(e) = ov_res {
+            log::warn!("Error during ownership voucher store maintenance: {:?}", e);
+        }
+        if let Err(e) = ses_res {
+            log::warn!("Error during session store maintenance: {:?}", e);
+        }
+
+        log::debug!("Maintenance finished");
+    }
 }
 
 #[tokio::main]
@@ -42,6 +95,27 @@ async fn main() -> Result<()> {
         .context("Loading configuration from environment variables")?;
     let settings: Settings = settings.try_into().context("Error parsing configuration")?;
 
+    // Trusted keys
+    let trusted_device_keys = {
+        let trusted_keys_path = &settings.trusted_device_keys_path;
+        let contents = std::fs::read(&trusted_keys_path).with_context(|| {
+            format!(
+                "Error reading trusted device keys from {}",
+                trusted_keys_path
+            )
+        })?;
+        X509::stack_from_pem(&contents).context("Error parsing trusted device keys")?
+    };
+    let trusted_device_keys = X5Bag::new(trusted_device_keys);
+
+    // Our private key
+    let owner_key = load_private_key(&settings.owner_private_key_path).with_context(|| {
+        format!(
+            "Error loading owner key from {}",
+            &settings.owner_private_key_path
+        )
+    })?;
+
     // Initialize stores
     let ownership_voucher_store = settings
         .ownership_voucher_store_driver
@@ -53,11 +127,17 @@ async fn main() -> Result<()> {
         .context("Error initializing session store")?;
     let session_store = fdo_http_wrapper::server::SessionStore::new(session_store);
 
-    // TODO: Initialize rest
-
     // Initialize user data
     let user_data = Arc::new(OwnerServiceUD {
+        // Stores
         ownership_voucher_store,
+        session_store: session_store.clone(),
+
+        // Trusted keys
+        trusted_device_keys,
+
+        // Private owner key
+        owner_key,
         // TODO
     });
 
@@ -111,6 +191,11 @@ async fn main() -> Result<()> {
         .with(warp::log("owner_onboarding_service"));
 
     println!("Listening on :8082");
-    warp::serve(routes).run(([0, 0, 0, 0], 8082)).await;
+    let server = warp::serve(routes).run(([0, 0, 0, 0], 8082));
+    let maintenance_runner =
+        tokio::spawn(async move { perform_maintenance(user_data.clone()).await });
+
+    tokio::join!(server, maintenance_runner);
+
     Ok(())
 }

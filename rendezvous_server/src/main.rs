@@ -51,7 +51,7 @@ async fn perform_maintenance(udt: RendezvousUDT) {
 
     loop {
         tokio::time::sleep(tokio::time::Duration::from_secs(MAINTENANCE_INTERVAL)).await;
-        log::info!("Maintenance starting");
+        log::debug!("Maintenance starting");
 
         let store_maint = udt.store.perform_maintenance();
         let ses_maint = udt.session_store.perform_maintenance();
@@ -64,7 +64,7 @@ async fn perform_maintenance(udt: RendezvousUDT) {
             log::warn!("Error during session store maintenance: {:?}", e);
         }
 
-        log::info!("Maintenance finished");
+        log::debug!("Maintenance finished");
     }
 }
 

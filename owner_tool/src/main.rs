@@ -1,4 +1,9 @@
-use std::{convert::TryFrom, fs, path::Path, str::FromStr};
+use std::{
+    convert::{TryFrom, TryInto},
+    fs,
+    path::Path,
+    str::FromStr,
+};
 
 use anyhow::{bail, Context, Error, Result};
 use aws_nitro_enclaves_cose::COSESign1;
@@ -637,15 +642,14 @@ enum RemoteAddress {
 #[serde(rename_all = "lowercase")]
 struct RemoteConnection {
     transport: RemoteTransport,
-    #[serde(flatten)]
-    address: RemoteAddress,
+    addresses: Vec<RemoteAddress>,
     port: u16,
 }
 
-impl TryFrom<RemoteConnection> for TO2AddressEntry {
+impl TryFrom<RemoteConnection> for Vec<TO2AddressEntry> {
     type Error = Error;
 
-    fn try_from(rc: RemoteConnection) -> Result<TO2AddressEntry> {
+    fn try_from(rc: RemoteConnection) -> Result<Vec<TO2AddressEntry>> {
         let transport = match rc.transport {
             RemoteTransport::TCP => TransportProtocol::TCP,
             RemoteTransport::TLS => TransportProtocol::TLS,
@@ -654,21 +658,28 @@ impl TryFrom<RemoteConnection> for TO2AddressEntry {
             RemoteTransport::HTTPS => TransportProtocol::HTTPS,
             RemoteTransport::CoAPS => TransportProtocol::CoAPS,
         };
-        let ip_address = match &rc.address {
-            RemoteAddress::IP { ip_address } => Some(
-                std::net::IpAddr::from_str(&ip_address)
-                    .with_context(|| format!("Error parsing IP address '{}'", ip_address))?,
-            ),
-            _ => None,
-        };
-        let dns_name = match rc.address {
-            RemoteAddress::DNS { dns_name } => Some(dns_name),
-            _ => None,
-        };
 
-        Ok(TO2AddressEntry::new(
-            ip_address, dns_name, rc.port, transport,
-        ))
+        let mut results = Vec::new();
+
+        for addr in &rc.addresses {
+            match addr {
+                RemoteAddress::IP { ip_address } => {
+                    let addr = std::net::IpAddr::from_str(&ip_address)
+                        .with_context(|| format!("Error parsing IP address '{}'", ip_address))?;
+                    results.push(TO2AddressEntry::new(Some(addr), None, rc.port, transport));
+                }
+                RemoteAddress::DNS { dns_name } => {
+                    results.push(TO2AddressEntry::new(
+                        None,
+                        Some(dns_name.clone()),
+                        rc.port,
+                        transport,
+                    ));
+                }
+            }
+        }
+
+        Ok(results)
     }
 }
 
@@ -717,11 +728,10 @@ async fn report_to_rendezvous(matches: &ArgMatches<'_>) -> Result<(), Error> {
             owner_addresses_path
         )
     })?;
-    let owner_addresses: Result<Vec<TO2AddressEntry>> = owner_addresses
-        .drain(..)
-        .map(TO2AddressEntry::try_from)
-        .collect();
-    let owner_addresses = owner_addresses.context("Error parsing owner addresses")?;
+    let owner_addresses: Result<Vec<Vec<TO2AddressEntry>>> =
+        owner_addresses.drain(..).map(|v| v.try_into()).collect();
+    let mut owner_addresses = owner_addresses.context("Error parsing owner addresses")?;
+    let owner_addresses = owner_addresses.drain(..).flatten().collect();
 
     // Determine the RV IP
     let rv_info = ov
