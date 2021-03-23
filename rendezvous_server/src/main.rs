@@ -44,7 +44,10 @@ struct Settings {
 const MAINTENANCE_INTERVAL: u64 = 60;
 
 async fn perform_maintenance(udt: RendezvousUDT) {
-    log::trace!("Scheduling maintenance every {} seconds", MAINTENANCE_INTERVAL);
+    log::trace!(
+        "Scheduling maintenance every {} seconds",
+        MAINTENANCE_INTERVAL
+    );
 
     loop {
         tokio::time::sleep(tokio::time::Duration::from_secs(MAINTENANCE_INTERVAL)).await;
@@ -169,9 +172,8 @@ async fn main() -> Result<()> {
 
     println!("Listening on :8081");
     let server = warp::serve(routes).run(([0, 0, 0, 0], 8081));
-    let maintenance_runner = tokio::spawn(async move {
-        perform_maintenance(user_data.clone()).await
-    });
+    let maintenance_runner =
+        tokio::spawn(async move { perform_maintenance(user_data.clone()).await });
 
     tokio::join!(server, maintenance_runner);
 
