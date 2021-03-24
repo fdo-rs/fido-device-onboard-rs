@@ -38,6 +38,12 @@ impl EncryptionKeys {
     fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>, CryptoError> {
         match self {
             EncryptionKeys::None => Ok(plaintext.to_vec()),
+            EncryptionKeys::AEAD(_) => {
+                log::error!("WARNING: ENCRYPTION KEY CRYPTO NOT IMPLEMENTED!");
+                let mut res = plaintext.to_vec();
+                res.insert(0, 42);
+                Ok(res)
+            }
             _ => todo!(),
         }
     }
@@ -45,6 +51,13 @@ impl EncryptionKeys {
     fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>, CryptoError> {
         match self {
             EncryptionKeys::None => Ok(ciphertext.to_vec()),
+            EncryptionKeys::AEAD(_) => {
+                log::error!("WARNING: ENCRYPTION KEY CRYPTO NOT IMPLEMENTED!");
+                if ciphertext[0] != 42 {
+                    return Err(CryptoError);
+                }
+                Ok(ciphertext[1..].to_vec())
+            }
             _ => todo!(),
         }
     }

@@ -8,6 +8,7 @@ use crate::{
     constants::{DeviceSigType, HashType, HeaderKeys, RendezvousVariable, TransportProtocol},
     errors::Error,
     ownershipvoucher::{OwnershipVoucher, OwnershipVoucherHeader},
+    publickey::PublicKey,
 };
 
 use openssl::hash::hash;
@@ -313,16 +314,56 @@ impl TO1DataPayload {
 }
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
+pub struct TO2SetupDevicePayload {
+    rendezvous_info: RendezvousInfo,
+    guid: Guid,
+    nonce7: Nonce,
+    owner2_key: PublicKey,
+}
+
+impl TO2SetupDevicePayload {
+    pub fn new(
+        rendezvous_info: RendezvousInfo,
+        guid: Guid,
+        nonce7: Nonce,
+        owner2_key: PublicKey,
+    ) -> Self {
+        TO2SetupDevicePayload {
+            rendezvous_info,
+            guid,
+            nonce7,
+            owner2_key,
+        }
+    }
+
+    pub fn rendezvous_info(&self) -> &RendezvousInfo {
+        &self.rendezvous_info
+    }
+
+    pub fn guid(&self) -> &Guid {
+        &self.guid
+    }
+
+    pub fn nonce7(&self) -> &Nonce {
+        &self.nonce7
+    }
+
+    pub fn owner2_key(&self) -> &PublicKey {
+        &self.owner2_key
+    }
+}
+
+#[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct TO2ProveDevicePayload {
-    b_key_exchange: KeyExchange,
+    b_key_exchange: Vec<u8>,
 }
 
 impl TO2ProveDevicePayload {
-    pub fn new(b_key_exchange: KeyExchange) -> Self {
+    pub fn new(b_key_exchange: Vec<u8>) -> Self {
         TO2ProveDevicePayload { b_key_exchange }
     }
 
-    pub fn b_key_exchange(&self) -> &KeyExchange {
+    pub fn b_key_exchange(&self) -> &[u8] {
         &self.b_key_exchange
     }
 }
@@ -396,7 +437,7 @@ pub struct TO2ProveOVHdrPayload {
     hmac: HMac,
     nonce5: Nonce,
     b_signature_info: SigInfo,
-    a_key_exchange: KeyExchange,
+    a_key_exchange: Vec<u8>,
 }
 
 impl TO2ProveOVHdrPayload {
@@ -406,7 +447,7 @@ impl TO2ProveOVHdrPayload {
         hmac: HMac,
         nonce5: Nonce,
         b_signature_info: SigInfo,
-        a_key_exchange: KeyExchange,
+        a_key_exchange: Vec<u8>,
     ) -> Self {
         TO2ProveOVHdrPayload {
             ov_header,
@@ -438,7 +479,7 @@ impl TO2ProveOVHdrPayload {
         &self.b_signature_info
     }
 
-    pub fn a_key_exchange(&self) -> &KeyExchange {
+    pub fn a_key_exchange(&self) -> &[u8] {
         &self.a_key_exchange
     }
 }
@@ -468,21 +509,31 @@ impl std::fmt::Debug for DerivedKeys {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct KeyExchange(Vec<u8>);
+pub enum KeyExchange {
+    Noop,
+}
 
 impl KeyExchange {
     pub fn new(suite: KexSuite) -> Result<Self, Error> {
-        //todo!();
-        Ok(KeyExchange(vec![]))
+        // TODO!!!!
+        log::error!("WARNING: KEY EXCHANGE NOT IMPLEMENTED!");
+        Ok(KeyExchange::Noop)
+    }
+
+    pub fn get_public(&self) -> Vec<u8> {
+        // TODO!!!!
+        log::error!("WARNING: KEY EXCHANGE AND CRYPTO NOT IMPLEMENTED!");
+        Vec::new()
     }
 
     pub fn derive_key(
         &self,
         suite: KexSuite,
         cipher: CipherSuite,
-        other: &KeyExchange,
+        other: &[u8],
     ) -> Result<DerivedKeys, Error> {
-        todo!();
+        log::error!("WARNING: KEY EXCHANGE NOT IMPLEMENTED!");
+        Ok(DerivedKeys::SEVK(vec![]))
     }
 }
 

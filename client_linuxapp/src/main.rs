@@ -290,15 +290,15 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
     let a_key_exchange = prove_ov_hdr_payload.a_key_exchange();
     let b_key_exchange =
         KeyExchange::new(kexsuite).context("Error creating device side of key exchange")?;
-    let new_keys = a_key_exchange
-        .derive_key(kexsuite, ciphersuite, &b_key_exchange)
+    let new_keys = b_key_exchange
+        .derive_key(kexsuite, ciphersuite, &a_key_exchange)
         .context("Error performing key derivation")?;
     let new_keys = fdo_http_wrapper::EncryptionKeys::from(new_keys);
 
     let nonce7 = Nonce::new().context("Error generating nonce7")?;
 
     // Send: ProveDevice, Receive: SetupDevice
-    let prove_device_payload = TO2ProveDevicePayload::new(b_key_exchange);
+    let prove_device_payload = TO2ProveDevicePayload::new(b_key_exchange.get_public());
     let prove_device_eat = new_eat(
         Some(&prove_device_payload),
         nonce6.clone(),

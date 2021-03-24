@@ -10,13 +10,15 @@ use fdo_data_formats::{
     messages::Message,
     publickey::{PublicKey, PublicKeyBody},
     types::{
-        COSEHeaderMap, COSESign, Guid, KeyExchange, Nonce, SigInfo, TO1DataPayload,
-        TO2ProveDevicePayload, TO2ProveOVHdrPayload,
+        COSEHeaderMap, COSESign, CipherSuite, Guid, KexSuite, KeyExchange, Nonce, RendezvousInfo,
+        SigInfo, TO1DataPayload, TO2ProveDevicePayload, TO2ProveOVHdrPayload,
+        TO2SetupDevicePayload,
     },
 };
 
 use fdo_http_wrapper::server::Error;
 use fdo_http_wrapper::server::SessionWithStore;
+use fdo_http_wrapper::EncryptionKeys;
 
 pub(super) async fn hello_device(
     user_data: super::OwnerServiceUDT,
@@ -72,20 +74,6 @@ pub(super) async fn hello_device(
         .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
     let nonce6 = Nonce::new().map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
 
-    // Store data
-    session
-        .insert("nonce6", nonce6.clone())
-        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
-    session
-        .insert("kexsuite", msg.kex_suite())
-        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
-    session
-        .insert("ciphersuite", msg.cipher_suite())
-        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
-    session
-        .insert("a_key_exchange", a_key_exchange.clone())
-        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
-
     // Now produce the result
     let ov_hdr = ownership_voucher
         .get_header()
@@ -97,8 +85,24 @@ pub(super) async fn hello_device(
         ownership_voucher.header_hmac().clone(),
         msg.nonce5().clone(),
         SigInfo::new(msg.a_signature_info().sig_type(), vec![]),
-        a_key_exchange,
+        a_key_exchange.get_public(),
     );
+
+    // Store data
+    session
+        .insert("nonce6", nonce6.clone())
+        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
+    session
+        .insert("kexsuite", msg.kex_suite())
+        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
+    session
+        .insert("ciphersuite", msg.cipher_suite())
+        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
+    session
+        .insert("a_key_exchange", a_key_exchange)
+        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
+
+    // Continue result production
     let mut res_header = COSEHeaderMap::new();
     res_header
         .insert(HeaderKeys::CUPHNonce, &nonce6)
@@ -168,11 +172,188 @@ pub(super) async fn get_ov_next_entry(
 }
 
 pub(super) async fn prove_device(
-    _user_data: super::OwnerServiceUDT,
+    user_data: super::OwnerServiceUDT,
     mut ses_with_store: SessionWithStore,
-    _msg: messages::to2::ProveDevice,
+    msg: messages::to2::ProveDevice,
 ) -> Result<(messages::to2::SetupDevice, SessionWithStore), warp::Rejection> {
-    todo!();
+    let mut session = ses_with_store.session;
+
+    let device_guid: String = match session.get("device_guid") {
+        Some(v) => v,
+        None => {
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                messages::to2::ProveDevice::message_type(),
+                "Request sequence failure",
+            )
+            .into())
+        }
+    };
+    let device_guid = Guid::from_str(&device_guid).unwrap();
+
+    let nonce6: Nonce = match session.get("nonce6") {
+        Some(v) => v,
+        None => {
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                messages::to2::ProveDevice::message_type(),
+                "Request sequence failure",
+            )
+            .into())
+        }
+    };
+    session.remove("nonce6");
+
+    let a_key_exchange: KeyExchange = match session.get("a_key_exchange") {
+        Some(v) => v,
+        None => {
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                messages::to2::ProveDevice::message_type(),
+                "Request sequence failure",
+            )
+            .into())
+        }
+    };
+    session.remove("a_key_exchange");
+
+    let kexsuite: KexSuite = match session.get("kexsuite") {
+        Some(v) => v,
+        None => {
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                messages::to2::ProveDevice::message_type(),
+                "Request sequence failure",
+            )
+            .into())
+        }
+    };
+    session.remove("kexsuite");
+
+    let ciphersuite: CipherSuite = match session.get("ciphersuite") {
+        Some(v) => v,
+        None => {
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                messages::to2::GetOVNextEntry::message_type(),
+                "Request sequence failure",
+            )
+            .into())
+        }
+    };
+    session.remove("ciphersuite");
+
+    let ownership_voucher = match user_data
+        .ownership_voucher_store
+        .load_data(&device_guid)
+        .await
+        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?
+    {
+        None => {
+            return Err(Error::new(
+                ErrorCode::ResourceNotFound,
+                messages::to2::ProveDevice::message_type(),
+                "Device not found",
+            )
+            .into())
+        }
+        Some(dev) => dev,
+    };
+    let device_certificate = match ownership_voucher
+        .device_certificate()
+        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?
+    {
+        Some(cert) => cert,
+        None => {
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                messages::to2::ProveDevice::message_type(),
+                "Device certificate not supported",
+            )
+            .into())
+        }
+    };
+    let dev_pubkey = &device_certificate
+        .public_key()
+        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?;
+
+    // Get device EAT
+    let token = msg.into_token();
+    let eat = token
+        .get_eat(&dev_pubkey)
+        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?;
+
+    let eat_payload: TO2ProveDevicePayload = match eat
+        .payload()
+        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?
+    {
+        Some(v) => v,
+        None => {
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                messages::to2::ProveDevice::message_type(),
+                "Missing payload",
+            )
+            .into())
+        }
+    };
+
+    // Verify the nonce
+    if eat.nonce() != &nonce6 {
+        return Err(Error::new(
+            ErrorCode::InvalidMessageError,
+            messages::to2::ProveDevice::message_type(),
+            "Nonce invalid",
+        )
+        .into());
+    }
+    let nonce7: Nonce = match eat
+        .other_claim(HeaderKeys::CUPHNonce)
+        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?
+    {
+        Some(n) => n,
+        None => {
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                messages::to2::ProveDevice::message_type(),
+                "Missing nonce8",
+            )
+            .into())
+        }
+    };
+    session
+        .insert("nonce7", nonce7.clone())
+        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?;
+
+    // Derive and set the keys
+    let new_keys = a_key_exchange
+        .derive_key(kexsuite, ciphersuite, eat_payload.b_key_exchange())
+        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?;
+    let new_keys = EncryptionKeys::from(new_keys);
+    log::trace!("Got new keys, setting: {:?}", new_keys);
+    fdo_http_wrapper::server::set_encryption_keys::<messages::to2::ProveDevice>(
+        &mut session,
+        new_keys,
+    )?;
+
+    // Generate new ephemeral SetupDevicePayload
+    let new_payload = TO2SetupDevicePayload::new(
+        RendezvousInfo::new(Vec::new()),
+        Guid::new().unwrap(),
+        nonce7,
+        user_data.owner2_pub.clone(),
+    );
+    let new_token = COSESign::new(&new_payload, None, &user_data.owner2_key)
+        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?;
+    let resp = messages::to2::SetupDevice::new(new_token);
+
+    session
+        .insert("proven_device", true)
+        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?;
+
+    ses_with_store.session = session;
+
+    Ok((resp, ses_with_store))
 }
 
 pub(super) async fn device_service_info_ready(
@@ -180,6 +361,19 @@ pub(super) async fn device_service_info_ready(
     mut ses_with_store: SessionWithStore,
     _msg: messages::to2::DeviceServiceInfoReady,
 ) -> Result<(messages::to2::OwnerServiceInfoReady, SessionWithStore), warp::Rejection> {
+    match ses_with_store.session.get::<bool>("proven_device") {
+        Some(_) => {}
+        None => {
+            log::error!("Device attempted to skip the proving");
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                messages::to2::GetOVNextEntry::message_type(),
+                "Request sequence failure",
+            )
+            .into());
+        }
+    };
+
     todo!();
 }
 
@@ -188,6 +382,19 @@ pub(super) async fn device_service_info(
     mut ses_with_store: SessionWithStore,
     _msg: messages::to2::DeviceServiceInfo,
 ) -> Result<(messages::to2::OwnerServiceInfo, SessionWithStore), warp::Rejection> {
+    match ses_with_store.session.get::<bool>("proven_device") {
+        Some(_) => {}
+        None => {
+            log::error!("Device attempted to skip the proving");
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                messages::to2::GetOVNextEntry::message_type(),
+                "Request sequence failure",
+            )
+            .into());
+        }
+    };
+
     todo!();
 }
 
@@ -196,5 +403,18 @@ pub(super) async fn done(
     mut ses_with_store: SessionWithStore,
     _msg: messages::to2::Done,
 ) -> Result<(messages::to2::Done2, SessionWithStore), warp::Rejection> {
+    match ses_with_store.session.get::<bool>("proven_device") {
+        Some(_) => {}
+        None => {
+            log::error!("Device attempted to skip the proving");
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                messages::to2::GetOVNextEntry::message_type(),
+                "Request sequence failure",
+            )
+            .into());
+        }
+    };
+
     todo!();
 }

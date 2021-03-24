@@ -3,6 +3,8 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use openssl::{
+    ec::{EcGroup, EcKey},
+    nid::Nid,
     pkey::{PKey, Private},
     x509::X509,
 };
@@ -29,6 +31,10 @@ struct OwnerServiceUD {
 
     // Our keys
     owner_key: PKey<Private>,
+
+    // The new Owner2Key, randomly generated, but not stored
+    owner2_key: PKey<Private>,
+    owner2_pub: PublicKey,
 }
 
 type OwnerServiceUDT = Arc<OwnerServiceUD>;
@@ -82,6 +88,16 @@ async fn perform_maintenance(udt: OwnerServiceUDT) {
     }
 }
 
+/// Generate an ephemeral owner2 key: we do not support reuse or resale protocols
+fn generate_owner2_keys() -> Result<(PKey<Private>, PublicKey)> {
+    let owner2_key_group =
+        EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).context("Error getting nist 256 group")?;
+    let owner2_key = EcKey::generate(&owner2_key_group).context("Error generating owned2 key")?;
+    let owner2_key =
+        PKey::from_ec_key(owner2_key).context("ERror converting owner2 key to PKey")?;
+    todo!();
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     pretty_env_logger::init();
@@ -126,6 +142,10 @@ async fn main() -> Result<()> {
         .context("Error initializing session store")?;
     let session_store = fdo_http_wrapper::server::SessionStore::new(session_store);
 
+    // Generate a new Owner2
+    let (owner2_key, owner2_pub) =
+        generate_owner2_keys().context("Error generating new owner2 keys")?;
+
     // Initialize user data
     let user_data = Arc::new(OwnerServiceUD {
         // Stores
@@ -137,7 +157,10 @@ async fn main() -> Result<()> {
 
         // Private owner key
         owner_key,
-        // TODO
+
+        // Ephemeral owner2 key
+        owner2_key,
+        owner2_pub,
     });
 
     // Initialize handlers
