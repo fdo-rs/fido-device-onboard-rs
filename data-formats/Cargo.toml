@@ -14,7 +14,6 @@ serde = "1"
 serde_cbor = "0.11"
 serde_repr = "0.1.6"
 #serde_int_map = "0.3"
-serde_int_map = {version = "0.3", path = "../../serde_int_map/serde_int_map"}
 serde_tuple = "0.5"
 thiserror = "1"
 aws-nitro-enclaves-cose = { git = "https://github.com/puiterwijk/aws-nitro-enclaves-cose.git", branch = "unprotected" }

@@ -2,7 +2,6 @@ use std::{convert::TryInto, ops::Deref, str::FromStr, string::ToString};
 
 use aws_nitro_enclaves_cose::COSESign1 as COSESignInner;
 use openssl::pkey::{PKeyRef, Private, Public};
-use serde_int_map::{Deserialize_int_map, Serialize_int_map};
 use serde_tuple::Serialize_tuple;
 
 use crate::{
@@ -868,30 +867,6 @@ impl COSEHeaderMap {
             None => Ok(None),
             Some(val) => Ok(Some(serde_cbor::value::from_value(val.clone())?)),
         }
-    }
-}
-
-impl serde_int_map::UnknownKeyHandler for COSEHeaderMap {
-    type ValueType = serde_cbor::Value;
-
-    fn new() -> Self {
-        COSEHeaderMap::new()
-    }
-
-    fn num_items(&self) -> usize {
-        self.0.len()
-    }
-
-    fn iter(&self) -> std::collections::hash_map::Iter<i64, Self::ValueType> {
-        self.0.iter()
-    }
-
-    fn handles_key(&self, _key: i64) -> bool {
-        true
-    }
-
-    fn fill_value(&mut self, key: i64, value: Self::ValueType) {
-        self.0.insert(key, value);
     }
 }
 
