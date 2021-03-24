@@ -143,6 +143,8 @@ impl Deref for Nonce {
     }
 }
 
+const EAT_RAND: u8 = 0x01;
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Hash, Eq)]
 pub struct Guid([u8; 16]);
 
@@ -153,6 +155,22 @@ impl Guid {
 
     fn as_uuid(&self) -> uuid::Uuid {
         uuid::Uuid::from_bytes(self.0)
+    }
+
+    fn as_ueid(&self) -> Vec<u8> {
+        let mut new: Vec<u8> = self.0.try_into().unwrap();
+
+        new.insert(0, EAT_RAND);
+
+        new
+    }
+
+    fn from_ueid(data: &[u8]) -> Result<Self, Error> {
+        if data[0] != EAT_RAND {
+            Err(Error::InconsistentValue("Invalid UEID"))
+        } else {
+            Ok(Guid(data[1..].try_into().unwrap()))
+        }
     }
 }
 
@@ -684,14 +702,11 @@ pub struct EATokenPayload<S>
 where
     S: PayloadState,
 {
-    //#[int_map_phantom]
     _phantom_state: std::marker::PhantomData<S>,
 
-    //#[int_map_id(-17760707)]
     payload: Option<Vec<u8>>,
-    //#[int_map_id(-17760709)]
-    nonce: Option<Nonce>,
-    //#[int_map_unknown]
+    nonce: Nonce,
+    device_guid: Vec<u8>,
     other_claims: COSEHeaderMap,
 }
 
@@ -709,8 +724,13 @@ where
         }
     }
 
-    fn nonce_internal(&self) -> Option<&Nonce> {
-        self.nonce.as_ref()
+    fn nonce_internal(&self) -> &Nonce {
+        &self.nonce
+    }
+
+    fn device_guid_internal(&self) -> Guid {
+        // This was previously validated during from_map construction
+        Guid::from_ueid(&self.device_guid).unwrap()
     }
 
     fn other_claim_internal<T>(&self, key: HeaderKeys) -> Result<Option<T>, Error>
@@ -724,11 +744,13 @@ where
         let mut res = self.other_claims.clone();
 
         if let Some(payload) = &self.payload {
-            res.insert(HeaderKeys::EatFDO, payload);
+            res.insert(HeaderKeys::EatFDO, payload)
+                .expect("Error adding to res");
         }
-        if let Some(nonce) = &self.nonce {
-            res.insert(HeaderKeys::EatNonce, nonce);
-        }
+        res.insert(HeaderKeys::EatNonce, &self.nonce)
+            .expect("Error adding to res");
+        res.insert(HeaderKeys::EatUeid, &self.device_guid)
+            .expect("Error adding to res");
 
         res
     }
@@ -745,8 +767,12 @@ where
         Ok(UnverifiedValue(self.payload_internal()?))
     }
 
-    pub fn nonce_unverified(&self) -> UnverifiedValue<Option<&Nonce>> {
+    pub fn nonce_unverified(&self) -> UnverifiedValue<&Nonce> {
         UnverifiedValue(self.nonce_internal())
+    }
+
+    pub fn device_guid_unverified(&self) -> UnverifiedValue<Guid> {
+        UnverifiedValue(self.device_guid_internal())
     }
 
     pub fn other_claim_unverified<T>(
@@ -775,8 +801,12 @@ where
         self.payload_internal()
     }
 
-    pub fn nonce(&self) -> Option<&Nonce> {
+    pub fn nonce(&self) -> &Nonce {
         self.nonce_internal()
+    }
+
+    pub fn device_guid(&self) -> Guid {
+        self.device_guid_internal()
     }
 
     pub fn other_claim<T>(&self, key: HeaderKeys) -> Result<Option<T>, Error>
@@ -796,8 +826,19 @@ where
         Some(val) => Some(serde_cbor::value::from_value(val)?),
     };
     let nonce = match claims.0.remove(&(HeaderKeys::EatNonce as i64)) {
-        None => None,
-        Some(val) => Some(serde_cbor::value::from_value(val)?),
+        None => return Err(Error::InconsistentValue("Missing nonce")),
+        Some(val) => serde_cbor::value::from_value(val)?,
+    };
+    let ueid = match claims.0.remove(&(HeaderKeys::EatUeid as i64)) {
+        None => return Err(Error::InconsistentValue("Missing UEID")),
+        Some(val) => {
+            let val: Vec<u8> = serde_cbor::value::from_value(val)?;
+            // Just verifying that it's valid
+            if Guid::from_ueid(&val).is_err() {
+                return Err(Error::InconsistentValue("Invalid UEID"));
+            }
+            val
+        }
     };
 
     Ok(EATokenPayload {
@@ -805,6 +846,7 @@ where
 
         payload,
         nonce,
+        device_guid: ueid,
 
         other_claims: claims,
     })
@@ -812,7 +854,8 @@ where
 
 pub fn new_eat<T>(
     payload: Option<&T>,
-    nonce: Option<Nonce>,
+    nonce: Nonce,
+    device_guid: Guid,
 ) -> Result<EATokenPayload<PayloadCreating>, Error>
 where
     T: Serialize,
@@ -826,6 +869,7 @@ where
 
         payload,
         nonce,
+        device_guid: device_guid.as_ueid(),
         other_claims: COSEHeaderMap::new(),
     })
 }

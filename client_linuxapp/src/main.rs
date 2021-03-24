@@ -98,7 +98,8 @@ async fn perform_to1(devcred: &DeviceCredential, client: &mut ServiceClient) -> 
 
     // Create EAT payload
     let eat: EATokenPayload<PayloadCreating> =
-        new_eat::<bool>(None, Some(nonce4.clone())).context("Error creating EATokenPayload")?;
+        new_eat::<bool>(None, nonce4.clone(), devcred.guid.clone())
+            .context("Error creating EATokenPayload")?;
 
     // Create signature over nonce4
     let privkey = PKey::private_key_from_der(&devcred.private_key)

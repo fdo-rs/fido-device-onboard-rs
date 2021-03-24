@@ -144,17 +144,7 @@ pub(super) async fn prove_to_rv(
         )
     })?;
 
-    let signed_nonce: &Nonce = match device_eat.nonce() {
-        Some(val) => val,
-        None => {
-            return Err(Error::new(
-                ErrorCode::InvalidMessageError,
-                messages::to1::ProveToRV::message_type(),
-                "Missing nonce",
-            )
-            .into())
-        }
-    };
+    let signed_nonce: &Nonce = device_eat.nonce();
 
     if &nonce4 != signed_nonce {
         return Err(Error::new(
