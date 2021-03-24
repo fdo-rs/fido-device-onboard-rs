@@ -202,7 +202,6 @@ pub(super) async fn prove_device(
             .into())
         }
     };
-    session.remove("nonce6");
 
     let a_key_exchange: KeyExchange = match session.get("a_key_exchange") {
         Some(v) => v,
@@ -375,7 +374,10 @@ pub(super) async fn device_service_info_ready(
         }
     };
 
-    todo!();
+    Ok((
+        messages::to2::OwnerServiceInfoReady::new(None),
+        ses_with_store,
+    ))
 }
 
 pub(super) async fn device_service_info(
@@ -402,7 +404,7 @@ pub(super) async fn device_service_info(
 pub(super) async fn done(
     _user_data: super::OwnerServiceUDT,
     mut ses_with_store: SessionWithStore,
-    _msg: messages::to2::Done,
+    msg: messages::to2::Done,
 ) -> Result<(messages::to2::Done2, SessionWithStore), warp::Rejection> {
     match ses_with_store.session.get::<bool>("proven_device") {
         Some(_) => {}
@@ -417,5 +419,53 @@ pub(super) async fn done(
         }
     };
 
-    todo!();
+    let nonce6: Nonce = match ses_with_store.session.get("nonce6") {
+        Some(v) => v,
+        None => {
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                messages::to2::ProveDevice::message_type(),
+                "Request sequence failure",
+            )
+            .into())
+        }
+    };
+    if &nonce6 != msg.nonce6() {
+        return Err(Error::new(
+            ErrorCode::InvalidMessageError,
+            messages::to2::ProveDevice::message_type(),
+            "Nonce6 invalid",
+        )
+        .into());
+    }
+
+    let device_guid: String = match ses_with_store.session.get("device_guid") {
+        Some(v) => v,
+        None => {
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                messages::to2::GetOVNextEntry::message_type(),
+                "Request sequence failure",
+            )
+            .into())
+        }
+    };
+    let device_guid = Guid::from_str(&device_guid).unwrap();
+    log::info!("Device {:?} has finished its onboarding", device_guid);
+
+    let nonce7: Nonce = match ses_with_store.session.get("nonce7") {
+        Some(v) => v,
+        None => {
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                messages::to2::ProveDevice::message_type(),
+                "Request sequence failure",
+            )
+            .into())
+        }
+    };
+    ses_with_store.session.remove("nonce7");
+    ses_with_store.session.destroy();
+
+    Ok((messages::to2::Done2::new(nonce7), ses_with_store))
 }

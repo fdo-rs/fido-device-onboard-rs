@@ -164,6 +164,10 @@ async fn get_ov_entries(client: &mut ServiceClient, num_entries: u16) -> Result<
     Ok(entries)
 }
 
+async fn perform_to2_serviceinfos(client: &mut ServiceClient) -> Result<()> {
+    todo!();
+}
+
 async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> {
     log::info!("Performing TO2 protocol, URLs: {:?}", urls);
     let url = urls.first().unwrap();
@@ -325,7 +329,33 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
     let setup_device = setup_device.context("Error proving device")?;
     log::trace!("Got setup_device response: {:?}", setup_device);
 
-    todo!();
+    // Send: DeviceServiceInfoReady, Receive: OwnerServiceInfoReady
+    let owner_service_info_ready: RequestResult<messages::to2::OwnerServiceInfoReady> = client
+        .send_request(messages::to2::DeviceServiceInfoReady::new(None, None), None)
+        .await;
+    let owner_service_info_ready =
+        owner_service_info_ready.context("Error getting OwnerServiceInfoReady")?;
+    log::trace!(
+        "Received OwnerServiceInfoReady: {:?}",
+        owner_service_info_ready
+    );
+
+    // Now, the magic: performing the roundtrip! We delegated that.
+    perform_to2_serviceinfos(&mut client)
+        .await
+        .context("Error performing the ServiceInfo roundtrips")?;
+
+    // Send: Done, Receive: Done2
+    let done2: RequestResult<messages::to2::Done2> = client
+        .send_request(messages::to2::Done::new(nonce6), None)
+        .await;
+    let done2 = done2.context("Error sending Done2")?;
+
+    if &nonce7 != done2.nonce7() {
+        bail!("Nonce7 did not match in Done2");
+    }
+
+    Ok(())
 }
 
 #[tokio::main]
@@ -366,5 +396,9 @@ async fn main() -> Result<()> {
 
     perform_to2(&dc, &to2_addresses)
         .await
-        .context("Error performing TO2 ownership protocol")
+        .context("Error performing TO2 ownership protocol")?;
+
+    log::info!("Secure Device Onboarding DONE");
+
+    Ok(())
 }
