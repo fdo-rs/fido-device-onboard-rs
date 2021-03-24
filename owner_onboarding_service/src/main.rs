@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use std::fs;
 use std::sync::Arc;
 
@@ -6,7 +7,7 @@ use openssl::{
     ec::{EcGroup, EcKey},
     nid::Nid,
     pkey::{PKey, Private},
-    x509::X509,
+    x509::{X509Builder, X509},
 };
 use serde::Deserialize;
 use warp::Filter;
@@ -14,7 +15,7 @@ use warp::Filter;
 use fdo_data_formats::{
     enhanced_types::X5Bag,
     ownershipvoucher::OwnershipVoucher,
-    publickey::PublicKey,
+    publickey::{PublicKey, PublicKeyBody},
     types::{COSESign, Guid, RendezvousInfo},
 };
 use fdo_store::{Store, StoreDriver};
@@ -95,7 +96,17 @@ fn generate_owner2_keys() -> Result<(PKey<Private>, PublicKey)> {
     let owner2_key = EcKey::generate(&owner2_key_group).context("Error generating owned2 key")?;
     let owner2_key =
         PKey::from_ec_key(owner2_key).context("ERror converting owner2 key to PKey")?;
-    todo!();
+
+    let mut builder = X509Builder::new().context("Error creating X509Builder")?;
+    builder
+        .sign(&owner2_key, openssl::hash::MessageDigest::sha384())
+        .context("Error signing certificate");
+
+    let cert = builder.build();
+    let cert = PublicKeyBody::X509(cert);
+    let pubkey = PublicKey::try_from(cert).context("Error converting PKB to PK")?;
+
+    Ok((owner2_key, pubkey))
 }
 
 #[tokio::main]
