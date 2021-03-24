@@ -279,6 +279,21 @@ pub(super) async fn prove_device(
 
     // Get device EAT
     let token = msg.into_token();
+    let nonce7: Nonce = match token
+        .get_unprotected_value(HeaderKeys::CUPHNonce)
+        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?
+    {
+        Some(n) => n,
+        None => {
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                messages::to2::ProveDevice::message_type(),
+                "Missing nonce7",
+            )
+            .into())
+        }
+    };
+
     let eat = token
         .get_eat(&dev_pubkey)
         .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?;
@@ -307,20 +322,6 @@ pub(super) async fn prove_device(
         )
         .into());
     }
-    let nonce7: Nonce = match eat
-        .other_claim(HeaderKeys::CUPHNonce)
-        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?
-    {
-        Some(n) => n,
-        None => {
-            return Err(Error::new(
-                ErrorCode::InvalidMessageError,
-                messages::to2::ProveDevice::message_type(),
-                "Missing nonce8",
-            )
-            .into())
-        }
-    };
     session
         .insert("nonce7", nonce7.clone())
         .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?;

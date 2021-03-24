@@ -317,11 +317,13 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
         &privkey,
     )
     .context("Error signing ProveDevice EAT")?;
+
     log::trace!("Prepared prove_device_token: {:?}", prove_device_token);
     let prove_device_msg = messages::to2::ProveDevice::new(prove_device_token);
     let setup_device: RequestResult<messages::to2::SetupDevice> =
         client.send_request(prove_device_msg, Some(new_keys)).await;
     let setup_device = setup_device.context("Error proving device")?;
+    log::trace!("Got setup_device response: {:?}", setup_device);
 
     todo!();
 }

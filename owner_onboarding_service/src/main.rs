@@ -99,8 +99,11 @@ fn generate_owner2_keys() -> Result<(PKey<Private>, PublicKey)> {
 
     let mut builder = X509Builder::new().context("Error creating X509Builder")?;
     builder
+        .set_pubkey(&owner2_key)
+        .context("Error setting public key")?;
+    builder
         .sign(&owner2_key, openssl::hash::MessageDigest::sha384())
-        .context("Error signing certificate");
+        .context("Error signing certificate")?;
 
     let cert = builder.build();
     let cert = PublicKeyBody::X509(cert);
