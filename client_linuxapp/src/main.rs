@@ -17,6 +17,8 @@ use fdo_data_formats::{
 };
 use fdo_http_wrapper::client::{RequestResult, ServiceClient};
 
+mod serviceinfo;
+
 fn get_to2_urls(entries: &[TO2AddressEntry]) -> Vec<String> {
     let mut urls = Vec::new();
 
@@ -162,10 +164,6 @@ async fn get_ov_entries(client: &mut ServiceClient, num_entries: u16) -> Result<
     }
 
     Ok(entries)
-}
-
-async fn perform_to2_serviceinfos(client: &mut ServiceClient) -> Result<()> {
-    todo!();
 }
 
 async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> {
@@ -341,7 +339,7 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
     );
 
     // Now, the magic: performing the roundtrip! We delegated that.
-    perform_to2_serviceinfos(&mut client)
+    serviceinfo::perform_to2_serviceinfos(&mut client)
         .await
         .context("Error performing the ServiceInfo roundtrips")?;
 

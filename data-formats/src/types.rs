@@ -376,8 +376,28 @@ impl ServiceInfo {
         ServiceInfo(Vec::new())
     }
 
-    pub fn add(&mut self, module: String, key: String, value: CborSimpleType) {
+    pub fn add<T>(&mut self, module: &str, key: &str, value: &T) -> Result<(), Error>
+    where
+        T: serde::Serialize,
+    {
+        let value = serde_cbor::value::to_value(&value)?;
         self.0.push((format!("{}:{}", module, key), value));
+        Ok(())
+    }
+
+    pub fn add_modules(&mut self, modules: &[&str]) -> Result<(), Error> {
+        self.add("devmod", "nummodules", &modules.len())?;
+
+        // We have a special case of this, becasue this is a list with different types.
+        let mut list = Vec::new();
+
+        list.push(serde_cbor::Value::Integer(0));
+        list.push(serde_cbor::Value::Integer(modules.len() as i128));
+        for module in modules {
+            list.push(serde_cbor::Value::Text(module.to_string()));
+        }
+
+        self.add("devmod", "modules", &list)
     }
 
     pub fn iter(&self) -> ServiceInfoIter {

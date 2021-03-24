@@ -14,6 +14,7 @@ openssl = "0.10"
 reqwest = "0.11"
 serde_cbor = "0.11"
 tokio = { version = "1", features = ["full"] }
+sys-info = "0.8"
 
 fdo-data-formats = { path = "../data-formats" }
 fdo_http_wrapper = { path = "../http-wrapper", features = ["client"] }

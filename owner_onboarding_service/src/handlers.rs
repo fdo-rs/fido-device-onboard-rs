@@ -415,7 +415,7 @@ pub(super) async fn device_service_info(
                 .session
                 .insert("num_service_info_loops", 1)
                 .map_err(Error::from_error::<messages::to2::DeviceServiceInfo, _>)?;
-            1
+            0
         }
     };
     if num_loops > MAX_SERVICE_INFO_LOOPS {
