@@ -14,6 +14,8 @@ use fdo_http_wrapper::server::Error;
 use fdo_http_wrapper::server::SessionWithStore;
 use fdo_http_wrapper::EncryptionKeys;
 
+use crate::serviceinfo::perform_service_info;
+
 pub(super) async fn hello_device(
     user_data: super::OwnerServiceUDT,
     mut ses_with_store: SessionWithStore,
@@ -374,10 +376,12 @@ pub(super) async fn device_service_info_ready(
     ))
 }
 
+const MAX_SERVICE_INFO_LOOPS: u32 = 1000;
+
 pub(super) async fn device_service_info(
-    _user_data: super::OwnerServiceUDT,
-    ses_with_store: SessionWithStore,
-    _msg: messages::to2::DeviceServiceInfo,
+    user_data: super::OwnerServiceUDT,
+    mut ses_with_store: SessionWithStore,
+    msg: messages::to2::DeviceServiceInfo,
 ) -> Result<(messages::to2::OwnerServiceInfo, SessionWithStore), warp::Rejection> {
     match ses_with_store.session.get::<bool>("proven_device") {
         Some(_) => {}
@@ -385,14 +389,73 @@ pub(super) async fn device_service_info(
             log::error!("Device attempted to skip the proving");
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::to2::GetOVNextEntry::message_type(),
+                messages::to2::DeviceServiceInfo::message_type(),
                 "Request sequence failure",
             )
             .into());
         }
     };
+    let device_guid: String = match ses_with_store.session.get("device_guid") {
+        Some(v) => v,
+        None => {
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                messages::to2::GetOVNextEntry::message_type(),
+                "Request sequence failure",
+            )
+            .into())
+        }
+    };
+    let device_guid = Guid::from_str(&device_guid).unwrap();
 
-    todo!();
+    let num_loops = match ses_with_store.session.get::<u32>("num_service_info_loops") {
+        Some(v) => v,
+        None => {
+            ses_with_store
+                .session
+                .insert("num_service_info_loops", 1)
+                .map_err(Error::from_error::<messages::to2::DeviceServiceInfo, _>)?;
+            1
+        }
+    };
+    if num_loops > MAX_SERVICE_INFO_LOOPS {
+        log::warn!(
+            "Device {:?} has attempted to perform too many ServiceInfo loops",
+            device_guid
+        );
+        return Err(Error::new(
+            ErrorCode::InvalidMessageError,
+            messages::to2::DeviceServiceInfo::message_type(),
+            "Too many serviceinfo loops performed",
+        )
+        .into());
+    }
+    ses_with_store
+        .session
+        .insert("num_service_info_loops", num_loops + 1)
+        .map_err(Error::from_error::<messages::to2::DeviceServiceInfo, _>)?;
+
+    log::trace!(
+        "Device {:?} is now starting ServiceInfo loop {}",
+        device_guid,
+        num_loops
+    );
+
+    let resp =
+        match perform_service_info(user_data, &mut ses_with_store.session, msg, num_loops).await {
+            Ok(v) => v,
+            Err(e) => {
+                log::warn!("Error during performing service info: {:?}", e);
+                return Err(Error::new(
+                    ErrorCode::InternalServerError,
+                    messages::to2::DeviceServiceInfo::message_type(),
+                    "Error handling serviceinfo",
+                )
+                .into());
+            }
+        };
+
+    Ok((resp, ses_with_store))
 }
 
 pub(super) async fn done(

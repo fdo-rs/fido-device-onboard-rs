@@ -18,11 +18,12 @@ use fdo_data_formats::{
     enhanced_types::X5Bag,
     ownershipvoucher::OwnershipVoucher,
     publickey::{PublicKey, PublicKeyBody},
-    types::{COSESign, Guid, RendezvousInfo},
+    types::Guid,
 };
 use fdo_store::{Store, StoreDriver};
 
 mod handlers;
+mod serviceinfo;
 
 struct OwnerServiceUD {
     // Trusted keys
