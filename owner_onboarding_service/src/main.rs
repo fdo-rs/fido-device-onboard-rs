@@ -39,6 +39,9 @@ struct OwnerServiceUD {
     // The new Owner2Key, randomly generated, but not stored
     owner2_key: PKey<Private>,
     owner2_pub: PublicKey,
+
+    // ServiceInfo
+    service_info_configuration: crate::serviceinfo::ServiceInfoConfiguration,
 }
 
 type OwnerServiceUDT = Arc<OwnerServiceUD>;
@@ -63,6 +66,9 @@ struct Settings {
     bind: String,
     tls_cert_path: Option<String>,
     tls_key_path: Option<String>,
+
+    // Service Info
+    service_info: crate::serviceinfo::ServiceInfoSettings,
 }
 
 fn load_private_key(path: &str) -> Result<PKey<Private>> {
@@ -136,6 +142,11 @@ async fn main() -> Result<()> {
     let bind_addr = SocketAddr::from_str(&settings.bind)
         .with_context(|| format!("Error parsing bind string '{}'", &settings.bind))?;
 
+    // ServiceInfo settings
+    let service_info_configuration =
+        crate::serviceinfo::ServiceInfoConfiguration::from_settings(settings.service_info.clone())
+            .context("Error preparing ServiceInfo configuration")?;
+
     // Trusted keys
     let trusted_device_keys = {
         let trusted_keys_path = &settings.trusted_device_keys_path;
@@ -187,6 +198,9 @@ async fn main() -> Result<()> {
         // Ephemeral owner2 key
         owner2_key,
         owner2_pub,
+
+        // Service Info
+        service_info_configuration,
     });
 
     // Initialize handlers
