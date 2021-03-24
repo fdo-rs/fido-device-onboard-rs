@@ -91,7 +91,7 @@ pub enum HeaderKeys {
 }
 
 impl HeaderKeys {
-    pub fn cbor_value(&self) -> serde_cbor::Value {
+    pub(crate) fn cbor_value(&self) -> serde_cbor::Value {
         serde_cbor::Value::Integer(*self as i128)
     }
 }

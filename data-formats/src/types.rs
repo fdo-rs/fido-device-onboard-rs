@@ -2,6 +2,7 @@ use std::{convert::TryInto, ops::Deref, str::FromStr, string::ToString};
 
 use aws_nitro_enclaves_cose::COSESign1 as COSESignInner;
 use openssl::pkey::{PKeyRef, Private, Public};
+use serde_int_map::{Deserialize_int_map, Serialize_int_map};
 use serde_tuple::Serialize_tuple;
 
 use crate::{
@@ -637,8 +638,24 @@ impl<'de> Deserialize<'de> for CipherSuite {
 }
 
 pub trait PayloadState {}
-pub trait PayloadVerified: PayloadState {}
-pub trait PayloadUnverified: PayloadState {}
+pub trait PayloadStateUnverified: PayloadState {}
+pub trait PayloadStateVerified: PayloadState {}
+pub trait PayloadStateCreating: PayloadState {}
+
+#[derive(Debug)]
+pub struct PayloadVerified;
+impl PayloadState for PayloadVerified {}
+impl PayloadStateVerified for PayloadVerified {}
+
+#[derive(Debug)]
+pub struct PayloadUnverified;
+impl PayloadState for PayloadUnverified {}
+impl PayloadStateUnverified for PayloadUnverified {}
+
+#[derive(Debug)]
+pub struct PayloadCreating;
+impl PayloadState for PayloadCreating {}
+impl PayloadStateCreating for PayloadCreating {}
 
 pub struct UnverifiedValue<T>(T);
 
@@ -657,6 +674,10 @@ impl<T> UnverifiedValue<T> {
     pub fn get_unverified_value(&self) -> &T {
         &self.0
     }
+
+    unsafe fn into_unverified(self) -> T {
+        self.0
+    }
 }
 
 #[derive(Debug)]
@@ -664,44 +685,69 @@ pub struct EATokenPayload<S>
 where
     S: PayloadState,
 {
+    //#[int_map_phantom]
     _phantom_state: std::marker::PhantomData<S>,
 
-    payload: Vec<u8>,
-    nonce: Nonce,
-    other_claims: aws_nitro_enclaves_cose::sign::HeaderMap,
+    //#[int_map_id(-17760707)]
+    payload: Option<Vec<u8>>,
+    //#[int_map_id(-17760709)]
+    nonce: Option<Nonce>,
+    //#[int_map_unknown]
+    other_claims: COSEHeaderMap,
 }
 
 impl<S> EATokenPayload<S>
 where
     S: PayloadState,
 {
-    fn payload_internal<T>(&self) -> Result<T, Error>
+    fn payload_internal<T>(&self) -> Result<Option<T>, Error>
     where
         T: serde::de::DeserializeOwned,
     {
-        Ok(serde_cbor::from_slice(&self.payload)?)
+        match &self.payload {
+            None => Ok(None),
+            Some(val) => Ok(Some(serde_cbor::from_slice(&val)?)),
+        }
+    }
+
+    fn nonce_internal(&self) -> Option<&Nonce> {
+        self.nonce.as_ref()
     }
 
     fn other_claim_internal<T>(&self, key: HeaderKeys) -> Result<Option<T>, Error>
     where
         T: serde::de::DeserializeOwned,
     {
-        match self.other_claims.get(&key.cbor_value()) {
-            None => Ok(None),
-            Some(val) => Ok(Some(serde_cbor::value::from_value(val.clone())?)),
+        self.other_claims.get(&key)
+    }
+
+    fn to_map(&self) -> COSEHeaderMap {
+        let mut res = self.other_claims.clone();
+
+        if let Some(payload) = &self.payload {
+            res.insert(HeaderKeys::EatFDO, payload);
         }
+        if let Some(nonce) = &self.nonce {
+            res.insert(HeaderKeys::EatNonce, nonce);
+        }
+
+        res
     }
 }
 
 impl<S> EATokenPayload<S>
 where
-    S: PayloadUnverified,
+    S: PayloadStateUnverified,
 {
-    pub fn payload_unverified<T>(&self) -> Result<UnverifiedValue<T>, Error>
+    pub fn payload_unverified<T>(&self) -> Result<UnverifiedValue<Option<T>>, Error>
     where
         T: serde::de::DeserializeOwned,
     {
         Ok(UnverifiedValue(self.payload_internal()?))
+    }
+
+    pub fn nonce_unverified(&self) -> UnverifiedValue<Option<&Nonce>> {
+        UnverifiedValue(self.nonce_internal())
     }
 
     pub fn other_claim_unverified<T>(
@@ -721,13 +767,17 @@ where
 
 impl<S> EATokenPayload<S>
 where
-    S: PayloadVerified,
+    S: PayloadStateVerified,
 {
-    pub fn payload<T>(&self) -> Result<T, Error>
+    pub fn payload<T>(&self) -> Result<Option<T>, Error>
     where
         T: serde::de::DeserializeOwned,
     {
         self.payload_internal()
+    }
+
+    pub fn nonce(&self) -> Option<&Nonce> {
+        self.nonce_internal()
     }
 
     pub fn other_claim<T>(&self, key: HeaderKeys) -> Result<Option<T>, Error>
@@ -738,12 +788,67 @@ where
     }
 }
 
-#[derive(Debug)]
-pub struct COSEHeaderMap(aws_nitro_enclaves_cose::sign::HeaderMap);
+fn eat_from_map<S>(mut claims: COSEHeaderMap) -> Result<EATokenPayload<S>, Error>
+where
+    S: PayloadState,
+{
+    let payload = match claims.0.remove(&(HeaderKeys::EatFDO as i64)) {
+        None => None,
+        Some(val) => Some(serde_cbor::value::from_value(val)?),
+    };
+    let nonce = match claims.0.remove(&(HeaderKeys::EatNonce as i64)) {
+        None => None,
+        Some(val) => Some(serde_cbor::value::from_value(val)?),
+    };
+
+    Ok(EATokenPayload {
+        _phantom_state: std::marker::PhantomData,
+
+        payload,
+        nonce,
+
+        other_claims: claims,
+    })
+}
+
+pub fn new_eat<T>(
+    payload: Option<&T>,
+    nonce: Option<Nonce>,
+) -> Result<EATokenPayload<PayloadCreating>, Error>
+where
+    T: Serialize,
+{
+    let payload = match payload {
+        None => None,
+        Some(payload) => Some(serde_cbor::to_vec(&payload)?),
+    };
+    Ok(EATokenPayload {
+        _phantom_state: std::marker::PhantomData,
+
+        payload,
+        nonce,
+        other_claims: COSEHeaderMap::new(),
+    })
+}
+
+type COSEHeaderMapType = std::collections::HashMap<i64, serde_cbor::Value>;
+
+#[derive(Debug, Clone)]
+pub struct COSEHeaderMap(COSEHeaderMapType);
+
+impl From<COSEHeaderMap> for aws_nitro_enclaves_cose::sign::HeaderMap {
+    fn from(mut chm: COSEHeaderMap) -> aws_nitro_enclaves_cose::sign::HeaderMap {
+        let mut new = aws_nitro_enclaves_cose::sign::HeaderMap::new();
+        for (key, value) in chm.0.drain() {
+            new.insert(serde_cbor::Value::Integer(key as i128), value);
+        }
+        new
+    }
+}
 
 impl COSEHeaderMap {
     pub fn new() -> Self {
-        COSEHeaderMap(aws_nitro_enclaves_cose::sign::HeaderMap::new())
+        COSEHeaderMap(std::collections::HashMap::new())
     }
 
     pub fn insert<T>(&mut self, key: HeaderKeys, value: &T) -> Result<(), Error>
@@ -751,8 +856,42 @@ impl COSEHeaderMap {
         T: Serialize,
     {
         self.0
-            .insert(key.cbor_value(), serde_cbor::value::to_value(value)?);
+            .insert(key as i64, serde_cbor::value::to_value(value)?);
         Ok(())
+    }
+
+    fn get<T>(&self, key: &HeaderKeys) -> Result<Option<T>, Error>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        match self.0.get(&(*key as i64)) {
+            None => Ok(None),
+            Some(val) => Ok(Some(serde_cbor::value::from_value(val.clone())?)),
+        }
+    }
+}
+
+impl serde_int_map::UnknownKeyHandler for COSEHeaderMap {
+    type ValueType = serde_cbor::Value;
+
+    fn new() -> Self {
+        COSEHeaderMap::new()
+    }
+
+    fn num_items(&self) -> usize {
+        self.0.len()
+    }
+
+    fn iter(&self) -> std::collections::hash_map::Iter<i64, Self::ValueType> {
+        self.0.iter()
+    }
+
+    fn handles_key(&self, _key: i64) -> bool {
+        true
+    }
+
+    fn fill_value(&mut self, key: i64, value: Self::ValueType) {
+        self.0.insert(key, value);
     }
 }
 
@@ -775,9 +914,21 @@ impl COSESign {
         let payload = serde_cbor::to_vec(&payload)?;
         Ok(COSESign(COSESignInner::new(
             &payload,
-            &unprotected.0,
+            &unprotected.into(),
             sign_key,
         )?))
+    }
+
+    pub fn from_eat<ES>(
+        eat: EATokenPayload<ES>,
+        unprotected: Option<COSEHeaderMap>,
+        sign_key: &PKeyRef<Private>,
+    ) -> Result<Self, Error>
+    where
+        ES: PayloadState,
+    {
+        let claims = eat.to_map();
+        Self::new(claims.0, unprotected, sign_key)
     }
 
     pub fn as_bytes(&self) -> Result<Vec<u8>, Error> {
@@ -804,6 +955,20 @@ impl COSESign {
         Ok(serde_cbor::from_slice(&payload)?)
     }
 
+    pub fn get_eat_unverified(&self) -> Result<EATokenPayload<PayloadUnverified>, Error> {
+        let claims: COSEHeaderMapType = unsafe { self.get_payload_unverified()?.into_unverified() };
+        let claims = COSEHeaderMap(claims);
+
+        eat_from_map(claims)
+    }
+
+    pub fn get_eat(&self, key: &PKeyRef<Public>) -> Result<EATokenPayload<PayloadVerified>, Error> {
+        let claims: COSEHeaderMapType = self.get_payload(key)?;
+        let claims = COSEHeaderMap(claims);
+
+        eat_from_map(claims)
+    }
+
     pub fn get_unprotected_value<T>(&self, key: HeaderKeys) -> Result<Option<T>, Error>
     where
         T: serde::de::DeserializeOwned,
@@ -812,12 +977,5 @@ impl COSESign {
             None => Ok(None),
             Some(val) => Ok(Some(serde_cbor::value::from_value(val.clone())?)),
         }
-    }
-
-    fn get_eat_payload_internal<S>(&self) -> Result<EATokenPayload<S>, Error>
-    where
-        S: PayloadState,
-    {
-        todo!();
     }
 }

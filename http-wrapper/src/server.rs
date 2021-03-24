@@ -1,5 +1,6 @@
 use std::convert::Infallible;
 use std::sync::Arc;
+use std::time::Duration;
 
 use super::EncryptionKeys;
 use fdo_data_formats::{
@@ -38,7 +39,11 @@ impl SessionStore {
 
     async fn store_session(&self, session: Session) -> Result<Option<String>, SessionError> {
         self.store
-            .store_data(session.id().to_string(), None, session.clone())
+            .store_data(
+                session.id().to_string(),
+                Some(Duration::from_secs(30)),
+                session.clone(),
+            )
             .await?;
         session.reset_data_changed();
         Ok(session.into_cookie_value())

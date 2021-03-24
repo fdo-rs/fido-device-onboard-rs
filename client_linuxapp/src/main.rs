@@ -10,9 +10,9 @@ use fdo_data_formats::{
     messages,
     ownershipvoucher::OwnershipVoucher,
     types::{
-        COSESign, CipherSuite, DeviceCredential, HMac, KexSuite, KeyExchange, Nonce, SigInfo,
-        TO1DataPayload, TO2AddressEntry, TO2ProveDevicePayload, TO2ProveOVHdrPayload,
-        UnverifiedValue,
+        new_eat, COSESign, CipherSuite, DeviceCredential, EATokenPayload, HMac, KexSuite,
+        KeyExchange, Nonce, PayloadCreating, SigInfo, TO1DataPayload, TO2AddressEntry,
+        TO2ProveDevicePayload, TO2ProveOVHdrPayload, UnverifiedValue,
     },
 };
 use fdo_http_wrapper::client::{RequestResult, ServiceClient};
@@ -96,10 +96,14 @@ async fn perform_to1(devcred: &DeviceCredential, client: &mut ServiceClient) -> 
     }
     let nonce4 = hello_rv_ack.nonce4();
 
+    // Create EAT payload
+    let eat: EATokenPayload<PayloadCreating> =
+        new_eat::<bool>(None, Some(nonce4.clone())).context("Error creating EATokenPayload")?;
+
     // Create signature over nonce4
     let privkey = PKey::private_key_from_der(&devcred.private_key)
         .context("Error loading private key from device credential")?;
-    let token = COSESign::new(nonce4.value(), None, &privkey).context("Error signing new token")?;
+    let token = COSESign::from_eat(eat, None, &privkey).context("Error signing new token")?;
 
     log::trace!("Sending token: {:?}", token);
 

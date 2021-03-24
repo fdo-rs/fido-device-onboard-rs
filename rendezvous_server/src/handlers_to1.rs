@@ -1,7 +1,7 @@
 use fdo_data_formats::{
-    constants::{DeviceSigType, ErrorCode},
+    constants::{DeviceSigType, ErrorCode, HeaderKeys},
     messages::{self, Message},
-    types::{Guid, Nonce, SigInfo},
+    types::{EATokenPayload, Guid, Nonce, SigInfo},
 };
 
 use fdo_http_wrapper::server::Error;
@@ -134,22 +134,29 @@ pub(super) async fn prove_to_rv(
     let dev_pkey = dev_pkey
         .as_pkey()
         .map_err(Error::from_error::<messages::to1::ProveToRV, _>)?;
-    let signed_nonce: Vec<u8> = msg.token().get_payload(&dev_pkey).map_err(|_| {
+
+    let device_eat = msg.token().get_eat(&dev_pkey).map_err(|e| {
+        log::debug!("Error parsing EAToken: {:?}", e);
         Error::new(
             ErrorCode::InvalidMessageError,
             messages::to1::ProveToRV::message_type(),
-            "Signature invaid",
-        )
-    })?;
-    let signed_nonce = Nonce::from_value(&signed_nonce).map_err(|_| {
-        Error::new(
-            ErrorCode::InvalidMessageError,
-            messages::to1::ProveToRV::message_type(),
-            "Signature invaid",
+            "Token invaid",
         )
     })?;
 
-    if nonce4 != signed_nonce {
+    let signed_nonce: &Nonce = match device_eat.nonce() {
+        Some(val) => val,
+        None => {
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                messages::to1::ProveToRV::message_type(),
+                "Missing nonce",
+            )
+            .into())
+        }
+    };
+
+    if &nonce4 != signed_nonce {
         return Err(Error::new(
             ErrorCode::InvalidMessageError,
             messages::to1::ProveToRV::message_type(),
