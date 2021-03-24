@@ -1,10 +1,9 @@
-use aws_nitro_enclaves_cose::COSESign1;
 use serde::{Deserialize, Serialize};
 use serde_tuple::Serialize_tuple;
 
 use super::{ClientMessage, Message, ServerMessage};
 
-use crate::types::{Guid, Nonce, SigInfo};
+use crate::types::{COSESign, Guid, Nonce, SigInfo};
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct HelloRV {
@@ -69,14 +68,14 @@ impl Message for HelloRVAck {
 impl ServerMessage for HelloRVAck {}
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ProveToRV(COSESign1);
+pub struct ProveToRV(COSESign);
 
 impl ProveToRV {
-    pub fn new(token: COSESign1) -> Self {
+    pub fn new(token: COSESign) -> Self {
         ProveToRV(token)
     }
 
-    pub fn token(&self) -> &COSESign1 {
+    pub fn token(&self) -> &COSESign {
         &self.0
     }
 }
@@ -90,18 +89,18 @@ impl Message for ProveToRV {
 impl ClientMessage for ProveToRV {}
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct RVRedirect(COSESign1);
+pub struct RVRedirect(COSESign);
 
 impl RVRedirect {
-    pub fn new(to1d: COSESign1) -> Self {
+    pub fn new(to1d: COSESign) -> Self {
         RVRedirect(to1d)
     }
 
-    pub fn to1d(&self) -> &COSESign1 {
+    pub fn to1d(&self) -> &COSESign {
         &self.0
     }
 
-    pub fn into_to1d(self) -> COSESign1 {
+    pub fn into_to1d(self) -> COSESign {
         self.0
     }
 }

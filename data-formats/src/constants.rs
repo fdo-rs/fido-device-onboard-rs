@@ -81,16 +81,18 @@ pub enum PublicKeyEncoding {
 #[repr(i64)]
 #[non_exhaustive]
 pub enum HeaderKeys {
+    EatNonce = 9,
+    EatUeid = 10,
+
     CUPHNonce = -17760701,       // IANA Pending
     CUPHOwnerPubKey = -17760702, // IANA Pending
+
+    EatFDO = -17760707,
 }
 
 impl HeaderKeys {
     pub fn cbor_value(&self) -> serde_cbor::Value {
-        match self {
-            HeaderKeys::CUPHNonce => serde_cbor::Value::Integer(-17760701),
-            HeaderKeys::CUPHOwnerPubKey => serde_cbor::Value::Integer(-17760702),
-        }
+        serde_cbor::Value::Integer(*self as i128)
     }
 }
 

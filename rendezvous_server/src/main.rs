@@ -1,12 +1,15 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use aws_nitro_enclaves_cose::COSESign1;
 use openssl::x509::X509;
 use serde::Deserialize;
 use warp::Filter;
 
-use fdo_data_formats::{enhanced_types::X5Bag, publickey::PublicKey, types::Guid};
+use fdo_data_formats::{
+    enhanced_types::X5Bag,
+    publickey::PublicKey,
+    types::{COSESign, Guid},
+};
 use fdo_store::{Store, StoreDriver};
 
 mod handlers_to0;
@@ -16,7 +19,7 @@ struct RendezvousUD {
     max_wait_seconds: u32,
     trusted_manufacturer_keys: X5Bag,
     trusted_device_keys: X5Bag,
-    store: Box<dyn Store<Guid, (PublicKey, COSESign1)>>,
+    store: Box<dyn Store<Guid, (PublicKey, COSESign)>>,
 
     session_store: Arc<fdo_http_wrapper::server::SessionStore>,
 }

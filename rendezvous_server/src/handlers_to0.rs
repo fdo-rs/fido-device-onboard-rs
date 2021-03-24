@@ -142,7 +142,7 @@ pub(super) async fn ownersign(
         "Checking whether to1d payload is signed by owner public key {:?}",
         owner_pubkey
     );
-    let to1d_payload = match msg.to1d().get_payload(Some(&owner_pubkey)) {
+    let to1d_payload: TO1DataPayload = match msg.to1d().get_payload(&owner_pubkey) {
         Err(e) => {
             log::error!("Error verifying to1d: {:?}", e);
             return Err(Error::new(
@@ -154,17 +154,16 @@ pub(super) async fn ownersign(
         }
         Ok(v) => v,
     };
-    let to1d: TO1DataPayload = serde_cbor::from_slice(&to1d_payload)
-        .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
 
     // Verify the to1d -> to0d hash
     let to0d_ser = serde_cbor::to_vec(&msg.to0d())
         .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
     log::trace!(
         "Checking whether to1d->to1d hash {:?} matches data",
-        to1d.to1d_to_to0d_hash(),
+        to1d_payload.to1d_to_to0d_hash(),
     );
-    to1d.to1d_to_to0d_hash()
+    to1d_payload
+        .to1d_to_to0d_hash()
         .compare_data(&to0d_ser)
         .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
 

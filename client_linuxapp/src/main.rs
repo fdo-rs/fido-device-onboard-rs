@@ -2,7 +2,6 @@ use std::env;
 use std::fs;
 
 use anyhow::{anyhow, bail, Context, Result};
-use aws_nitro_enclaves_cose::COSESign1;
 use openssl::{hash::MessageDigest, pkey::PKey, sign::Signer};
 
 use fdo_data_formats::{
@@ -11,8 +10,9 @@ use fdo_data_formats::{
     messages,
     ownershipvoucher::OwnershipVoucher,
     types::{
-        CipherSuite, DeviceCredential, HMac, KexSuite, Nonce, SigInfo, TO1DataPayload,
-        TO2AddressEntry, TO2ProveOVHdrPayload,
+        COSESign, CipherSuite, DeviceCredential, HMac, KexSuite, KeyExchange, Nonce, SigInfo,
+        TO1DataPayload, TO2AddressEntry, TO2ProveDevicePayload, TO2ProveOVHdrPayload,
+        UnverifiedValue,
     },
 };
 use fdo_http_wrapper::client::{RequestResult, ServiceClient};
@@ -69,7 +69,7 @@ async fn get_client(rv_info: Vec<RendezvousInterpretedDirective>) -> Result<Serv
     bail!("No rendezvous entries found we can construct a client for");
 }
 
-async fn perform_to1(devcred: &DeviceCredential, client: &mut ServiceClient) -> Result<COSESign1> {
+async fn perform_to1(devcred: &DeviceCredential, client: &mut ServiceClient) -> Result<COSESign> {
     log::trace!(
         "Starting TO1 with credential {:?} and client {:?}",
         devcred,
@@ -99,12 +99,7 @@ async fn perform_to1(devcred: &DeviceCredential, client: &mut ServiceClient) -> 
     // Create signature over nonce4
     let privkey = PKey::private_key_from_der(&devcred.private_key)
         .context("Error loading private key from device credential")?;
-    let token = COSESign1::new(
-        nonce4.value(),
-        &aws_nitro_enclaves_cose::sign::HeaderMap::new(),
-        &privkey,
-    )
-    .context("Error signing new token")?;
+    let token = COSESign::new(nonce4.value(), None, &privkey).context("Error signing new token")?;
 
     log::trace!("Sending token: {:?}", token);
 
@@ -118,7 +113,7 @@ async fn perform_to1(devcred: &DeviceCredential, client: &mut ServiceClient) -> 
     Ok(rv_redirect.into_to1d())
 }
 
-async fn get_to1d_from_rv(devcred: &DeviceCredential) -> Result<COSESign1> {
+async fn get_to1d_from_rv(devcred: &DeviceCredential) -> Result<COSESign> {
     // Determine RV info
     let rv_info = devcred
         .rvinfo
@@ -157,7 +152,7 @@ async fn get_ov_entries(client: &mut ServiceClient, num_entries: u16) -> Result<
             );
         }
 
-        entries.push(entry_result.entry().as_bytes(true).with_context(|| {
+        entries.push(entry_result.entry().as_bytes().with_context(|| {
             format!("Error serializing entry {} of ownership voucher", entry_num)
         })?);
     }
@@ -194,24 +189,22 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
 
     // NOTE: At this moment, we have not yet validated the signature on it...
     // We can only do so after we got all of the OV parts..
-    let untrusted_prove_ov_hdr_payload = prove_ov_hdr.get_payload(None).unwrap();
-    let untrusted_prove_ov_hdr_payload: TO2ProveOVHdrPayload =
-        serde_cbor::from_slice(&untrusted_prove_ov_hdr_payload)
-            .context("Error parsing ProveOVHdr")?;
+    let prove_ov_hdr_payload: UnverifiedValue<TO2ProveOVHdrPayload> = prove_ov_hdr
+        .get_payload_unverified()
+        .context("Error parsing unverified payload")?;
 
-    log::trace!(
-        "Got an (UNTRUSTED!) prove OV hdr payload: {:?}",
-        untrusted_prove_ov_hdr_payload
-    );
+    log::trace!("Got an prove OV hdr payload: {:?}", prove_ov_hdr_payload);
 
     // Verify the nonce5 value
-    if &nonce5 != untrusted_prove_ov_hdr_payload.nonce5() {
+    if &nonce5 != prove_ov_hdr_payload.get_unverified_value().nonce5() {
         bail!("Nonce5 value is mismatched");
     }
 
     // Check the bSigInfo is what we expect it to be
     {
-        let b_signature_info = untrusted_prove_ov_hdr_payload.b_signature_info();
+        let b_signature_info = prove_ov_hdr_payload
+            .get_unverified_value()
+            .b_signature_info();
         if b_signature_info.sig_type() != sigtype {
             bail!("Invalid signature type returned");
         }
@@ -222,8 +215,9 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
 
     // Verify the HMAC, we do this in an extra scope to not leak anything untrusted out
     let header_hmac = {
-        let ov_hdr_vec = serde_cbor::to_vec(&untrusted_prove_ov_hdr_payload.ov_header())
-            .context("Error parsing Ownership Voucher header")?;
+        let ov_hdr_vec =
+            serde_cbor::to_vec(&prove_ov_hdr_payload.get_unverified_value().ov_header())
+                .context("Error parsing Ownership Voucher header")?;
         let hmac_key = PKey::hmac(&devcred.hmac_secret).context("Error building hmac key")?;
         let mut hmac_signer = Signer::new(MessageDigest::sha384(), &hmac_key)
             .context("Error creating hmac signer")?;
@@ -235,7 +229,7 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
             .context("Error computing OV HMac")?;
         let ov_hmac = HMac::new_from_data(HashType::Sha384, ov_hmac);
 
-        if &ov_hmac != untrusted_prove_ov_hdr_payload.hmac() {
+        if &ov_hmac != prove_ov_hdr_payload.get_unverified_value().hmac() {
             bail!("HMac over ownership voucher was invalid");
         }
         log::trace!("Ownership Voucher HMAC validated");
@@ -245,19 +239,22 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
     // Get nonce6
     let nonce6 = {
         prove_ov_hdr
-            .get_unprotected()
-            .get(&HeaderKeys::CUPHNonce.cbor_value())
+            .get_unprotected_value(HeaderKeys::CUPHNonce)
+            .context("Error getting nonce6")?
             .ok_or_else(|| anyhow!("Missing nonce6"))
     }?;
 
     // Get the other OV entries
-    let ov_entries = get_ov_entries(&mut client, untrusted_prove_ov_hdr_payload.num_ov_entries())
-        .await
-        .context("Error getting remaining OV entries")?;
+    let ov_entries = get_ov_entries(
+        &mut client,
+        prove_ov_hdr_payload.get_unverified_value().num_ov_entries(),
+    )
+    .await
+    .context("Error getting remaining OV entries")?;
 
     // At this moment, we have validated all we can, we'll check the signature later (After we get the final bits of the OV)
     let ownership_voucher = {
-        let header = serde_cbor::to_vec(&untrusted_prove_ov_hdr_payload.ov_header())
+        let header = serde_cbor::to_vec(&prove_ov_hdr_payload.get_unverified_value().ov_header())
             .context("Error serializing the OV header")?;
         OwnershipVoucher::from_parts(header, header_hmac, ov_entries)
     };
@@ -280,13 +277,21 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
         .public_key
         .as_pkey()
         .context("Error parsing owner public key")?;
-    if !prove_ov_hdr
-        .verify_signature(&owner_pubkey)
-        .context("Error validating ProveOVHdr signature")?
-    {
-        bail!("Invalid ProveOVHdr signature");
-    }
+    let prove_ov_hdr_payload: TO2ProveOVHdrPayload = prove_ov_hdr
+        .get_payload(&owner_pubkey)
+        .context("Error validating ProveOVHdr signature")?;
     log::trace!("ProveOVHdr validated with public key: {:?}", owner_pubkey);
+
+    // Perform the key derivation
+    let a_key_exchange = prove_ov_hdr_payload.a_key_exchange();
+    let b_key_exchange =
+        KeyExchange::new(kexsuite).context("Error creating device side of key exchange")?;
+    let new_keys = a_key_exchange
+        .derive_key(kexsuite, ciphersuite, &b_key_exchange)
+        .context("Error performing key derivation")?;
+    let new_keys = fdo_http_wrapper::EncryptionKeys::from(new_keys);
+
+    // Send: ProveDevice, Receive: SetupDevice
 
     todo!();
 }
@@ -316,12 +321,10 @@ async fn main() -> Result<()> {
         .context("Error getting to1d from rendezvous server")?;
     log::trace!("Received a usable to1d structure:: {:?}", to1d);
 
-    let to1d_payload = to1d
-        .get_payload(None)
+    let to1d_payload: UnverifiedValue<TO1DataPayload> = to1d
+        .get_payload_unverified()
         .context("Error getting the TO2 payload")?;
-    let to1d_payload: TO1DataPayload = serde_cbor::from_slice(&to1d_payload)
-        .context("Error loading the TO1DataPayload out of TO1D")?;
-    let to2_addresses = to1d_payload.to2_addresses();
+    let to2_addresses = to1d_payload.get_unverified_value().to2_addresses();
     let to2_addresses = get_to2_urls(&to2_addresses);
     log::info!("Got TO2 addresses: {:?}", to2_addresses);
 

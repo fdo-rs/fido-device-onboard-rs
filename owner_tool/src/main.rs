@@ -6,7 +6,6 @@ use std::{
 };
 
 use anyhow::{bail, Context, Error, Result};
-use aws_nitro_enclaves_cose::COSESign1;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use openssl::{
     asn1::{Asn1Integer, Asn1Time},
@@ -30,7 +29,7 @@ use fdo_data_formats::{
     ownershipvoucher::{OwnershipVoucher, OwnershipVoucherHeader},
     publickey::{PublicKey, PublicKeyBody, X5Chain},
     types::{
-        DeviceCredential, Guid, HMac, Hash, RendezvousDirective, RendezvousInfo, TO0Data,
+        COSESign, DeviceCredential, Guid, HMac, Hash, RendezvousDirective, RendezvousInfo, TO0Data,
         TO1DataPayload, TO2AddressEntry,
     },
     PROTOCOL_VERSION,
@@ -766,13 +765,8 @@ async fn report_to_rendezvous(matches: &ArgMatches<'_>) -> Result<(), Error> {
     let to0d_vec = serde_cbor::to_vec(&to0d).context("Error serializing to0d")?;
     let to0d_hash = Hash::new(None, &to0d_vec).context("Error hashing to0d")?;
     let to1d_payload = TO1DataPayload::new(owner_addresses, to0d_hash);
-    let to1d_payload = serde_cbor::to_vec(&to1d_payload).context("Error serializing to1d")?;
-    let to1d = COSESign1::new(
-        &to1d_payload,
-        &aws_nitro_enclaves_cose::sign::HeaderMap::new(),
-        &owner_private_key,
-    )
-    .context("Error signing to1d")?;
+    let to1d =
+        COSESign::new(&to1d_payload, None, &owner_private_key).context("Error signing to1d")?;
 
     // Send: OwnerSign, Receive: AcceptOwner
     let accept_owner: RequestResult<messages::to0::AcceptOwner> = rv_client

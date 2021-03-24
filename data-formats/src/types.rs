@@ -1,9 +1,11 @@
 use std::{convert::TryInto, ops::Deref, str::FromStr, string::ToString};
 
+use aws_nitro_enclaves_cose::COSESign1 as COSESignInner;
+use openssl::pkey::{PKeyRef, Private, Public};
 use serde_tuple::Serialize_tuple;
 
 use crate::{
-    constants::{DeviceSigType, HashType, RendezvousVariable, TransportProtocol},
+    constants::{DeviceSigType, HashType, HeaderKeys, RendezvousVariable, TransportProtocol},
     errors::Error,
     ownershipvoucher::{OwnershipVoucher, OwnershipVoucherHeader},
 };
@@ -451,12 +453,17 @@ impl std::fmt::Debug for DerivedKeys {
 pub struct KeyExchange(Vec<u8>);
 
 impl KeyExchange {
-    pub fn new(suite: KexSuite) -> Self {
+    pub fn new(suite: KexSuite) -> Result<Self, Error> {
         //todo!();
-        KeyExchange(vec![])
+        Ok(KeyExchange(vec![]))
     }
 
-    pub fn derive_key(&self, other: &KeyExchange) -> Vec<u8> {
+    pub fn derive_key(
+        &self,
+        suite: KexSuite,
+        cipher: CipherSuite,
+        other: &KeyExchange,
+    ) -> Result<DerivedKeys, Error> {
         todo!();
     }
 }
@@ -626,5 +633,191 @@ impl<'de> Deserialize<'de> for CipherSuite {
         }
 
         deserializer.deserialize_str(CipherSuiteVisitor)
+    }
+}
+
+pub trait PayloadState {}
+pub trait PayloadVerified: PayloadState {}
+pub trait PayloadUnverified: PayloadState {}
+
+pub struct UnverifiedValue<T>(T);
+
+impl<T> std::fmt::Debug for UnverifiedValue<T>
+where
+    T: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("[ UNVERIFIED VALUE: [[ ")?;
+        self.0.fmt(f)?;
+        f.write_str(" ]] ]")
+    }
+}
+
+impl<T> UnverifiedValue<T> {
+    pub fn get_unverified_value(&self) -> &T {
+        &self.0
+    }
+}
+
+#[derive(Debug)]
+pub struct EATokenPayload<S>
+where
+    S: PayloadState,
+{
+    _phantom_state: std::marker::PhantomData<S>,
+
+    payload: Vec<u8>,
+    nonce: Nonce,
+    other_claims: aws_nitro_enclaves_cose::sign::HeaderMap,
+}
+
+impl<S> EATokenPayload<S>
+where
+    S: PayloadState,
+{
+    fn payload_internal<T>(&self) -> Result<T, Error>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        Ok(serde_cbor::from_slice(&self.payload)?)
+    }
+
+    fn other_claim_internal<T>(&self, key: HeaderKeys) -> Result<Option<T>, Error>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        match self.other_claims.get(&key.cbor_value()) {
+            None => Ok(None),
+            Some(val) => Ok(Some(serde_cbor::value::from_value(val.clone())?)),
+        }
+    }
+}
+
+impl<S> EATokenPayload<S>
+where
+    S: PayloadUnverified,
+{
+    pub fn payload_unverified<T>(&self) -> Result<UnverifiedValue<T>, Error>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        Ok(UnverifiedValue(self.payload_internal()?))
+    }
+
+    pub fn other_claim_unverified<T>(
+        &self,
+        key: HeaderKeys,
+    ) -> Result<Option<UnverifiedValue<T>>, Error>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        match self.other_claim_internal(key) {
+            Ok(Some(val)) => Ok(Some(UnverifiedValue(val))),
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+impl<S> EATokenPayload<S>
+where
+    S: PayloadVerified,
+{
+    pub fn payload<T>(&self) -> Result<T, Error>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        self.payload_internal()
+    }
+
+    pub fn other_claim<T>(&self, key: HeaderKeys) -> Result<Option<T>, Error>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        self.other_claim_internal(key)
+    }
+}
+
+#[derive(Debug)]
+pub struct COSEHeaderMap(aws_nitro_enclaves_cose::sign::HeaderMap);
+
+impl COSEHeaderMap {
+    pub fn new() -> Self {
+        COSEHeaderMap(aws_nitro_enclaves_cose::sign::HeaderMap::new())
+    }
+
+    pub fn insert<T>(&mut self, key: HeaderKeys, value: &T) -> Result<(), Error>
+    where
+        T: Serialize,
+    {
+        self.0
+            .insert(key.cbor_value(), serde_cbor::value::to_value(value)?);
+        Ok(())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct COSESign(COSESignInner);
+
+impl COSESign {
+    pub fn new<T>(
+        payload: T,
+        unprotected: Option<COSEHeaderMap>,
+        sign_key: &PKeyRef<Private>,
+    ) -> Result<Self, Error>
+    where
+        T: Serialize,
+    {
+        let unprotected = match unprotected {
+            Some(v) => v,
+            None => COSEHeaderMap::new(),
+        };
+        let payload = serde_cbor::to_vec(&payload)?;
+        Ok(COSESign(COSESignInner::new(
+            &payload,
+            &unprotected.0,
+            sign_key,
+        )?))
+    }
+
+    pub fn as_bytes(&self) -> Result<Vec<u8>, Error> {
+        Ok(self.0.as_bytes(true)?)
+    }
+
+    pub fn from_bytes(data: &[u8]) -> Result<Self, Error> {
+        Ok(COSESign(COSESignInner::from_bytes(data)?))
+    }
+
+    pub fn get_payload_unverified<T>(&self) -> Result<UnverifiedValue<T>, Error>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        let payload = self.0.get_payload(None)?;
+        Ok(UnverifiedValue(serde_cbor::from_slice(&payload)?))
+    }
+
+    pub fn get_payload<T>(&self, key: &PKeyRef<Public>) -> Result<T, Error>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        let payload = self.0.get_payload(Some(key))?;
+        Ok(serde_cbor::from_slice(&payload)?)
+    }
+
+    pub fn get_unprotected_value<T>(&self, key: HeaderKeys) -> Result<Option<T>, Error>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        match self.0.get_unprotected().get(&key.cbor_value()) {
+            None => Ok(None),
+            Some(val) => Ok(Some(serde_cbor::value::from_value(val.clone())?)),
+        }
+    }
+
+    fn get_eat_payload_internal<S>(&self) -> Result<EATokenPayload<S>, Error>
+    where
+        S: PayloadState,
+    {
+        todo!();
     }
 }

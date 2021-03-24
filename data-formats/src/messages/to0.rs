@@ -1,10 +1,9 @@
-use aws_nitro_enclaves_cose::COSESign1;
 use serde::{Deserialize, Serialize};
 use serde_tuple::Serialize_tuple;
 
 use super::{ClientMessage, Message, ServerMessage};
 
-use crate::types::{Nonce, TO0Data, TO1DataPayload};
+use crate::types::{COSESign, Nonce, TO0Data, TO1DataPayload};
 
 #[derive(Debug, Deserialize)]
 pub struct Hello {}
@@ -60,11 +59,11 @@ impl ServerMessage for HelloAck {}
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct OwnerSign {
     to0d: TO0Data,
-    to1d: COSESign1,
+    to1d: COSESign,
 }
 
 impl OwnerSign {
-    pub fn new(to0d: TO0Data, to1d: COSESign1) -> Self {
+    pub fn new(to0d: TO0Data, to1d: COSESign) -> Self {
         OwnerSign { to0d, to1d }
     }
 
@@ -72,7 +71,7 @@ impl OwnerSign {
         &self.to0d
     }
 
-    pub fn to1d(&self) -> &COSESign1 {
+    pub fn to1d(&self) -> &COSESign {
         &self.to1d
     }
 }

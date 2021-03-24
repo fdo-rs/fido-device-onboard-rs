@@ -1,6 +1,5 @@
 use std::convert::TryFrom;
 
-use aws_nitro_enclaves_cose::COSESign1;
 use openssl::{
     pkey::{PKey, PKeyRef, Private, Public},
     x509::X509,
@@ -12,7 +11,7 @@ use crate::{
     constants::HashType,
     errors::Result,
     publickey::{PublicKey, X5Chain},
-    types::{Guid, HMac, Hash, RendezvousInfo},
+    types::{COSESign, Guid, HMac, Hash, RendezvousInfo, UnverifiedValue},
     Error,
 };
 
@@ -77,10 +76,10 @@ impl OwnershipVoucher {
         self.entries.len() as u16
     }
 
-    pub fn entry(&self, entry_num: u16) -> Result<Option<COSESign1>> {
+    pub fn entry(&self, entry_num: u16) -> Result<Option<COSESign>> {
         match self.entries.get(entry_num as usize) {
             None => Ok(None),
-            Some(v) => Ok(Some(COSESign1::from_bytes(&v)?)),
+            Some(v) => Ok(Some(COSESign::from_bytes(&v)?)),
         }
     }
 
@@ -110,21 +109,29 @@ impl OwnershipVoucher {
             )
         } else {
             let lastrawentry = &self.entries[self.entries.len() - 1];
-            let lastsignedentry = COSESign1::from_bytes(&lastrawentry)?;
-            let lastentry: OwnershipVoucherEntryPayload =
-                serde_cbor::from_slice(&lastsignedentry.get_payload(None)?)?;
+            let lastsignedentry = COSESign::from_bytes(&lastrawentry)?;
+            let lastentry: UnverifiedValue<OwnershipVoucherEntryPayload> =
+                lastsignedentry.get_payload_unverified()?;
             // Check whether the hash_type passed is identical to the previous entry, or is not passed at all.
             let hash_type = if let Some(hash_type) = hash_type {
-                if lastentry.hash_previous_entry.get_type() != hash_type {
+                if lastentry
+                    .get_unverified_value()
+                    .hash_previous_entry
+                    .get_type()
+                    != hash_type
+                {
                     return Err(Error::InconsistentValue("hash-type"));
                 }
                 hash_type
             } else {
-                lastentry.hash_previous_entry.get_type()
+                lastentry
+                    .get_unverified_value()
+                    .hash_previous_entry
+                    .get_type()
             };
             (
                 Hash::new(Some(hash_type), lastrawentry)?,
-                lastentry.public_key,
+                lastentry.get_unverified_value().public_key.clone(),
             )
         };
         if !owner_pubkey.matches_pkey(&owner_private_key)? {
@@ -138,17 +145,12 @@ impl OwnershipVoucher {
             hash_header_info: hdrinfo_hash,
             public_key: next_party.clone(),
         };
-        let new_entry = serde_cbor::to_vec(&new_entry)?;
 
         // Sign with private key
-        let signed_new_entry = COSESign1::new(
-            &new_entry,
-            &aws_nitro_enclaves_cose::sign::HeaderMap::new(),
-            owner_private_key,
-        )?;
+        let signed_new_entry = COSESign::new(&new_entry, None, owner_private_key)?;
 
         // Append
-        self.entries.push(signed_new_entry.as_bytes(true)?);
+        self.entries.push(signed_new_entry.as_bytes()?);
 
         Ok(())
     }
@@ -215,11 +217,9 @@ impl<'a> EntryIter<'a> {
     }
 
     fn process_element(&mut self, element: &'a [u8]) -> Result<OwnershipVoucherEntryPayload> {
-        let entry = aws_nitro_enclaves_cose::COSESign1::from_bytes(element)?;
+        let entry = COSESign::from_bytes(element)?;
         let key = self.pubkey.as_pkey()?;
-        let payload = entry.get_payload(Some(&key))?;
-
-        let entry: OwnershipVoucherEntryPayload = serde_cbor::from_slice(&payload)?;
+        let entry: OwnershipVoucherEntryPayload = entry.get_payload(&key)?;
 
         // Compare the HashPreviousEntry to either (HeaderTag || HeaderHmac) or the previous entry
         let mut hdr_hash =

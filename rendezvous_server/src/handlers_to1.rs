@@ -134,7 +134,7 @@ pub(super) async fn prove_to_rv(
     let dev_pkey = dev_pkey
         .as_pkey()
         .map_err(Error::from_error::<messages::to1::ProveToRV, _>)?;
-    let signed_nonce = msg.token().get_payload(Some(&dev_pkey)).map_err(|_| {
+    let signed_nonce: Vec<u8> = msg.token().get_payload(&dev_pkey).map_err(|_| {
         Error::new(
             ErrorCode::InvalidMessageError,
             messages::to1::ProveToRV::message_type(),

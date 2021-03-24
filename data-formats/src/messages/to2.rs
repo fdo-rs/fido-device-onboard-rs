@@ -1,10 +1,9 @@
-use aws_nitro_enclaves_cose::COSESign1;
 use serde::{Deserialize, Serialize};
 use serde_tuple::Serialize_tuple;
 
 use super::{ClientMessage, Message, ServerMessage};
 
-use crate::types::{CipherSuite, Guid, HMac, KexSuite, Nonce, ServiceInfo, SigInfo};
+use crate::types::{COSESign, CipherSuite, Guid, HMac, KexSuite, Nonce, ServiceInfo, SigInfo};
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct HelloDevice {
@@ -62,14 +61,14 @@ impl Message for HelloDevice {
 impl ClientMessage for HelloDevice {}
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ProveOVHdr(COSESign1);
+pub struct ProveOVHdr(COSESign);
 
 impl ProveOVHdr {
-    pub fn new(token: COSESign1) -> Self {
+    pub fn new(token: COSESign) -> Self {
         ProveOVHdr(token)
     }
 
-    pub fn into_token(self) -> COSESign1 {
+    pub fn into_token(self) -> COSESign {
         self.0
     }
 }
@@ -108,11 +107,11 @@ impl ClientMessage for GetOVNextEntry {}
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct OVNextEntry {
     entry_num: u16,
-    entry: COSESign1,
+    entry: COSESign,
 }
 
 impl OVNextEntry {
-    pub fn new(entry_num: u16, entry: COSESign1) -> Self {
+    pub fn new(entry_num: u16, entry: COSESign) -> Self {
         OVNextEntry { entry_num, entry }
     }
 
@@ -120,7 +119,7 @@ impl OVNextEntry {
         self.entry_num
     }
 
-    pub fn entry(&self) -> &COSESign1 {
+    pub fn entry(&self) -> &COSESign {
         &self.entry
     }
 }
@@ -134,14 +133,14 @@ impl Message for OVNextEntry {
 impl ServerMessage for OVNextEntry {}
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ProveDevice(COSESign1);
+pub struct ProveDevice(COSESign);
 
 impl ProveDevice {
-    pub fn new(token: COSESign1) -> Self {
+    pub fn new(token: COSESign) -> Self {
         ProveDevice(token)
     }
 
-    pub fn into_token(self) -> COSESign1 {
+    pub fn into_token(self) -> COSESign {
         self.0
     }
 }
@@ -155,14 +154,14 @@ impl Message for ProveDevice {
 impl ClientMessage for ProveDevice {}
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct SetupDevice(COSESign1);
+pub struct SetupDevice(COSESign);
 
 impl SetupDevice {
-    pub fn new(token: COSESign1) -> Self {
+    pub fn new(token: COSESign) -> Self {
         SetupDevice(token)
     }
 
-    pub fn into_token(self) -> COSESign1 {
+    pub fn into_token(self) -> COSESign {
         self.0
     }
 }

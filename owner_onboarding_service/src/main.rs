@@ -2,7 +2,6 @@ use std::fs;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use aws_nitro_enclaves_cose::COSESign1;
 use openssl::{
     pkey::{PKey, Private},
     x509::X509,
@@ -14,7 +13,7 @@ use fdo_data_formats::{
     enhanced_types::X5Bag,
     ownershipvoucher::OwnershipVoucher,
     publickey::PublicKey,
-    types::{Guid, RendezvousInfo},
+    types::{COSESign, Guid, RendezvousInfo},
 };
 use fdo_store::{Store, StoreDriver};
 

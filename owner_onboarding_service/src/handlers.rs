@@ -2,7 +2,6 @@ use core::time::Duration;
 use std::convert::TryFrom;
 use std::str::FromStr;
 
-use aws_nitro_enclaves_cose::sign::{COSESign1, HeaderMap};
 use serde_cbor::Value;
 
 use fdo_data_formats::messages;
@@ -11,8 +10,8 @@ use fdo_data_formats::{
     messages::Message,
     publickey::{PublicKey, PublicKeyBody},
     types::{
-        Guid, KeyExchange, Nonce, SigInfo, TO1DataPayload, TO2ProveDevicePayload,
-        TO2ProveOVHdrPayload,
+        COSEHeaderMap, COSESign, Guid, KeyExchange, Nonce, SigInfo, TO1DataPayload,
+        TO2ProveDevicePayload, TO2ProveOVHdrPayload,
     },
 };
 
@@ -69,7 +68,8 @@ pub(super) async fn hello_device(
     }
 
     // Build kex a
-    let a_key_exchange = KeyExchange::new(msg.kex_suite());
+    let a_key_exchange = KeyExchange::new(msg.kex_suite())
+        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
     let nonce6 = Nonce::new().map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
 
     // Store data
@@ -96,16 +96,12 @@ pub(super) async fn hello_device(
         SigInfo::new(msg.a_signature_info().sig_type(), vec![]),
         a_key_exchange,
     );
-    let res_payload = serde_cbor::to_vec(&res_payload)
+    let mut res_header = COSEHeaderMap::new();
+    res_header
+        .insert(HeaderKeys::CUPHNonce, &nonce6)
         .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
-    let mut res_header = HeaderMap::new();
-    res_header.insert(
-        HeaderKeys::CUPHNonce.cbor_value(),
-        serde_cbor::value::to_value(nonce6)
-            .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?,
-    );
 
-    let res = COSESign1::new(&res_payload, &res_header, &user_data.owner_key)
+    let res = COSESign::new(&res_payload, Some(res_header), &user_data.owner_key)
         .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
     let res = messages::to2::ProveOVHdr::new(res);
 
@@ -116,7 +112,7 @@ pub(super) async fn hello_device(
 
 pub(super) async fn get_ov_next_entry(
     user_data: super::OwnerServiceUDT,
-    mut ses_with_store: SessionWithStore,
+    ses_with_store: SessionWithStore,
     msg: messages::to2::GetOVNextEntry,
 ) -> Result<(messages::to2::OVNextEntry, SessionWithStore), warp::Rejection> {
     let device_guid: String = match ses_with_store.session.get("device_guid") {
