@@ -74,6 +74,9 @@ pub(super) async fn hello_device(
 
     // Store data
     session
+        .insert("nonce6", nonce6.clone())
+        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
+    session
         .insert("kexsuite", msg.kex_suite())
         .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
     session

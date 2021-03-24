@@ -104,7 +104,6 @@ async fn perform_to1(devcred: &DeviceCredential, client: &mut ServiceClient) -> 
     let privkey = PKey::private_key_from_der(&devcred.private_key)
         .context("Error loading private key from device credential")?;
     let token = COSESign::from_eat(eat, None, &privkey).context("Error signing new token")?;
-
     log::trace!("Sending token: {:?}", token);
 
     // Send: ProveToRV, Receive: RVRedirect
@@ -241,7 +240,7 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
     };
 
     // Get nonce6
-    let nonce6 = {
+    let nonce6: Option<Nonce> = {
         prove_ov_hdr
             .get_unprotected_value(HeaderKeys::CUPHNonce)
             .context("Error getting nonce6")?
