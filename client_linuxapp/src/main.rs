@@ -10,8 +10,8 @@ use fdo_data_formats::{
     messages,
     ownershipvoucher::OwnershipVoucher,
     types::{
-        new_eat, COSESign, CipherSuite, DeviceCredential, EATokenPayload, HMac, KexSuite,
-        KeyExchange, Nonce, PayloadCreating, SigInfo, TO1DataPayload, TO2AddressEntry,
+        new_eat, COSEHeaderMap, COSESign, CipherSuite, DeviceCredential, EATokenPayload, HMac,
+        KexSuite, KeyExchange, Nonce, PayloadCreating, SigInfo, TO1DataPayload, TO2AddressEntry,
         TO2ProveDevicePayload, TO2ProveOVHdrPayload, UnverifiedValue,
     },
 };
@@ -241,7 +241,7 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
     };
 
     // Get nonce6
-    let nonce6: Option<Nonce> = {
+    let nonce6: Nonce = {
         prove_ov_hdr
             .get_unprotected_value(HeaderKeys::CUPHNonce)
             .context("Error getting nonce6")?
@@ -295,7 +295,33 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
         .context("Error performing key derivation")?;
     let new_keys = fdo_http_wrapper::EncryptionKeys::from(new_keys);
 
+    let nonce7 = Nonce::new().context("Error generating nonce7")?;
+
     // Send: ProveDevice, Receive: SetupDevice
+    let prove_device_payload = TO2ProveDevicePayload::new(b_key_exchange);
+    let prove_device_eat = new_eat(
+        Some(&prove_device_payload),
+        nonce6.clone(),
+        devcred.guid.clone(),
+    )
+    .context("Error building provedevice EAT")?;
+    let mut prove_device_eat_unprotected = COSEHeaderMap::new();
+    prove_device_eat_unprotected
+        .insert(HeaderKeys::CUPHNonce, &nonce7)
+        .context("Error adding nonce7 to unprotected")?;
+    let privkey = PKey::private_key_from_der(&devcred.private_key)
+        .context("Error loading private key from device credential")?;
+    let prove_device_token = COSESign::from_eat(
+        prove_device_eat,
+        Some(prove_device_eat_unprotected),
+        &privkey,
+    )
+    .context("Error signing ProveDevice EAT")?;
+    log::trace!("Prepared prove_device_token: {:?}", prove_device_token);
+    let prove_device_msg = messages::to2::ProveDevice::new(prove_device_token);
+    let setup_device: RequestResult<messages::to2::SetupDevice> =
+        client.send_request(prove_device_msg, Some(new_keys)).await;
+    let setup_device = setup_device.context("Error proving device")?;
 
     todo!();
 }
