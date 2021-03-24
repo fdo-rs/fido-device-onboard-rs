@@ -2,7 +2,7 @@ use serde::Deserialize;
 use serde_tuple::Serialize_tuple;
 
 use super::Message;
-use crate::{ownershipvoucher::OwnershipVoucherHeader, types::CborSimpleType};
+use crate::types::CborSimpleType;
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct AppStart {

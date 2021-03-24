@@ -1,6 +1,8 @@
+use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use openssl::x509::X509;
 use serde::Deserialize;
 use warp::Filter;
@@ -42,6 +44,11 @@ struct Settings {
 
     // Other info
     max_wait_seconds: Option<u32>,
+
+    // Bind information
+    bind: String,
+    tls_cert_path: Option<String>,
+    tls_key_path: Option<String>,
 }
 
 const MAINTENANCE_INTERVAL: u64 = 60;
@@ -87,6 +94,10 @@ async fn main() -> Result<()> {
     let max_wait_seconds = settings
         .max_wait_seconds
         .unwrap_or(DEFAULT_MAX_WAIT_SECONDS);
+
+    // Bind information
+    let bind_addr = SocketAddr::from_str(&settings.bind)
+        .with_context(|| format!("Error parsing bind string '{}'", &settings.bind))?;
 
     // Initialize stores
     let store = settings
@@ -173,12 +184,26 @@ async fn main() -> Result<()> {
         .recover(fdo_http_wrapper::server::handle_rejection)
         .with(warp::log("rendezvous_server"));
 
-    println!("Listening on :8081");
-    let server = warp::serve(routes).run(([0, 0, 0, 0], 8081));
+    log::info!("Listening on {}", bind_addr);
+    let server = warp::serve(routes);
+
     let maintenance_runner =
         tokio::spawn(async move { perform_maintenance(user_data.clone()).await });
 
-    tokio::join!(server, maintenance_runner);
+    if let Some(cert_path) = settings.tls_cert_path {
+        if settings.tls_key_path.is_none() {
+            bail!("When using TLS, a key path is also required");
+        }
+        let server = server
+            .tls()
+            .cert_path(cert_path)
+            .key_path(settings.tls_key_path.unwrap())
+            .run(bind_addr);
+        tokio::join!(server, maintenance_runner);
+    } else {
+        let server = server.run(bind_addr);
+        tokio::join!(server, maintenance_runner);
+    }
 
     Ok(())
 }

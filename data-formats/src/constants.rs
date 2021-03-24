@@ -1,13 +1,9 @@
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 use std::str::FromStr;
 
-use crate::{errors::Result, types::CborSimpleType, Error};
+use crate::{errors::Result, Error};
 
-use openssl::{
-    hash::{hash, DigestBytes, MessageDigest},
-    nid::Nid,
-};
-use serde_cbor::Value;
+use openssl::hash::MessageDigest;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, PartialEq, Eq)]

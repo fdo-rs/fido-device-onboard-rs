@@ -3,7 +3,7 @@ use serde_tuple::Serialize_tuple;
 
 use super::{ClientMessage, Message, ServerMessage};
 
-use crate::types::{COSESign, Nonce, TO0Data, TO1DataPayload};
+use crate::types::{COSESign, Nonce, TO0Data};
 
 #[derive(Debug, Deserialize)]
 pub struct Hello {}

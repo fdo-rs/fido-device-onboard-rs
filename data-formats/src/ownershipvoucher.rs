@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 
 use openssl::{
-    pkey::{PKey, PKeyRef, Private, Public},
+    pkey::{PKeyRef, Private},
     x509::X509,
 };
 use serde::Deserialize;

@@ -35,7 +35,6 @@ impl PublicKey {
                 encoding: PublicKeyEncoding::X509,
                 data: v.to_der()?,
             }),
-            _ => todo!(),
         }
     }
 

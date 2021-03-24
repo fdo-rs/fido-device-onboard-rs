@@ -1,7 +1,7 @@
 use fdo_data_formats::{
-    constants::{DeviceSigType, ErrorCode, HeaderKeys},
+    constants::{DeviceSigType, ErrorCode},
     messages::{self, Message},
-    types::{EATokenPayload, Guid, Nonce, SigInfo},
+    types::{Nonce, SigInfo},
 };
 
 use fdo_http_wrapper::server::Error;

@@ -1,18 +1,12 @@
-use core::time::Duration;
-use std::convert::TryFrom;
 use std::str::FromStr;
-
-use serde_cbor::Value;
 
 use fdo_data_formats::messages;
 use fdo_data_formats::{
     constants::{DeviceSigType, ErrorCode, HeaderKeys},
     messages::Message,
-    publickey::{PublicKey, PublicKeyBody},
     types::{
         COSEHeaderMap, COSESign, CipherSuite, Guid, KexSuite, KeyExchange, Nonce, RendezvousInfo,
-        SigInfo, TO1DataPayload, TO2ProveDevicePayload, TO2ProveOVHdrPayload,
-        TO2SetupDevicePayload,
+        SigInfo, TO2ProveDevicePayload, TO2ProveOVHdrPayload, TO2SetupDevicePayload,
     },
 };
 
@@ -358,7 +352,7 @@ pub(super) async fn prove_device(
 
 pub(super) async fn device_service_info_ready(
     _user_data: super::OwnerServiceUDT,
-    mut ses_with_store: SessionWithStore,
+    ses_with_store: SessionWithStore,
     _msg: messages::to2::DeviceServiceInfoReady,
 ) -> Result<(messages::to2::OwnerServiceInfoReady, SessionWithStore), warp::Rejection> {
     match ses_with_store.session.get::<bool>("proven_device") {
@@ -382,7 +376,7 @@ pub(super) async fn device_service_info_ready(
 
 pub(super) async fn device_service_info(
     _user_data: super::OwnerServiceUDT,
-    mut ses_with_store: SessionWithStore,
+    ses_with_store: SessionWithStore,
     _msg: messages::to2::DeviceServiceInfo,
 ) -> Result<(messages::to2::OwnerServiceInfo, SessionWithStore), warp::Rejection> {
     match ses_with_store.session.get::<bool>("proven_device") {

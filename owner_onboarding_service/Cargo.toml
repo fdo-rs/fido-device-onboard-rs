@@ -13,7 +13,7 @@ tokio = { version = "1", features = ["full"] }
 thiserror= "1"
 serde = "1"
 openssl = "0.10"
-warp = "0.3"
+warp = { version = "0.3", features = ["tls"] }
 pretty_env_logger = "0.4"
 serde_cbor = "0.11"
 log = "0.4"
