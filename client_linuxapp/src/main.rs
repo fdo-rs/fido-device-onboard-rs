@@ -1,5 +1,6 @@
 use std::env;
 use std::fs;
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
 use openssl::{hash::MessageDigest, pkey::PKey, sign::Signer};
@@ -18,6 +19,43 @@ use fdo_data_formats::{
 use fdo_http_wrapper::client::{RequestResult, ServiceClient};
 
 mod serviceinfo;
+
+const SDO_EXECUTED_MARKER_FILE: &str = "/etc/sdo_executed";
+
+fn device_credential_path() -> Result<PathBuf> {
+    if let Ok(path) = env::var("DEVICE_CREDENTIAL") {
+        return Ok(PathBuf::from(path));
+    }
+    let fwcfg_path = Path::new("/sys/firmware/qemu-fw-cfg/by_name/sdo/devicecredential");
+    if fwcfg_path.exists() {
+        return Ok(fwcfg_path.to_owned());
+    }
+
+    bail!("Unable to find device credential");
+}
+
+#[derive(Debug)]
+enum DeactivationMethod {
+    Deactivate,
+    MarkUsed,
+    None,
+}
+
+fn get_deactivation_method() -> DeactivationMethod {
+    if std::env::var_os("SKIP_DEACTIVATION").is_some() {
+        return DeactivationMethod::None;
+    }
+    let fwcfg_path = Path::new("/sys/firmware/qemu-fw-cfg/by_name/sdo/devicecredential");
+    if fwcfg_path.exists() {
+        return DeactivationMethod::MarkUsed;
+    }
+
+    DeactivationMethod::Deactivate
+}
+
+fn mark_devcred_used() -> Result<()> {
+    fs::write(&SDO_EXECUTED_MARKER_FILE, "executed").context("Error creating executed marker file")
+}
 
 fn get_to2_urls(entries: &[TO2AddressEntry]) -> Vec<String> {
     let mut urls = Vec::new();
@@ -344,8 +382,14 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
         .context("Error performing the ServiceInfo roundtrips")?;
 
     // Update the device credential to disabled
-    if std::env::var_os("SKIP_DEACTIVATION").is_none() {
-        deactivate_device_credential().context("Error deactivating device credential")?;
+    match get_deactivation_method() {
+        DeactivationMethod::None => log::info!("Not deactivating device credential"),
+        DeactivationMethod::Deactivate => {
+            deactivate_device_credential().context("Error deactivating device credential")?
+        }
+        DeactivationMethod::MarkUsed => {
+            mark_devcred_used().context("Error marking the device credential as used")?
+        }
     }
 
     // Send: Done, Receive: Done2
@@ -364,11 +408,15 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
 fn deactivate_device_credential() -> Result<()> {
     log::info!("Marking device credential as disabled");
 
-    let devcred_path = env::var("DEVICE_CREDENTIAL").unwrap();
+    let devcred_path = device_credential_path().unwrap();
 
     let mut dc: DeviceCredential = {
-        let dc_file = fs::File::open(&devcred_path)
-            .with_context(|| format!("Error opening device credential at {}", devcred_path))?;
+        let dc_file = fs::File::open(&devcred_path).with_context(|| {
+            format!(
+                "Error opening device credential at {}",
+                devcred_path.display()
+            )
+        })?;
         serde_cbor::from_reader(dc_file).context("Error loading device credential")?
     };
     dc.active = false;
@@ -376,7 +424,7 @@ fn deactivate_device_credential() -> Result<()> {
     let dc_file = fs::File::create(&devcred_path).with_context(|| {
         format!(
             "Error opening device credential at {} for writing",
-            devcred_path
+            devcred_path.display()
         )
     })?;
     serde_cbor::to_writer(dc_file, &dc)
@@ -389,12 +437,24 @@ fn deactivate_device_credential() -> Result<()> {
 async fn main() -> Result<()> {
     pretty_env_logger::init();
 
-    let devcred_path = env::var("DEVICE_CREDENTIAL")
+    if Path::new(SDO_EXECUTED_MARKER_FILE).exists() {
+        log::info!(
+            "SDO marker file {} exists, not rerunning",
+            SDO_EXECUTED_MARKER_FILE
+        );
+        return Ok(());
+    }
+
+    let devcred_path = device_credential_path()
         .context("Error getting device credential from DEVICE_CREDENTIAL environment variable")?;
 
     let dc: DeviceCredential = {
-        let dc_file = fs::File::open(&devcred_path)
-            .with_context(|| format!("Error opening device credential at {}", devcred_path))?;
+        let dc_file = fs::File::open(&devcred_path).with_context(|| {
+            format!(
+                "Error opening device credential at {}",
+                devcred_path.display()
+            )
+        })?;
         serde_cbor::from_reader(dc_file).context("Error loading device credential")?
     };
     log::trace!("Device credential: {:?}", dc);

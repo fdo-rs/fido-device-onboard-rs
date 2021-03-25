@@ -6,12 +6,12 @@ use fdo_http_wrapper::server::Session;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct ServiceInfoSettings {
-    rhsm_organization_id: String,
-    rhsm_activation_key: String,
-    rhsm_run_insights: bool,
+    rhsm_organization_id: Option<String>,
+    rhsm_activation_key: Option<String>,
+    rhsm_run_insights: Option<bool>,
 
-    sshkey_user: String,
-    sshkey_key: String,
+    sshkey_user: Option<String>,
+    sshkey_key: Option<String>,
 }
 
 #[derive(Debug)]
@@ -50,23 +50,45 @@ pub(crate) async fn perform_service_info(
             }
             log::trace!("Module list: {:?}", modlist);
 
-            if modlist.iter().any(|name| name == "sshkey") {
+            if modlist.iter().any(|name| name == "sshkey")
+                && user_data
+                    .service_info_configuration
+                    .settings
+                    .sshkey_user
+                    .is_some()
+            {
                 log::trace!("Found SSH key module, sending SSH key information");
 
                 out_si.add("sshkey", "active", &true)?;
                 out_si.add(
                     "sshkey",
                     "username",
-                    &user_data.service_info_configuration.settings.sshkey_user,
+                    &user_data
+                        .service_info_configuration
+                        .settings
+                        .sshkey_user
+                        .as_ref()
+                        .unwrap(),
                 )?;
                 out_si.add(
                     "sshkey",
                     "key",
-                    &user_data.service_info_configuration.settings.sshkey_key,
+                    &user_data
+                        .service_info_configuration
+                        .settings
+                        .sshkey_key
+                        .as_ref()
+                        .unwrap(),
                 )?;
             }
 
-            if modlist.iter().any(|name| name == "rhsm") {
+            if modlist.iter().any(|name| name == "rhsm")
+                && user_data
+                    .service_info_configuration
+                    .settings
+                    .rhsm_organization_id
+                    .is_some()
+            {
                 log::trace!("Found RHSM module, sending RHSM information");
 
                 out_si.add("rhsm", "active", &true)?;
@@ -76,7 +98,9 @@ pub(crate) async fn perform_service_info(
                     &user_data
                         .service_info_configuration
                         .settings
-                        .rhsm_organization_id,
+                        .rhsm_organization_id
+                        .as_ref()
+                        .unwrap(),
                 )?;
                 out_si.add(
                     "rhsm",
@@ -84,7 +108,9 @@ pub(crate) async fn perform_service_info(
                     &user_data
                         .service_info_configuration
                         .settings
-                        .rhsm_activation_key,
+                        .rhsm_activation_key
+                        .as_ref()
+                        .unwrap(),
                 )?;
                 out_si.add(
                     "rhsm",
@@ -92,7 +118,9 @@ pub(crate) async fn perform_service_info(
                     &user_data
                         .service_info_configuration
                         .settings
-                        .rhsm_run_insights,
+                        .rhsm_run_insights
+                        .as_ref()
+                        .unwrap(),
                 )?;
             }
         }

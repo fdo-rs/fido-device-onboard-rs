@@ -1,6 +1,7 @@
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::process::Command;
 
 use anyhow::{anyhow, bail, Context, Result};
 
@@ -80,7 +81,27 @@ fn install_ssh_key(user: &str, key: &str) -> Result<()> {
 }
 
 fn perform_rhsm(organization_id: &str, activation_key: &str, perform_insights: bool) -> Result<()> {
-    todo!();
+    log::info!("Executing subscription-manager registration");
+    Command::new("subscription-manager")
+        .arg("register")
+        .arg(format!("--org={}", organization_id))
+        .arg(format!("--activationkey={}", activation_key))
+        .spawn()
+        .context("Error spawning subscription-manager")?
+        .wait()
+        .context("Error running subscription-manager")?;
+
+    if perform_insights {
+        log::info!("Executing insights-client registration");
+        Command::new("insights-client")
+            .arg("--register")
+            .spawn()
+            .context("Error spawning insights-client")?
+            .wait()
+            .context("Error running insights-client")?;
+    }
+
+    Ok(())
 }
 
 async fn process_serviceinfo_in(si_in: &ServiceInfo) -> Result<()> {
