@@ -132,7 +132,10 @@ impl FromStr for Nonce {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Error> {
-        Ok(Nonce(hex::decode(s).unwrap().try_into().unwrap()))
+        let decoded = hex::decode(s).unwrap();
+        let boxed_slice = decoded.into_boxed_slice();
+        let boxed_array: Box<[u8; 16]> = boxed_slice.try_into().unwrap();
+        Ok(Nonce(*boxed_array))
     }
 }
 
