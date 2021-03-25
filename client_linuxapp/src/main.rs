@@ -21,12 +21,13 @@ use fdo_http_wrapper::client::{RequestResult, ServiceClient};
 mod serviceinfo;
 
 const SDO_EXECUTED_MARKER_FILE: &str = "/etc/sdo_executed";
+const QEMU_FW_CFG_PATH: &str = "/sys/firmware/qemu-fw-cfg/by_name/opt/sdo/devicecredential";
 
 fn device_credential_path() -> Result<PathBuf> {
     if let Ok(path) = env::var("DEVICE_CREDENTIAL") {
         return Ok(PathBuf::from(path));
     }
-    let fwcfg_path = Path::new("/sys/firmware/qemu-fw-cfg/by_name/sdo/devicecredential");
+    let fwcfg_path = Path::new(&QEMU_FW_CFG_PATH);
     if fwcfg_path.exists() {
         return Ok(fwcfg_path.to_owned());
     }
@@ -45,7 +46,7 @@ fn get_deactivation_method() -> DeactivationMethod {
     if std::env::var_os("SKIP_DEACTIVATION").is_some() {
         return DeactivationMethod::None;
     }
-    let fwcfg_path = Path::new("/sys/firmware/qemu-fw-cfg/by_name/sdo/devicecredential");
+    let fwcfg_path = Path::new(&QEMU_FW_CFG_PATH);
     if fwcfg_path.exists() {
         return DeactivationMethod::MarkUsed;
     }
