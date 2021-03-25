@@ -54,14 +54,13 @@ struct Settings {
 const MAINTENANCE_INTERVAL: u64 = 60;
 
 async fn perform_maintenance(udt: RendezvousUDT) {
-    log::trace!(
+    log::info!(
         "Scheduling maintenance every {} seconds",
         MAINTENANCE_INTERVAL
     );
 
     loop {
         tokio::time::sleep(tokio::time::Duration::from_secs(MAINTENANCE_INTERVAL)).await;
-        log::debug!("Maintenance starting");
 
         let store_maint = udt.store.perform_maintenance();
         let ses_maint = udt.session_store.perform_maintenance();
@@ -73,8 +72,6 @@ async fn perform_maintenance(udt: RendezvousUDT) {
         if let Err(e) = ses_res {
             log::warn!("Error during session store maintenance: {:?}", e);
         }
-
-        log::debug!("Maintenance finished");
     }
 }
 
@@ -82,7 +79,7 @@ const DEFAULT_MAX_WAIT_SECONDS: u32 = 2592000;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    pretty_env_logger::init();
+    pretty_env_logger::init_timed();
 
     let mut settings = config::Config::default();
     settings
