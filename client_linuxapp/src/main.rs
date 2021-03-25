@@ -343,6 +343,11 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
         .await
         .context("Error performing the ServiceInfo roundtrips")?;
 
+    // Update the device credential to disabled
+    if std::env::var_os("SKIP_DEACTIVATION").is_none() {
+        deactivate_device_credential().context("Error deactivating device credential")?;
+    }
+
     // Send: Done, Receive: Done2
     let done2: RequestResult<messages::to2::Done2> = client
         .send_request(messages::to2::Done::new(nonce6), None)
@@ -352,6 +357,30 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
     if &nonce7 != done2.nonce7() {
         bail!("Nonce7 did not match in Done2");
     }
+
+    Ok(())
+}
+
+fn deactivate_device_credential() -> Result<()> {
+    log::info!("Marking device credential as disabled");
+
+    let devcred_path = env::var("DEVICE_CREDENTIAL").unwrap();
+
+    let mut dc: DeviceCredential = {
+        let dc_file = fs::File::open(&devcred_path)
+            .with_context(|| format!("Error opening device credential at {}", devcred_path))?;
+        serde_cbor::from_reader(dc_file).context("Error loading device credential")?
+    };
+    dc.active = false;
+
+    let dc_file = fs::File::create(&devcred_path).with_context(|| {
+        format!(
+            "Error opening device credential at {} for writing",
+            devcred_path
+        )
+    })?;
+    serde_cbor::to_writer(dc_file, &dc)
+        .context("Error writing out deactivated device credential")?;
 
     Ok(())
 }
