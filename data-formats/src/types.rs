@@ -385,7 +385,7 @@ impl ServiceInfo {
         Ok(())
     }
 
-    pub fn add_modules(&mut self, modules: &[&str]) -> Result<(), Error> {
+    pub fn add_modules(&mut self, modules: &[String]) -> Result<(), Error> {
         self.add("devmod", "nummodules", &modules.len())?;
 
         // We have a special case of this, becasue this is a list with different types.
@@ -446,7 +446,7 @@ impl Iterator for ServiceInfoIter<'_> {
         };
 
         let (module, key) = module_key.split_at(split_pos);
-        Some((module.to_string(), key.to_string(), val.clone()))
+        Some((module.to_string(), key[1..].to_string(), val.clone()))
     }
 }
 
