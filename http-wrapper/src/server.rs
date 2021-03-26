@@ -41,7 +41,7 @@ impl SessionStore {
         self.store
             .store_data(
                 session.id().to_string(),
-                Some(Duration::from_secs(30)),
+                Some(Duration::from_secs(600)),
                 session.clone(),
             )
             .await?;
@@ -105,6 +105,8 @@ impl warp::reject::Reject for Error {}
 
 pub async fn handle_rejection(err: Rejection) -> Result<warp::reply::Response, Infallible> {
     let local_err: Error;
+
+    log::warn!("Error processing request: {:?}", err);
 
     let err = if let Some(err) = err.find::<Error>() {
         err
@@ -324,7 +326,5 @@ where
         )
         .untuple_one()
         .and_then(encrypt_and_generate_response::<IM, OM>)
-        //.recover(handle_rejection::<IM>)
-        //.unify()
         .boxed()
 }
