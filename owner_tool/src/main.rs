@@ -511,6 +511,22 @@ fn dump_voucher(matches: &ArgMatches) -> Result<(), Error> {
         Some(v) => println!("\tDevice certificate chain hash: {}", v),
     }
 
+    println!("Header HMAC: {}", ov.header_hmac());
+
+    let dev_cert = ov
+        .device_certificate()
+        .context("Error parsing the device certificate")?;
+    let dev_cert_signers = ov
+        .device_cert_signers()
+        .context("Error parsing the device certificate chain")?;
+    println!("Device certificate chain:");
+    if let Some(dev_cert) = dev_cert {
+        println!("\tDevice certificate: {:?}", &dev_cert);
+    }
+    for (num, dev_cert_signer) in dev_cert_signers.iter().enumerate() {
+        println!("\tSigner {}: {:?}", num, dev_cert_signer);
+    }
+
     let ov_iter = ov.iter_entries().context("Error creating OV iterator")?;
 
     println!("Entries:");
