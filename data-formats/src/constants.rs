@@ -7,11 +7,11 @@ use openssl::hash::MessageDigest;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, PartialEq, Eq)]
-#[repr(u8)]
+#[repr(i8)]
 #[non_exhaustive]
 pub enum HashType {
-    Sha256 = 8,
-    Sha384 = 14,
+    Sha256 = -16,
+    Sha384 = -43,
     HmacSha256 = 5,
     HmacSha384 = 6,
 }
