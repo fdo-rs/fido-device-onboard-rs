@@ -4,3 +4,4 @@
 - Client does not send an error to the server (owner or rendezvous) if one occurs
 - Key derivation and encryption/decryption
 - The client does not send the TO2 ServiceInfo KeepAlive's
+- The client does not currently check the owner pubkey against the hash in the device credential
