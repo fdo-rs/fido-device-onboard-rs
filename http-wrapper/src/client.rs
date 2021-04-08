@@ -66,7 +66,7 @@ impl ServiceClient {
 
         let mut req = self
             .client
-            .post(url)
+            .post(&url)
             .header("Content-Type", "application/cbor")
             .body(to_send);
 
