@@ -37,7 +37,10 @@ impl EncryptionKeys {
         if self.cipher_suite.is_none() {
             Ok(plaintext.to_vec())
         } else {
-            todo!();
+            log::error!("WARNING: ENCRYPTION KEY CRYPTO NOT IMPLEMENTED!");
+            let mut res = plaintext.to_vec();
+            res.insert(0, 42);
+            Ok(res)
         }
     }
 
@@ -45,7 +48,11 @@ impl EncryptionKeys {
         if self.cipher_suite.is_none() {
             Ok(ciphertext.to_vec())
         } else {
-            todo!();
+            log::error!("WARNING: ENCRYPTION KEY CRYPTO NOT IMPLEMENTED!");
+            if ciphertext[0] != 42 {
+                return Err(CryptoError);
+            }
+            Ok(ciphertext[1..].to_vec())
         }
     }
 }
