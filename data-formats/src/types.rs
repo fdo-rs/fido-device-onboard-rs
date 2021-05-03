@@ -588,7 +588,7 @@ impl KeyExchange {
             }
             KeyExchange::Ecdh(suite, key, our_random) => {
                 let ec_group = suite.get_ecdh_group()?;
-                let key = EcKey::private_key_from_pem(&key)?;
+                let key = EcKey::private_key_from_der(&key)?;
 
                 let mut public_x = BigNum::new()?;
                 let mut public_y = BigNum::new()?;
@@ -679,7 +679,7 @@ impl KeyExchange {
                 EcKey::from_public_key_affine_coordinates(&ec_group, &other_x, &other_y)?;
             other_pub.check_key()?;
 
-            let our_key = EcKey::private_key_from_pem(&key)?;
+            let our_key = EcKey::private_key_from_der(&key)?;
 
             let mut bnctx = BigNumContext::new()?;
 
