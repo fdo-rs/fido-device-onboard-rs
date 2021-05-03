@@ -11,7 +11,17 @@ use crate::{
     publickey::PublicKey,
 };
 
-use openssl::hash::hash;
+use openssl::{
+    bn::{BigNum, BigNumContext},
+    dh::Dh,
+    ec::{EcGroup, EcKey, EcPoint},
+    hash::{hash, MessageDigest},
+    nid::Nid,
+    pkey::Params,
+    rand::rand_bytes,
+    symm::Cipher,
+};
+use openssl_kdf::{Kdf, KdfKbMode, KdfMacType, KdfType};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize_tuple, Deserialize, Clone)]
@@ -520,8 +530,9 @@ impl MAROEPrefix {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub enum DerivedKeys {
-    SEVK(Vec<u8>),
+    Combined { sevk: Vec<u8> },
     Split { sek: Vec<u8>, svk: Vec<u8> },
 }
 
@@ -531,32 +542,223 @@ impl std::fmt::Debug for DerivedKeys {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-pub enum KeyExchange {
-    Noop,
+#[derive(Debug)]
+pub enum KeyDeriveSide {
+    OwnerService,
+    Device,
 }
+
+#[derive(Serialize, Deserialize)]
+pub enum KeyExchange {
+    Ecdh(KexSuite, Vec<u8>, Vec<u8>),
+    Dhkex(KexSuite, Vec<u8>),
+}
+
+const KEY_DERIVE_LABEL: &[u8] = b"FIDO-KDF";
+const KEY_DERIVE_CONTEXT_PREFIX: &[u8] = b"AutomaticOnboardTunnel";
 
 impl KeyExchange {
     pub fn new(suite: KexSuite) -> Result<Self, Error> {
-        // TODO!!!!
-        log::error!("WARNING: KEY EXCHANGE NOT IMPLEMENTED!");
-        Ok(KeyExchange::Noop)
+        match suite {
+            KexSuite::DhkexId14 | KexSuite::DhkexId15 => {
+                let dh_params = suite.get_dh_params()?;
+                let key = dh_params.generate_key()?;
+                Ok(KeyExchange::Dhkex(suite, key.private_key().to_vec()))
+            }
+            KexSuite::Ecdh256 | KexSuite::Ecdh384 => {
+                let ec_group = suite.get_ecdh_group()?;
+                let key = EcKey::generate(&ec_group)?;
+                let key = key.private_key_to_der()?;
+
+                let mut our_random = vec![0; suite.get_ecdh_random_size()];
+                rand_bytes(&mut our_random)?;
+
+                Ok(KeyExchange::Ecdh(suite, key, our_random))
+            }
+        }
     }
 
-    pub fn get_public(&self) -> Vec<u8> {
-        // TODO!!!!
-        log::error!("WARNING: KEY EXCHANGE AND CRYPTO NOT IMPLEMENTED!");
-        Vec::new()
+    pub fn get_public(&self) -> Result<Vec<u8>, Error> {
+        match self {
+            KeyExchange::Dhkex(suite, key) => {
+                let key = BigNum::from_slice(&key)?;
+                let dh_params = suite.get_dh_params()?;
+                let key = dh_params.set_private_key(key)?;
+                Ok(key.public_key().to_vec())
+            }
+            KeyExchange::Ecdh(suite, key, our_random) => {
+                let ec_group = suite.get_ecdh_group()?;
+                let key = EcKey::private_key_from_pem(&key)?;
+
+                let mut public_x = BigNum::new()?;
+                let mut public_y = BigNum::new()?;
+                let mut bnctx = BigNumContext::new()?;
+
+                key.public_key().affine_coordinates_gfp(
+                    &ec_group,
+                    &mut public_x,
+                    &mut public_y,
+                    &mut bnctx,
+                )?;
+
+                let public_x = public_x.to_vec();
+                let public_y = public_y.to_vec();
+
+                Ok(self.encode_ecdh_bstr(&public_x, &public_y, &our_random))
+            }
+        }
+    }
+
+    fn encode_ecdh_bstr(&self, ax: &[u8], ay: &[u8], random: &[u8]) -> Vec<u8> {
+        let mut out = Vec::with_capacity(2 + ax.len() + 2 + ax.len() + 2 + random.len());
+
+        out.extend_from_slice(&(ax.len() as u16).to_be_bytes());
+        out.extend_from_slice(&ax);
+
+        out.extend_from_slice(&(ay.len() as u16).to_be_bytes());
+        out.extend_from_slice(&ay);
+
+        out.extend_from_slice(&(random.len() as u16).to_be_bytes());
+        out.extend_from_slice(&random);
+
+        out
+    }
+
+    fn decode_ecdh_bstr(&self, bstr: &[u8]) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), Error> {
+        let (ax_len, bstr) = bstr.split_at(std::mem::size_of::<u16>());
+        let ax_len = u16::from_be_bytes(ax_len.try_into().unwrap());
+
+        let (ax, bstr) = bstr.split_at(ax_len as usize);
+
+        let (ay_len, bstr) = bstr.split_at(std::mem::size_of::<u16>());
+        let ay_len = u16::from_be_bytes(ay_len.try_into().unwrap());
+
+        let (ay, bstr) = bstr.split_at(ay_len as usize);
+
+        let (random_len, bstr) = bstr.split_at(std::mem::size_of::<u16>());
+        let random_len = u16::from_be_bytes(random_len.try_into().unwrap());
+
+        let (random, bstr) = bstr.split_at(random_len as usize);
+
+        if !bstr.is_empty() {
+            Err(Error::KeyExchangeError("Invalid ecdh bstr received"))
+        } else {
+            Ok((ax.to_vec(), ay.to_vec(), random.to_vec()))
+        }
+    }
+
+    fn derive_key_dh(&self, other: &[u8]) -> Result<(Vec<u8>, Vec<u8>), Error> {
+        if let KeyExchange::Dhkex(suite, key) = self {
+            let other = BigNum::from_slice(&other)?;
+
+            let key = BigNum::from_slice(&key)?;
+            let dh_params = suite.get_dh_params()?;
+            let key = dh_params.set_private_key(key)?;
+
+            Ok((key.compute_key(&other)?, vec![]))
+        } else {
+            panic!("Invalid derive_key_dh call");
+        }
+    }
+
+    fn derive_key_ecdh(
+        &self,
+        our_side: KeyDeriveSide,
+        other: &[u8],
+    ) -> Result<(Vec<u8>, Vec<u8>), Error> {
+        if let KeyExchange::Ecdh(suite, key, our_random) = self {
+            let ec_group = suite.get_ecdh_group()?;
+
+            let (other_x, other_y, other_random) = self.decode_ecdh_bstr(&other)?;
+            if other_random.len() != suite.get_ecdh_random_size() {
+                return Err(Error::KeyExchangeError("Other random is invalid size"));
+            }
+            let other_x = BigNum::from_slice(&other_x)?;
+            let other_y = BigNum::from_slice(&other_y)?;
+            let other_pub =
+                EcKey::from_public_key_affine_coordinates(&ec_group, &other_x, &other_y)?;
+            other_pub.check_key()?;
+
+            let our_key = EcKey::private_key_from_pem(&key)?;
+
+            let mut bnctx = BigNumContext::new()?;
+
+            let mut derived = EcPoint::new(&ec_group)?;
+            derived.mul(
+                &ec_group,
+                other_pub.public_key(),
+                our_key.private_key(),
+                &bnctx,
+            )?;
+            if derived.is_infinity(&ec_group) || !derived.is_on_curve(&ec_group, &mut bnctx)? {
+                return Err(Error::KeyExchangeError("Invalid key derived"));
+            }
+
+            let mut derived_x = BigNum::new()?;
+            let mut derived_y = BigNum::new()?;
+            derived.affine_coordinates_gfp(
+                &ec_group,
+                &mut derived_x,
+                &mut derived_y,
+                &mut bnctx,
+            )?;
+            let derived_x = derived_x.to_vec();
+
+            let mut shared_secret =
+                Vec::with_capacity(derived_x.len() + our_random.len() + other_random.len());
+            shared_secret.extend_from_slice(&derived_x);
+            match our_side {
+                KeyDeriveSide::Device => {
+                    shared_secret.extend_from_slice(&our_random);
+                    shared_secret.extend_from_slice(&other_random);
+                }
+                KeyDeriveSide::OwnerService => {
+                    shared_secret.extend_from_slice(&other_random);
+                    shared_secret.extend_from_slice(&our_random);
+                }
+            }
+
+            Ok((shared_secret, vec![]))
+        } else {
+            panic!("Invalid derive_key_ecdh call");
+        }
     }
 
     pub fn derive_key(
         &self,
-        suite: KexSuite,
+        our_side: KeyDeriveSide,
         cipher: CipherSuite,
         other: &[u8],
     ) -> Result<DerivedKeys, Error> {
-        log::error!("WARNING: KEY EXCHANGE NOT IMPLEMENTED!");
-        Ok(DerivedKeys::SEVK(vec![]))
+        let (shared_secret, context_rand) = match self {
+            KeyExchange::Dhkex(..) => self.derive_key_dh(other)?,
+            KeyExchange::Ecdh(..) => self.derive_key_ecdh(our_side, other)?,
+        };
+
+        let kdf = Kdf::new(KdfType::KeyBased)?;
+        kdf.set_kb_mode(KdfKbMode::Counter)?;
+        kdf.set_kb_mac_type(KdfMacType::Hmac)?;
+        kdf.set_digest(cipher.kdf_digest())?;
+        // Label
+        kdf.set_salt(&KEY_DERIVE_LABEL)?;
+        // Context
+        let mut context = Vec::with_capacity(KEY_DERIVE_CONTEXT_PREFIX.len() + context_rand.len());
+        context.extend_from_slice(&KEY_DERIVE_CONTEXT_PREFIX);
+        context.extend_from_slice(&context_rand);
+        kdf.set_kb_info(&context)?;
+        // Key
+        kdf.set_key(&shared_secret)?;
+        let key_out = kdf.derive(cipher.required_keylen())?;
+
+        if cipher.uses_combined_key() {
+            Ok(DerivedKeys::Combined { sevk: key_out })
+        } else {
+            let (svk, sek) = key_out.split_at(cipher.split_key_split_pos());
+            Ok(DerivedKeys::Split {
+                svk: svk.to_vec(),
+                sek: sek.to_vec(),
+            })
+        }
     }
 }
 
@@ -596,17 +798,23 @@ pub struct SizedMessage {
 
 #[derive(Debug, Clone, Copy)]
 pub enum KexSuite {
-    ECDH256,
-    ECDH384,
+    // Elliptic Curve Diffie-Hellman Key Exchange Protocol
+    Ecdh256,
+    Ecdh384,
+    // Diffie-Hellmann Key Exchange Protocol
+    DhkexId14,
+    DhkexId15,
 }
 
 impl FromStr for KexSuite {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Error> {
-        match &s.to_lowercase()[..] {
-            "ecdh256" => Ok(KexSuite::ECDH256),
-            "ecdh384" => Ok(KexSuite::ECDH384),
+        match s {
+            "ECDH256" => Ok(KexSuite::Ecdh256),
+            "ECDH384" => Ok(KexSuite::Ecdh384),
+            "DHKEXid14" => Ok(KexSuite::DhkexId14),
+            "DHKEXid15" => Ok(KexSuite::DhkexId15),
             other => Err(Error::InvalidSuiteName(other.to_string())),
         }
     }
@@ -615,8 +823,10 @@ impl FromStr for KexSuite {
 impl ToString for KexSuite {
     fn to_string(&self) -> String {
         match self {
-            KexSuite::ECDH256 => "ECDH256".to_string(),
-            KexSuite::ECDH384 => "ECDH384".to_string(),
+            KexSuite::Ecdh256 => "ECDH256".to_string(),
+            KexSuite::Ecdh384 => "ECDH384".to_string(),
+            KexSuite::DhkexId14 => "DHKEXid14".to_string(),
+            KexSuite::DhkexId15 => "DHKEXid15".to_string(),
         }
     }
 }
@@ -661,19 +871,124 @@ impl<'de> Deserialize<'de> for KexSuite {
     }
 }
 
+impl KexSuite {
+    fn get_ecdh_random_size(&self) -> usize {
+        match self {
+            KexSuite::Ecdh256 => 128,
+            KexSuite::Ecdh384 => 384,
+            _ => panic!("Invalid get_ecdh_random_size call"),
+        }
+    }
+
+    fn get_ecdh_group(&self) -> Result<EcGroup, Error> {
+        let curve_name = match self {
+            KexSuite::Ecdh256 => Nid::X9_62_PRIME256V1,
+            KexSuite::Ecdh384 => Nid::SECP384R1,
+            _ => panic!("Invalid get_ecdh_group call"),
+        };
+        Ok(EcGroup::from_curve_name(curve_name)?)
+    }
+
+    fn get_dh_params(&self) -> Result<Dh<Params>, Error> {
+        match self {
+            KexSuite::DhkexId14 => {
+                // From RFC3526, section 3
+                let prime = BigNum::from_hex_str(
+                    "
+                FFFFFFFF FFFFFFFF C90FDAA2 2168C234 C4C6628B 80DC1CD1
+                29024E08 8A67CC74 020BBEA6 3B139B22 514A0879 8E3404DD
+                EF9519B3 CD3A431B 302B0A6D F25F1437 4FE1356D 6D51C245
+                E485B576 625E7EC6 F44C42E9 A637ED6B 0BFF5CB6 F406B7ED
+                EE386BFB 5A899FA5 AE9F2411 7C4B1FE6 49286651 ECE45B3D
+                C2007CB8 A163BF05 98DA4836 1C55D39A 69163FA8 FD24CF5F
+                83655D23 DCA3AD96 1C62F356 208552BB 9ED52907 7096966D
+                670C354E 4ABC9804 F1746C08 CA18217C 32905E46 2E36CE3B
+                E39E772C 180E8603 9B2783A2 EC07A28F B5C55DF0 6F4C52C9
+                DE2BCBF6 95581718 3995497C EA956AE5 15D22618 98FA0510
+                15728E5A 8AACAA68 FFFFFFFF FFFFFFFF",
+                )?;
+                let generator = BigNum::from_u32(2)?;
+                Ok(Dh::from_pqg(prime, None, generator)?)
+            }
+            KexSuite::DhkexId15 => {
+                // From RFC3526, section 4
+                let prime = BigNum::from_hex_str(
+                    "
+                FFFFFFFF FFFFFFFF C90FDAA2 2168C234 C4C6628B 80DC1CD1
+                29024E08 8A67CC74 020BBEA6 3B139B22 514A0879 8E3404DD
+                EF9519B3 CD3A431B 302B0A6D F25F1437 4FE1356D 6D51C245
+                E485B576 625E7EC6 F44C42E9 A637ED6B 0BFF5CB6 F406B7ED
+                EE386BFB 5A899FA5 AE9F2411 7C4B1FE6 49286651 ECE45B3D
+                C2007CB8 A163BF05 98DA4836 1C55D39A 69163FA8 FD24CF5F
+                83655D23 DCA3AD96 1C62F356 208552BB 9ED52907 7096966D
+                670C354E 4ABC9804 F1746C08 CA18217C 32905E46 2E36CE3B
+                E39E772C 180E8603 9B2783A2 EC07A28F B5C55DF0 6F4C52C9
+                DE2BCBF6 95581718 3995497C EA956AE5 15D22618 98FA0510
+                15728E5A 8AAAC42D AD33170D 04507A33 A85521AB DF1CBA64
+                ECFB8504 58DBEF0A 8AEA7157 5D060C7D B3970F85 A6E1E4C7
+                ABF5AE8C DB0933D7 1E8C94E0 4A25619D CEE3D226 1AD2EE6B
+                F12FFA06 D98A0864 D8760273 3EC86A64 521F2B18 177B200C
+                BBE11757 7A615D6C 770988C0 BAD946E2 08E24FA0 74E5AB31
+                43DB5BFC E0FD108E 4B82D120 A93AD2CA FFFFFFFF FFFFFFFF",
+                )?;
+                let generator = BigNum::from_u32(2)?;
+                Ok(Dh::from_pqg(prime, None, generator)?)
+            }
+            _ => panic!("Invalid get_dh_params call"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum CipherSuite {
-    A128GCM,
-    A256GCM,
+    // Combined ciphers
+    A128Gcm,
+    A256Gcm,
+}
+
+impl CipherSuite {
+    fn uses_combined_key(&self) -> bool {
+        match self {
+            CipherSuite::A128Gcm | CipherSuite::A256Gcm => true,
+        }
+    }
+
+    fn split_key_split_pos(&self) -> usize {
+        match self {
+            CipherSuite::A128Gcm | CipherSuite::A256Gcm => {
+                panic!("Invalid call to split_key_split_pos")
+            }
+        }
+    }
+
+    fn required_keylen(&self) -> usize {
+        match self {
+            CipherSuite::A128Gcm => 128,
+            CipherSuite::A256Gcm => 256,
+        }
+    }
+
+    fn kdf_digest(&self) -> MessageDigest {
+        match self {
+            CipherSuite::A128Gcm | CipherSuite::A256Gcm => MessageDigest::sha256(),
+        }
+    }
+
+    pub fn openssl_cipher(&self) -> Cipher {
+        match self {
+            CipherSuite::A128Gcm => Cipher::aes_128_gcm(),
+            CipherSuite::A256Gcm => Cipher::aes_256_gcm(),
+        }
+    }
 }
 
 impl FromStr for CipherSuite {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Error> {
-        match &s.to_lowercase()[..] {
-            "a128gcm" => Ok(CipherSuite::A128GCM),
-            "a256gcm" => Ok(CipherSuite::A256GCM),
+        match s {
+            "A128GCM" => Ok(CipherSuite::A128Gcm),
+            "A256GCM" => Ok(CipherSuite::A256Gcm),
             other => Err(Error::InvalidSuiteName(other.to_string())),
         }
     }
@@ -682,8 +997,8 @@ impl FromStr for CipherSuite {
 impl ToString for CipherSuite {
     fn to_string(&self) -> String {
         match self {
-            CipherSuite::A128GCM => "A128GCM".to_string(),
-            CipherSuite::A256GCM => "A256GCM".to_string(),
+            CipherSuite::A128Gcm => "A128GCM".to_string(),
+            CipherSuite::A256Gcm => "A256GCM".to_string(),
         }
     }
 }

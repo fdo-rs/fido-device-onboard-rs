@@ -1,7 +1,7 @@
-use openssl::symm::{encrypt, Cipher};
+use openssl::symm::Crypter;
 use serde::{Deserialize, Serialize};
 
-use fdo_data_formats::types::DerivedKeys;
+use fdo_data_formats::types::{CipherSuite, DerivedKeys};
 
 #[cfg(feature = "server")]
 pub mod server;
@@ -9,56 +9,43 @@ pub mod server;
 #[cfg(feature = "client")]
 pub mod client;
 
-#[derive(Serialize, Deserialize)]
-pub enum EncryptionKeys {
-    None,
-    AEAD(Vec<u8>),
-    Separate(Vec<u8>, Vec<u8>),
-}
-
-impl From<DerivedKeys> for EncryptionKeys {
-    fn from(dk: DerivedKeys) -> Self {
-        match dk {
-            DerivedKeys::SEVK(sevk) => EncryptionKeys::AEAD(sevk),
-            DerivedKeys::Split { sek, svk } => EncryptionKeys::Separate(sek, svk),
-        }
-    }
-}
-
-impl std::fmt::Debug for EncryptionKeys {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("[[ ENCRYPTIONKEYS: REDACTED ]]")
-    }
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EncryptionKeys {
+    cipher_suite: Option<CipherSuite>,
+    keys: Option<DerivedKeys>,
 }
 
 #[derive(Debug)]
 pub struct CryptoError;
 
 impl EncryptionKeys {
+    pub fn unencrypted() -> Self {
+        EncryptionKeys {
+            cipher_suite: None,
+            keys: None,
+        }
+    }
+
+    pub fn from_derived(cipher_suite: CipherSuite, derived_keys: DerivedKeys) -> Self {
+        EncryptionKeys {
+            cipher_suite: Some(cipher_suite),
+            keys: Some(derived_keys),
+        }
+    }
+
     fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>, CryptoError> {
-        match self {
-            EncryptionKeys::None => Ok(plaintext.to_vec()),
-            EncryptionKeys::AEAD(_) => {
-                log::error!("WARNING: ENCRYPTION KEY CRYPTO NOT IMPLEMENTED!");
-                let mut res = plaintext.to_vec();
-                res.insert(0, 42);
-                Ok(res)
-            }
-            _ => todo!(),
+        if self.cipher_suite.is_none() {
+            Ok(plaintext.to_vec())
+        } else {
+            todo!();
         }
     }
 
     fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>, CryptoError> {
-        match self {
-            EncryptionKeys::None => Ok(ciphertext.to_vec()),
-            EncryptionKeys::AEAD(_) => {
-                log::error!("WARNING: ENCRYPTION KEY CRYPTO NOT IMPLEMENTED!");
-                if ciphertext[0] != 42 {
-                    return Err(CryptoError);
-                }
-                Ok(ciphertext[1..].to_vec())
-            }
-            _ => todo!(),
+        if self.cipher_suite.is_none() {
+            Ok(ciphertext.to_vec())
+        } else {
+            todo!();
         }
     }
 }

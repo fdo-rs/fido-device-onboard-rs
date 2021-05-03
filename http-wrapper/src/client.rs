@@ -46,7 +46,7 @@ impl ServiceClient {
             base_url: base_url.trim_end_matches('/').to_string(),
             client: reqwest::Client::new(),
             authorization_token: None,
-            encryption_keys: EncryptionKeys::None,
+            encryption_keys: EncryptionKeys::unencrypted(),
         }
     }
 

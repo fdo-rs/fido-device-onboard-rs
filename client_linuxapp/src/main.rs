@@ -12,8 +12,8 @@ use fdo_data_formats::{
     ownershipvoucher::OwnershipVoucher,
     types::{
         new_eat, COSEHeaderMap, COSESign, CipherSuite, DeviceCredential, EATokenPayload, HMac,
-        KexSuite, KeyExchange, Nonce, PayloadCreating, SigInfo, TO1DataPayload, TO2AddressEntry,
-        TO2ProveDevicePayload, TO2ProveOVHdrPayload, UnverifiedValue,
+        KexSuite, KeyDeriveSide, KeyExchange, Nonce, PayloadCreating, SigInfo, TO1DataPayload,
+        TO2AddressEntry, TO2ProveDevicePayload, TO2ProveOVHdrPayload, UnverifiedValue,
     },
 };
 use fdo_http_wrapper::client::{RequestResult, ServiceClient};
@@ -211,8 +211,8 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
 
     let nonce5 = Nonce::new().context("Error generating nonce5")?;
     let sigtype = DeviceSigType::StSECP384R1;
-    let kexsuite = KexSuite::ECDH384;
-    let ciphersuite = CipherSuite::A256GCM;
+    let kexsuite = KexSuite::Ecdh384;
+    let ciphersuite = CipherSuite::A256Gcm;
 
     let mut client = fdo_http_wrapper::client::ServiceClient::new(&url);
 
@@ -332,14 +332,18 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
     let b_key_exchange =
         KeyExchange::new(kexsuite).context("Error creating device side of key exchange")?;
     let new_keys = b_key_exchange
-        .derive_key(kexsuite, ciphersuite, &a_key_exchange)
+        .derive_key(KeyDeriveSide::Device, ciphersuite, &a_key_exchange)
         .context("Error performing key derivation")?;
-    let new_keys = fdo_http_wrapper::EncryptionKeys::from(new_keys);
+    let new_keys = fdo_http_wrapper::EncryptionKeys::from_derived(ciphersuite, new_keys);
 
     let nonce7 = Nonce::new().context("Error generating nonce7")?;
 
     // Send: ProveDevice, Receive: SetupDevice
-    let prove_device_payload = TO2ProveDevicePayload::new(b_key_exchange.get_public());
+    let prove_device_payload = TO2ProveDevicePayload::new(
+        b_key_exchange
+            .get_public()
+            .context("Error building our public")?,
+    );
     let prove_device_eat = new_eat(
         Some(&prove_device_payload),
         nonce6.clone(),

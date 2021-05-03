@@ -147,7 +147,7 @@ where
     let keys: EncryptionKeys = ses_with_store
         .session
         .get(ENCRYPTION_KEYS_SES_KEY)
-        .unwrap_or(EncryptionKeys::None);
+        .unwrap_or(EncryptionKeys::unencrypted());
     let inbound = match keys.decrypt(&inbound) {
         Ok(v) => v,
         Err(_) => {
@@ -197,7 +197,7 @@ where
     let keys = ses_with_store
         .session
         .get(ENCRYPTION_KEYS_SES_KEY)
-        .unwrap_or(EncryptionKeys::None);
+        .unwrap_or(EncryptionKeys::unencrypted());
 
     Ok((
         response,

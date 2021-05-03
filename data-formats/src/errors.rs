@@ -27,4 +27,6 @@ pub enum Error {
     InvalidSuiteName(String),
     #[error("Invalid entry number requested")]
     InvalidEntryNum,
+    #[error("Error in key exchange: {0}")]
+    KeyExchangeError(&'static str),
 }

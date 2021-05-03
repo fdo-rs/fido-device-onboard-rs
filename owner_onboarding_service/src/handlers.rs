@@ -5,8 +5,9 @@ use fdo_data_formats::{
     constants::{DeviceSigType, ErrorCode, HeaderKeys},
     messages::Message,
     types::{
-        COSEHeaderMap, COSESign, CipherSuite, Guid, KexSuite, KeyExchange, Nonce, RendezvousInfo,
-        SigInfo, TO2ProveDevicePayload, TO2ProveOVHdrPayload, TO2SetupDevicePayload,
+        COSEHeaderMap, COSESign, CipherSuite, Guid, KexSuite, KeyDeriveSide, KeyExchange, Nonce,
+        RendezvousInfo, SigInfo, TO2ProveDevicePayload, TO2ProveOVHdrPayload,
+        TO2SetupDevicePayload,
     },
 };
 
@@ -69,6 +70,9 @@ pub(super) async fn hello_device(
     let a_key_exchange = KeyExchange::new(msg.kex_suite())
         .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
     let nonce6 = Nonce::new().map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
+    let a_key_exchange_public = a_key_exchange
+        .get_public()
+        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
 
     // Now produce the result
     let ov_hdr = ownership_voucher
@@ -81,15 +85,12 @@ pub(super) async fn hello_device(
         ownership_voucher.header_hmac().clone(),
         msg.nonce5().clone(),
         SigInfo::new(msg.a_signature_info().sig_type(), vec![]),
-        a_key_exchange.get_public(),
+        a_key_exchange_public,
     );
 
     // Store data
     session
         .insert("nonce6", nonce6.clone())
-        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
-    session
-        .insert("kexsuite", msg.kex_suite())
         .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
     session
         .insert("ciphersuite", msg.cipher_suite())
@@ -212,19 +213,6 @@ pub(super) async fn prove_device(
     };
     session.remove("a_key_exchange");
 
-    let kexsuite: KexSuite = match session.get("kexsuite") {
-        Some(v) => v,
-        None => {
-            return Err(Error::new(
-                ErrorCode::InvalidMessageError,
-                messages::to2::ProveDevice::message_type(),
-                "Request sequence failure",
-            )
-            .into())
-        }
-    };
-    session.remove("kexsuite");
-
     let ciphersuite: CipherSuite = match session.get("ciphersuite") {
         Some(v) => v,
         None => {
@@ -323,9 +311,13 @@ pub(super) async fn prove_device(
 
     // Derive and set the keys
     let new_keys = a_key_exchange
-        .derive_key(kexsuite, ciphersuite, eat_payload.b_key_exchange())
+        .derive_key(
+            KeyDeriveSide::OwnerService,
+            ciphersuite,
+            eat_payload.b_key_exchange(),
+        )
         .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?;
-    let new_keys = EncryptionKeys::from(new_keys);
+    let new_keys = EncryptionKeys::from_derived(ciphersuite, new_keys);
     log::trace!("Got new keys, setting: {:?}", new_keys);
     fdo_http_wrapper::server::set_encryption_keys::<messages::to2::ProveDevice>(
         &mut session,
