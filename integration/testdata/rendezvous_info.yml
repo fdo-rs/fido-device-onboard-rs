@@ -1,0 +1,5 @@
+---
+- dns: localhost
+  device_port: 8081
+  owner_port: 8081
+  protocol: http

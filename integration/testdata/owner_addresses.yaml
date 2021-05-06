@@ -1,0 +1,5 @@
+---
+- transport: HTTP
+  port: 8080
+  addresses:
+    - dns_name: localhost

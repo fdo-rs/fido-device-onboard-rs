@@ -1,0 +1,46 @@
+on: [push, pull_request]
+
+name: Continuous integration
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Install deps
+        run: |
+          dnf install -y make gcc openssl openssl-devel
+
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+
+      - name: Generate test keys
+        run: |
+          mkdir keys
+          openssl ecparam -name prime256v1 -genkey -out keys/manufacturer_key.der -outform der
+          openssl req -x509 -key keys/manufacturer_key.der -keyform der -out keys/manufacturer_cert.pem -days 365 -subj "/C=US/O=RHEL for Edge/CN=FIDO Manufacturer"
+          openssl ecparam -name prime256v1 -genkey -out keys/device_ca_key.der -outform der
+          openssl req -x509 -key keys/device_ca_key.der -keyform der -out keys/device_ca_cert.pem -days 365 -subj "/C=US/O=RHEL for Edge/CN=Device"
+          openssl ecparam -name prime256v1 -genkey -out keys/owner_key.der -outform der
+          openssl req -x509 -key keys/owner_key.der -keyform der -out keys/owner_cert.pem -days 365 -subj "/C=US/O=RHEL for Edge/CN=Owner"
+          openssl ecparam -name prime256v1 -genkey -out keys/reseller_key.der -outform der
+          openssl req -x509 -key keys/reseller_key.der -keyform der -out keys/reseller_cert.pem -days 365 -subj "/C=US/O=RHEL for Edge/CN=Reseller"
+
+      # - name: Test
+      #   run: ./integration/test.sh
