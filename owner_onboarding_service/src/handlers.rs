@@ -5,7 +5,7 @@ use fdo_data_formats::{
     constants::{DeviceSigType, ErrorCode, HeaderKeys},
     messages::Message,
     types::{
-        COSEHeaderMap, COSESign, CipherSuite, Guid, KexSuite, KeyDeriveSide, KeyExchange, Nonce,
+        COSEHeaderMap, COSESign, CipherSuite, Guid, KeyDeriveSide, KeyExchange, Nonce,
         RendezvousInfo, SigInfo, TO2ProveDevicePayload, TO2ProveOVHdrPayload,
         TO2SetupDevicePayload,
     },

@@ -963,8 +963,8 @@ impl CipherSuite {
 
     fn required_keylen(&self) -> usize {
         match self {
-            CipherSuite::A128Gcm => 128,
-            CipherSuite::A256Gcm => 256,
+            CipherSuite::A128Gcm => 16,
+            CipherSuite::A256Gcm => 32,
         }
     }
 
