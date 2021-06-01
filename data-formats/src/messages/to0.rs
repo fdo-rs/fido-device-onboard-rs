@@ -9,6 +9,7 @@ use crate::types::{COSESign, Nonce, TO0Data};
 pub struct Hello {}
 
 impl Hello {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Hello {}
     }

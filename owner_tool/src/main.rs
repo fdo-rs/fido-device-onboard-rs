@@ -637,6 +637,7 @@ fn extend_voucher(matches: &ArgMatches) -> Result<(), Error> {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(clippy::upper_case_acronyms)]
 enum RemoteTransport {
     TCP,
     TLS,
@@ -650,7 +651,7 @@ enum RemoteTransport {
 #[serde(untagged)]
 enum RemoteAddress {
     IP { ip_address: String },
-    DNS { dns_name: String },
+    Dns { dns_name: String },
 }
 
 #[derive(Debug, Deserialize)]
@@ -666,11 +667,11 @@ impl TryFrom<RemoteConnection> for Vec<TO2AddressEntry> {
 
     fn try_from(rc: RemoteConnection) -> Result<Vec<TO2AddressEntry>> {
         let transport = match rc.transport {
-            RemoteTransport::TCP => TransportProtocol::TCP,
-            RemoteTransport::TLS => TransportProtocol::TLS,
-            RemoteTransport::HTTP => TransportProtocol::HTTP,
+            RemoteTransport::TCP => TransportProtocol::Tcp,
+            RemoteTransport::TLS => TransportProtocol::Tls,
+            RemoteTransport::HTTP => TransportProtocol::Http,
             RemoteTransport::CoAP => TransportProtocol::CoAP,
-            RemoteTransport::HTTPS => TransportProtocol::HTTPS,
+            RemoteTransport::HTTPS => TransportProtocol::Https,
             RemoteTransport::CoAPS => TransportProtocol::CoAPS,
         };
 
@@ -683,7 +684,7 @@ impl TryFrom<RemoteConnection> for Vec<TO2AddressEntry> {
                         .with_context(|| format!("Error parsing IP address '{}'", ip_address))?;
                     results.push(TO2AddressEntry::new(Some(addr), None, rc.port, transport));
                 }
-                RemoteAddress::DNS { dns_name } => {
+                RemoteAddress::Dns { dns_name } => {
                     results.push(TO2AddressEntry::new(
                         None,
                         Some(dns_name.clone()),
