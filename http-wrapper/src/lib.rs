@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-use fdo_data_formats::types::{CipherSuite, DerivedKeys};
-use aws_nitro_enclaves_cose::COSEEncrypt0;
 use aws_nitro_enclaves_cose::error::COSEError;
+use aws_nitro_enclaves_cose::COSEEncrypt0;
+use fdo_data_formats::types::{CipherSuite, DerivedKeys};
 
 #[cfg(feature = "server")]
 pub mod server;
@@ -36,14 +36,15 @@ impl EncryptionKeys {
             Ok(plaintext.to_vec())
         } else {
             let k = match &self.keys {
-                Some(DerivedKeys::Combined{sevk: k}) => k,
-                _ => panic!()
+                Some(DerivedKeys::Combined { sevk: k }) => k,
+                _ => panic!(),
             };
             COSEEncrypt0::new(
                 plaintext,
                 self.cipher_suite.unwrap().openssl_cipher(),
                 &k[..],
-            ).map(|c| c.as_bytes(true))?
+            )
+            .map(|c| c.as_bytes(true))?
         }
     }
 
@@ -52,17 +53,15 @@ impl EncryptionKeys {
             Ok(ciphertext.to_vec())
         } else {
             let k = match &self.keys {
-                Some(DerivedKeys::Combined{sevk: k}) => k,
+                Some(DerivedKeys::Combined { sevk: k }) => k,
                 _ => panic!(),
             };
             match COSEEncrypt0::from_bytes(ciphertext) {
-                Ok(v) => {
-                    match v.decrypt(k) {
-                        Ok((_, _, payload)) => Ok(payload),
-                        Err(e) => Err(e)
-                    }
+                Ok(v) => match v.decrypt(k) {
+                    Ok((_, _, payload)) => Ok(payload),
+                    Err(e) => Err(e),
                 },
-                Err(e) => Err(e)
+                Err(e) => Err(e),
             }
         }
     }

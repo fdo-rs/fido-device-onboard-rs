@@ -32,6 +32,7 @@ impl TryFrom<MessageDigest> for HashType {
     type Error = Error;
 
     fn try_from(md: MessageDigest) -> Result<HashType> {
+        #[allow(clippy::match_single_binding)]
         match md.type_() {
             // TODO
             _ => Err(Error::UnsupportedAlgorithm),
@@ -69,7 +70,7 @@ pub enum PublicKeyEncoding {
     Crypto = 0,
     X509 = 1,
     COSEX509 = 2,
-    COSEKEY = 3,
+    Cosekey = 3,
 }
 
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr)]
@@ -106,11 +107,11 @@ pub enum CryptoTypes {
 #[repr(u8)]
 #[non_exhaustive]
 pub enum TransportProtocol {
-    TCP = 1,
-    TLS = 2,
-    HTTP = 3,
+    Tcp = 1,
+    Tls = 2,
+    Http = 3,
     CoAP = 4,
-    HTTPS = 5,
+    Https = 5,
     CoAPS = 6,
 }
 
@@ -229,10 +230,10 @@ impl FromStr for RendezvousVariable {
 #[non_exhaustive]
 pub enum RendezvousProtocolValue {
     Rest = 0,
-    HTTP = 1,
-    HTTPS = 2,
-    TCP = 3,
-    TLS = 4,
+    Http = 1,
+    Https = 2,
+    Tcp = 3,
+    Tls = 4,
     CoAPTCP = 5,
     CoAPUDP = 6,
 }
@@ -243,10 +244,10 @@ impl FromStr for RendezvousProtocolValue {
     fn from_str(s: &str) -> Result<Self> {
         Ok(match &s.to_lowercase()[..] {
             "rest" => RendezvousProtocolValue::Rest,
-            "http" => RendezvousProtocolValue::HTTP,
-            "https" => RendezvousProtocolValue::HTTPS,
-            "tcp" => RendezvousProtocolValue::TCP,
-            "tls" => RendezvousProtocolValue::TLS,
+            "http" => RendezvousProtocolValue::Http,
+            "https" => RendezvousProtocolValue::Https,
+            "tcp" => RendezvousProtocolValue::Tcp,
+            "tls" => RendezvousProtocolValue::Tls,
             "coaptcp" => RendezvousProtocolValue::CoAPTCP,
             "coapudp" => RendezvousProtocolValue::CoAPUDP,
             _ => return Err(Error::InconsistentValue("protocol")),
@@ -257,8 +258,8 @@ impl FromStr for RendezvousProtocolValue {
 impl RendezvousProtocolValue {
     pub(crate) fn default_port(&self) -> u32 {
         match self {
-            RendezvousProtocolValue::HTTP => 80,
-            RendezvousProtocolValue::HTTPS => 443,
+            RendezvousProtocolValue::Http => 80,
+            RendezvousProtocolValue::Https => 443,
             _ => todo!(),
         }
     }

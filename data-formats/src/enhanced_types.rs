@@ -40,8 +40,8 @@ pub struct RendezvousInterpretedDirective {
 impl RendezvousInterpretedDirective {
     pub fn get_urls(&self) -> Vec<String> {
         let protocol_text = match self.protocol {
-            RendezvousProtocolValue::HTTP => "http",
-            RendezvousProtocolValue::HTTPS => "https",
+            RendezvousProtocolValue::Http => "http",
+            RendezvousProtocolValue::Https => "https",
             _ => return Vec::new(),
         };
 
@@ -60,6 +60,7 @@ impl RendezvousInterpretedDirective {
         urls
     }
 
+    #[allow(clippy::ptr_arg)]
     fn from_rv_directive(
         info: &RendezvousDirective,
         side: RendezvousInterpreterSide,
@@ -73,7 +74,7 @@ impl RendezvousInterpretedDirective {
         let mut wifi_ssid = None;
         let mut wifi_password = None;
         let mut medium = None;
-        let mut protocol = RendezvousProtocolValue::TLS;
+        let mut protocol = RendezvousProtocolValue::Tls;
         let mut delay = 0;
         let mut bypass = false;
 
@@ -184,10 +185,7 @@ impl RendezvousInfo {
         self.values()
             .iter()
             .map(|v| RendezvousInterpretedDirective::from_rv_directive(v, side))
-            .filter(|v| match v {
-                Ok(None) => false,
-                _ => true,
-            })
+            .filter(|v| !matches!(v, Ok(None)))
             .map(|v| match v {
                 Ok(v) => Ok(v.unwrap()),
                 Err(e) => Err(e),

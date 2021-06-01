@@ -27,6 +27,7 @@ mod serviceinfo;
 
 struct OwnerServiceUD {
     // Trusted keys
+    #[allow(dead_code)]
     trusted_device_keys: X5Bag,
 
     // Stores
@@ -90,6 +91,7 @@ async fn perform_maintenance(udt: OwnerServiceUDT) -> std::result::Result<(), &'
         let ov_maint = udt.ownership_voucher_store.perform_maintenance();
         let ses_maint = udt.session_store.perform_maintenance();
 
+        #[allow(unused_must_use)]
         let (ov_res, ses_res) = tokio::join!(ov_maint, ses_maint);
         if let Err(e) = ov_res {
             log::warn!("Error during ownership voucher store maintenance: {:?}", e);
@@ -264,10 +266,10 @@ async fn main() -> Result<()> {
             .cert_path(cert_path)
             .key_path(settings.tls_key_path.unwrap())
             .run(bind_addr);
-        tokio::join!(server, maintenance_runner);
+        let _ = tokio::join!(server, maintenance_runner);
     } else {
         let server = server.run(bind_addr);
-        tokio::join!(server, maintenance_runner);
+        let _ = tokio::join!(server, maintenance_runner);
     }
 
     Ok(())

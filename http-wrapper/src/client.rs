@@ -1,7 +1,7 @@
 use thiserror::Error;
 
-use fdo_data_formats::messages::{ClientMessage, ErrorMessage, Message, ServerMessage};
 use aws_nitro_enclaves_cose::error::COSEError;
+use fdo_data_formats::messages::{ClientMessage, ErrorMessage, Message, ServerMessage};
 
 use crate::EncryptionKeys;
 

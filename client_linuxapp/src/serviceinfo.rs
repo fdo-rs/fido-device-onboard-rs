@@ -14,11 +14,11 @@ use fdo_http_wrapper::client::{RequestResult, ServiceClient};
 const MAX_SERVICE_INFO_LOOPS: u32 = 1000;
 
 fn find_available_modules() -> Result<Vec<String>> {
-    let mut module_list = Vec::new();
-
-    // These modules are always here
-    module_list.push("devmod".to_string());
-    module_list.push("sshkey".to_string());
+    let mut module_list = vec![
+        // These modules are always here
+        "devmod".to_string(),
+        "sshkey".to_string(),
+    ];
 
     // See if we add RHSM
     if Path::new("/usr/sbin/subscription-manager").exists() {

@@ -402,10 +402,11 @@ impl ServiceInfo {
         self.add("devmod", "nummodules", &modules.len())?;
 
         // We have a special case of this, becasue this is a list with different types.
-        let mut list = Vec::new();
+        let mut list = vec![
+            serde_cbor::Value::Integer(0),
+            serde_cbor::Value::Integer(modules.len() as i128),
+        ];
 
-        list.push(serde_cbor::Value::Integer(0));
-        list.push(serde_cbor::Value::Integer(modules.len() as i128));
         for module in modules {
             list.push(serde_cbor::Value::Text(module.to_string()));
         }
@@ -624,6 +625,7 @@ impl KeyExchange {
         out
     }
 
+    #[allow(clippy::type_complexity)]
     fn decode_ecdh_bstr(&self, bstr: &[u8]) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), Error> {
         let (ax_len, bstr) = bstr.split_at(std::mem::size_of::<u16>());
         let ax_len = u16::from_be_bytes(ax_len.try_into().unwrap());
@@ -1279,6 +1281,7 @@ impl From<COSEHeaderMap> for aws_nitro_enclaves_cose::sign::HeaderMap {
 }
 
 impl COSEHeaderMap {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         COSEHeaderMap(std::collections::HashMap::new())
     }

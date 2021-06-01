@@ -63,8 +63,8 @@ fn get_to2_urls(entries: &[TO2AddressEntry]) -> Vec<String> {
 
     for addr_entry in entries {
         let prot_text = match addr_entry.protocol() {
-            TransportProtocol::HTTP => "http",
-            TransportProtocol::HTTPS => "https",
+            TransportProtocol::Http => "http",
+            TransportProtocol::Https => "https",
             _ => continue,
         };
         if let Some(dns_name) = addr_entry.dns() {

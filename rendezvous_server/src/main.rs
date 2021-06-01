@@ -196,10 +196,10 @@ async fn main() -> Result<()> {
             .cert_path(cert_path)
             .key_path(settings.tls_key_path.unwrap())
             .run(bind_addr);
-        tokio::join!(server, maintenance_runner);
+        let _ = tokio::join!(server, maintenance_runner);
     } else {
         let server = server.run(bind_addr);
-        tokio::join!(server, maintenance_runner);
+        let _ = tokio::join!(server, maintenance_runner);
     }
 
     Ok(())
