@@ -1270,9 +1270,9 @@ type COSEHeaderMapType = std::collections::HashMap<i64, serde_cbor::Value>;
 #[derive(Debug, Clone)]
 pub struct COSEHeaderMap(COSEHeaderMapType);
 
-impl From<COSEHeaderMap> for aws_nitro_enclaves_cose::sign::HeaderMap {
-    fn from(mut chm: COSEHeaderMap) -> aws_nitro_enclaves_cose::sign::HeaderMap {
-        let mut new = aws_nitro_enclaves_cose::sign::HeaderMap::new();
+impl From<COSEHeaderMap> for aws_nitro_enclaves_cose::header_map::HeaderMap {
+    fn from(mut chm: COSEHeaderMap) -> aws_nitro_enclaves_cose::header_map::HeaderMap {
+        let mut new = aws_nitro_enclaves_cose::header_map::HeaderMap::new();
         for (key, value) in chm.0.drain() {
             new.insert(serde_cbor::Value::Integer(key as i128), value);
         }
