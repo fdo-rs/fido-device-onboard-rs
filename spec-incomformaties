@@ -1,7 +1,0 @@
-- In TO0, the to1d structure is sent without COSE tag 18
-- In Rendezvous Info, IP addresses are not encoded correctly
-- Client right now just tries everything once, and if it fails, aborts. It should fall over to next entries, and automatically retry
-- Client does not send an error to the server (owner or rendezvous) if one occurs
-- Key derivation and encryption/decryption
-- The client does not send the TO2 ServiceInfo KeepAlive's
-- The client does not currently check the owner pubkey against the hash in the device credential
