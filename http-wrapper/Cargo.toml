@@ -1,5 +1,5 @@
 [package]
-name = "fdo_http_wrapper"
+name = "fdo-http-wrapper"
 version = "0.1.0"
 authors = ["Patrick Uiterwijk <patrick@puiterwijk.org>"]
 edition = "2018"

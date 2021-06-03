@@ -16,4 +16,4 @@ serde_yaml = "0.8"
 tokio = { version = "1", features = ["full"] }
 
 fdo-data-formats = { path = "../data-formats" }
-fdo_http_wrapper = { path = "../http-wrapper", features = ["client"] }
+fdo-http-wrapper = { path = "../http-wrapper", features = ["client"] }
