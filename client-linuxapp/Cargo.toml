@@ -1,5 +1,5 @@
 [package]
-name = "client_linuxapp"
+name = "fdo-client-linuxapp"
 version = "0.1.0"
 authors = ["Patrick Uiterwijk <patrick@puiterwijk.org>"]
 edition = "2018"
