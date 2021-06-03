@@ -17,4 +17,4 @@ sys-info = "0.8"
 passwd = "0.0.1"
 
 fdo-data-formats = { path = "../data-formats" }
-fdo_http_wrapper = { path = "../http-wrapper", features = ["client"] }
+fdo-http-wrapper = { path = "../http-wrapper", features = ["client"] }
