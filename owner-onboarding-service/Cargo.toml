@@ -1,5 +1,5 @@
 [package]
-name = "owner_onboarding_service"
+name = "fdo-owner-onboarding-service"
 version = "0.1.0"
 authors = ["Patrick Uiterwijk <patrick@puiterwijk.org>"]
 edition = "2018"
