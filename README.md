@@ -1,8 +1,15 @@
 # fido-iot-rs
-FIDO IoT Rust crates
+FIDO Device Onboard Specification rust crates.
 
-This intends to implement the FIDO IoT draft specification.
-Current specification version target: v1.0 20200730.
+This intends to implement the FIDO Device Onboard Specification.
+The current implementation targets  specification version: [v1.0 20210323a(https://fidoalliance.org/specs/FDO/fido-device-onboard-v1.0-ps-20210323/fido-device-onboard-v1.0-ps-20210323.html)].
+
+## Components
+The fido-fdo-rs implements all core components of the FIDO Device Onboard Specification including:
+- Client
+- Rendezvous Server
+- Onboarding Server
+- Manufacturing Tool
 
 ## Protocols
 - Device Initialize Protocol (DI)
