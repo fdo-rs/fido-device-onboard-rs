@@ -83,7 +83,7 @@ async fn main() -> Result<()> {
 
     let mut settings = config::Config::default();
     settings
-        .merge(config::File::with_name("rendezvous_service"))
+        .merge(config::File::with_name("rendezvous-service"))
         .context("Loading configuration files")?
         .merge(config::Environment::with_prefix("rendezvous"))
         .context("Loading configuration from environment variables")?;
@@ -179,7 +179,7 @@ async fn main() -> Result<()> {
                 .or(handler_to1_prove_to_rv),
         )
         .recover(fdo_http_wrapper::server::handle_rejection)
-        .with(warp::log("rendezvous_server"));
+        .with(warp::log("rendezvous-server"));
 
     log::info!("Listening on {}", bind_addr);
     let server = warp::serve(routes);

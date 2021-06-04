@@ -1,5 +1,5 @@
 [package]
-name = "rendezvous_server"
+name = "fdo-rendezvous-server"
 version = "0.1.0"
 authors = ["Patrick Uiterwijk <patrick@puiterwijk.org>"]
 edition = "2018"

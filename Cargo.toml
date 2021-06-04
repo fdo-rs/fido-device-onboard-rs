@@ -5,7 +5,7 @@ members = [
     "store",
 
     "owner_onboarding_service",
-    "rendezvous_server",
+    "rendezvous-server",
     "client_linuxapp",
     "owner_tool",
 ]
