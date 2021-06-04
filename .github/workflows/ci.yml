@@ -80,7 +80,7 @@ jobs:
         run: |
           cd integration/testdata
           cargo run --bin owner_onboarding_service &
-          cargo run --bin rendezvous_server &
+          cargo run --bin fdo-rendezvous-server &
           sleep 5
 
       - name: Test
