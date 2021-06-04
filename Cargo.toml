@@ -4,8 +4,8 @@ members = [
     "http-wrapper",
     "store",
 
-    "owner_onboarding_service",
-    "rendezvous-server",
     "client_linuxapp",
-    "owner_tool",
+    "owner-onboarding-service",
+    "owner-tool",
+    "rendezvous-server",
 ]

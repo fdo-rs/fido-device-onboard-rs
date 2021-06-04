@@ -79,7 +79,7 @@ jobs:
       - name: Run services
         run: |
           cd integration/testdata
-          cargo run --bin owner_onboarding_service &
+          cargo run --bin fdo-owner-onboarding-service &
           cargo run --bin fdo-rendezvous-server &
           sleep 5
 

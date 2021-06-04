@@ -131,9 +131,9 @@ async fn main() -> Result<()> {
 
     let mut settings = config::Config::default();
     settings
-        .merge(config::File::with_name("owner_onboarding_service"))
+        .merge(config::File::with_name("owner-onboarding-service"))
         .context("Loading configuration files")?
-        .merge(config::Environment::with_prefix("owner_onboarding_service"))
+        .merge(config::Environment::with_prefix("owner-onboarding-service"))
         .context("Loading configuration from environment variables")?;
     let settings: Settings = settings.try_into().context("Error parsing configuration")?;
 
@@ -249,7 +249,7 @@ async fn main() -> Result<()> {
                 .or(handler_to2_done),
         )
         .recover(fdo_http_wrapper::server::handle_rejection)
-        .with(warp::log("owner_onboarding_service"));
+        .with(warp::log("owner-onboarding-service"));
 
     log::info!("Listening on {}", bind_addr);
     let server = warp::serve(routes);
