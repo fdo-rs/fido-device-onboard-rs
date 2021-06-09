@@ -682,7 +682,12 @@ impl TryFrom<RemoteConnection> for Vec<TO2AddressEntry> {
                 RemoteAddress::IP { ip_address } => {
                     let addr = std::net::IpAddr::from_str(&ip_address)
                         .with_context(|| format!("Error parsing IP address '{}'", ip_address))?;
-                    results.push(TO2AddressEntry::new(Some(addr), None, rc.port, transport));
+                    results.push(TO2AddressEntry::new(
+                        Some(addr.into()),
+                        None,
+                        rc.port,
+                        transport,
+                    ));
                 }
                 RemoteAddress::Dns { dns_name } => {
                     results.push(TO2AddressEntry::new(

@@ -22,7 +22,7 @@ use openssl::{
     symm::Cipher,
 };
 use openssl_kdf::{Kdf, KdfKbMode, KdfMacType, KdfType};
-use serde::{Deserialize, Serialize};
+use serde::{de::SeqAccess, ser::SerializeSeq, Deserialize, Serialize};
 
 #[derive(Debug, Serialize_tuple, Deserialize, Clone)]
 pub struct Hash {
@@ -210,7 +210,100 @@ impl Deref for Guid {
     }
 }
 
-pub use std::net::{IpAddr as IPAddress, Ipv4Addr as IP4, Ipv6Addr as IP6};
+#[derive(Debug, Serialize, Deserialize)]
+pub struct IP4(std::net::Ipv4Addr);
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct IP6(std::net::Ipv6Addr);
+
+#[derive(Debug)]
+pub struct IPAddress(std::net::IpAddr);
+
+impl From<std::net::IpAddr> for IPAddress {
+    fn from(addr: std::net::IpAddr) -> IPAddress {
+        IPAddress(addr)
+    }
+}
+
+impl std::fmt::Display for IPAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl Serialize for IPAddress {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match &self.0 {
+            std::net::IpAddr::V4(addr) => {
+                let mut seq = serializer.serialize_seq(Some(4))?;
+                for o in &addr.octets() {
+                    seq.serialize_element(o)?;
+                }
+                seq.end()
+            }
+            std::net::IpAddr::V6(addr) => {
+                let mut seq = serializer.serialize_seq(Some(16))?;
+                for o in &addr.octets() {
+                    seq.serialize_element(o)?;
+                }
+                seq.end()
+            }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for IPAddress {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct IPAddressVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for IPAddressVisitor {
+            type Value = IPAddress;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("an ip address byte string")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut ip_octets: Vec<u8> = match seq.size_hint() {
+                    Some(size) => Vec::with_capacity(size),
+                    None => Vec::new(),
+                };
+                while let Some(octet) = seq.next_element()? {
+                    ip_octets.push(octet);
+                }
+
+                match ip_octets.len() {
+                    4 => {
+                        let ip_octets: [u8; 4] = ip_octets.try_into().unwrap();
+                        Ok(IPAddress(std::net::IpAddr::V4(std::net::Ipv4Addr::from(
+                            ip_octets,
+                        ))))
+                    }
+                    16 => {
+                        let ip_octets: [u8; 16] = ip_octets.try_into().unwrap();
+                        Ok(IPAddress(std::net::IpAddr::V6(std::net::Ipv6Addr::from(
+                            ip_octets,
+                        ))))
+                    }
+                    _ => Err(serde::de::Error::custom(
+                        "Invalid IP address: not 4 or 16 octets",
+                    )),
+                }
+            }
+        }
+
+        deserializer.deserialize_seq(IPAddressVisitor)
+    }
+}
 
 pub type DNSAddress = String;
 pub type Port = u16;
