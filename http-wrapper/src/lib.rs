@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use aws_nitro_enclaves_cose::error::COSEError;
-use aws_nitro_enclaves_cose::COSEEncrypt0;
+use aws_nitro_enclaves_cose::{COSEEncrypt0, CipherConfiguration};
 use fdo_data_formats::types::{CipherSuite, DerivedKeys};
 
 #[cfg(feature = "server")]
@@ -39,12 +39,8 @@ impl EncryptionKeys {
                 Some(DerivedKeys::Combined { sevk: k }) => k,
                 _ => panic!(),
             };
-            COSEEncrypt0::new(
-                plaintext,
-                self.cipher_suite.unwrap().openssl_cipher(),
-                &k[..],
-            )
-            .map(|c| c.as_bytes(true))?
+            COSEEncrypt0::new(plaintext, CipherConfiguration::Gcm, &k[..])
+                .map(|c| c.as_bytes(true))?
         }
     }
 
