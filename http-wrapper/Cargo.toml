@@ -18,7 +18,7 @@ openssl = "0.10"
 
 fdo-data-formats = { path = "../data-formats" }
 fdo-store = { path = "../store" }
-aws-nitro-enclaves-cose = {git = "https://github.com/runcom/aws-nitro-enclaves-cose", branch = "issue-17" }
+aws-nitro-enclaves-cose = { git = "https://github.com/awslabs/aws-nitro-enclaves-cose.git", branch = "main" }
 
 # Server-side
 uuid = { version = "0.8", features = ["v4"], optional = true }
