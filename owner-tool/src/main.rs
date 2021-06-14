@@ -636,15 +636,53 @@ fn extend_voucher(matches: &ArgMatches) -> Result<(), Error> {
     Ok(())
 }
 
-#[derive(Debug, Deserialize)]
-#[allow(clippy::upper_case_acronyms)]
+#[derive(Debug)]
 enum RemoteTransport {
-    TCP,
-    TLS,
-    HTTP,
+    Tcp,
+    Tls,
+    Http,
     CoAP,
-    HTTPS,
+    Https,
     CoAPS,
+}
+
+impl<'de> Deserialize<'de> for RemoteTransport {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct RemoteTransportVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for RemoteTransportVisitor {
+            type Value = RemoteTransport;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a string")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(match &v.to_lowercase()[..] {
+                    "tcp" => RemoteTransport::Tcp,
+                    "tls" => RemoteTransport::Tls,
+                    "http" => RemoteTransport::Http,
+                    "coap" => RemoteTransport::CoAP,
+                    "https" => RemoteTransport::Https,
+                    "coaps" => RemoteTransport::CoAPS,
+                    _ => {
+                        return Err(serde::de::Error::invalid_value(
+                            serde::de::Unexpected::Str(v),
+                            &"a supported transport type",
+                        ))
+                    }
+                })
+            }
+        }
+
+        deserializer.deserialize_str(RemoteTransportVisitor)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -667,11 +705,11 @@ impl TryFrom<RemoteConnection> for Vec<TO2AddressEntry> {
 
     fn try_from(rc: RemoteConnection) -> Result<Vec<TO2AddressEntry>> {
         let transport = match rc.transport {
-            RemoteTransport::TCP => TransportProtocol::Tcp,
-            RemoteTransport::TLS => TransportProtocol::Tls,
-            RemoteTransport::HTTP => TransportProtocol::Http,
+            RemoteTransport::Tcp => TransportProtocol::Tcp,
+            RemoteTransport::Tls => TransportProtocol::Tls,
+            RemoteTransport::Http => TransportProtocol::Http,
             RemoteTransport::CoAP => TransportProtocol::CoAP,
-            RemoteTransport::HTTPS => TransportProtocol::Https,
+            RemoteTransport::Https => TransportProtocol::Https,
             RemoteTransport::CoAPS => TransportProtocol::CoAPS,
         };
 
