@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use openssl::x509::X509;
 use serde::Deserialize;
 use warp::Filter;
@@ -47,8 +47,6 @@ struct Settings {
 
     // Bind information
     bind: String,
-    tls_cert_path: Option<String>,
-    tls_key_path: Option<String>,
 }
 
 const MAINTENANCE_INTERVAL: u64 = 60;
@@ -187,20 +185,8 @@ async fn main() -> Result<()> {
     let maintenance_runner =
         tokio::spawn(async move { perform_maintenance(user_data.clone()).await });
 
-    if let Some(cert_path) = settings.tls_cert_path {
-        if settings.tls_key_path.is_none() {
-            bail!("When using TLS, a key path is also required");
-        }
-        let server = server
-            .tls()
-            .cert_path(cert_path)
-            .key_path(settings.tls_key_path.unwrap())
-            .run(bind_addr);
-        let _ = tokio::join!(server, maintenance_runner);
-    } else {
-        let server = server.run(bind_addr);
-        let _ = tokio::join!(server, maintenance_runner);
-    }
+    let server = server.run(bind_addr);
+    let _ = tokio::join!(server, maintenance_runner);
 
     Ok(())
 }
