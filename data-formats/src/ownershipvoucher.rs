@@ -281,6 +281,10 @@ impl OwnershipVoucherHeader {
 
         Ok(hdrinfo)
     }
+
+    pub fn get_raw_public_key(&self) -> Result<Vec<u8>> {
+        serde_cbor::to_vec(&self.public_key).map_err(|e| e.into())
+    }
 }
 
 impl TryFrom<&OwnershipVoucherHeader> for Vec<u8> {

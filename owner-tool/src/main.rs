@@ -351,6 +351,12 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
     let manufacturer_cert = PublicKeyBody::X509(manufacturer_cert);
     let manufacturer_pubkey = PublicKey::new(PublicKeyType::SECP256R1, manufacturer_cert)
         .context("Error creating manufacturer public key representation")?;
+    let manufacturer_pubkey_hash = Hash::new(
+        None,
+        &serde_cbor::to_vec(&manufacturer_pubkey)
+            .context("Error serializing manufacturer public key")?,
+    )
+    .context("Error hashing manufacturer public key")?;
 
     let device_cert_ca_private_key = load_private_key(&device_cert_ca_private_key_path)
         .with_context(|| {
@@ -429,7 +435,7 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
         device_info: device_id.to_string(),
         guid: device_guid.clone(),
         rvinfo: rendezvous_info.clone(),
-        pubkey_hash: Hash::new(None, &[]).unwrap(),
+        pubkey_hash: manufacturer_pubkey_hash,
         private_key: device_key
             .private_key_to_der()
             .context("Error serializing device private key")?,
