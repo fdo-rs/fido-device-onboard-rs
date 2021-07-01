@@ -1,6 +1,6 @@
-use std::env;
+use std::borrow::Borrow;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::{anyhow, bail, Context, Result};
 use openssl::{hash::MessageDigest, pkey::PKey, sign::Signer};
@@ -18,44 +18,16 @@ use fdo_data_formats::{
 };
 use fdo_http_wrapper::client::{RequestResult, ServiceClient};
 
+mod device_credential_locations;
 mod serviceinfo;
 
-const SDO_EXECUTED_MARKER_FILE: &str = "/etc/sdo_executed";
-const QEMU_FW_CFG_PATH: &str = "/sys/firmware/qemu_fw_cfg/by_name/opt/sdo/devicecredential/raw";
+use device_credential_locations::UsableDeviceCredentialLocation;
 
-fn device_credential_path() -> Result<PathBuf> {
-    if let Ok(path) = env::var("DEVICE_CREDENTIAL") {
-        return Ok(PathBuf::from(path));
-    }
-    let fwcfg_path = Path::new(&QEMU_FW_CFG_PATH);
-    if fwcfg_path.exists() {
-        return Ok(fwcfg_path.to_owned());
-    }
+const DEVICE_ONBOARDING_EXECUTED_MARKER_FILE: &str = "/etc/device_onboarding_performed";
 
-    bail!("Unable to find device credential");
-}
-
-#[derive(Debug)]
-enum DeactivationMethod {
-    Deactivate,
-    MarkUsed,
-    None,
-}
-
-fn get_deactivation_method() -> DeactivationMethod {
-    if std::env::var_os("SKIP_DEACTIVATION").is_some() {
-        return DeactivationMethod::None;
-    }
-    let fwcfg_path = Path::new(&QEMU_FW_CFG_PATH);
-    if fwcfg_path.exists() {
-        return DeactivationMethod::MarkUsed;
-    }
-
-    DeactivationMethod::Deactivate
-}
-
-fn mark_devcred_used() -> Result<()> {
-    fs::write(&SDO_EXECUTED_MARKER_FILE, "executed").context("Error creating executed marker file")
+fn mark_device_onboarding_executed() -> Result<()> {
+    fs::write(&DEVICE_ONBOARDING_EXECUTED_MARKER_FILE, "executed")
+        .context("Error creating executed marker file")
 }
 
 fn get_to2_urls(entries: &[TO2AddressEntry]) -> Vec<String> {
@@ -205,7 +177,11 @@ async fn get_ov_entries(client: &mut ServiceClient, num_entries: u16) -> Result<
     Ok(entries)
 }
 
-async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> {
+async fn perform_to2(
+    devcredloc: &dyn UsableDeviceCredentialLocation,
+    devcred: &DeviceCredential,
+    urls: &[String],
+) -> Result<()> {
     log::info!("Performing TO2 protocol, URLs: {:?}", urls);
     let url = urls.first().unwrap();
 
@@ -399,16 +375,12 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
         .await
         .context("Error performing the ServiceInfo roundtrips")?;
 
-    // Update the device credential to disabled
-    match get_deactivation_method() {
-        DeactivationMethod::None => log::info!("Not deactivating device credential"),
-        DeactivationMethod::Deactivate => {
-            deactivate_device_credential().context("Error deactivating device credential")?
-        }
-        DeactivationMethod::MarkUsed => {
-            mark_devcred_used().context("Error marking the device credential as used")?
-        }
-    }
+    mark_device_onboarding_executed()
+        .context("Error creating the device onboarding executed marker file")?;
+
+    devcredloc
+        .deactivate()
+        .context("Error deactivating device credential")?;
 
     // Send: Done, Receive: Done2
     let done2: RequestResult<messages::to2::Done2> = client
@@ -423,62 +395,39 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
     Ok(())
 }
 
-fn deactivate_device_credential() -> Result<()> {
-    log::info!("Marking device credential as disabled");
-
-    let devcred_path = device_credential_path().unwrap();
-
-    let mut dc: DeviceCredential = {
-        let dc_file = fs::File::open(&devcred_path).with_context(|| {
-            format!(
-                "Error opening device credential at {}",
-                devcred_path.display()
-            )
-        })?;
-        serde_cbor::from_reader(dc_file).context("Error loading device credential")?
-    };
-    dc.active = false;
-
-    let dc_file = fs::File::create(&devcred_path).with_context(|| {
-        format!(
-            "Error opening device credential at {} for writing",
-            devcred_path.display()
-        )
-    })?;
-    serde_cbor::to_writer(dc_file, &dc)
-        .context("Error writing out deactivated device credential")?;
-
-    Ok(())
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     pretty_env_logger::init();
 
-    if Path::new(SDO_EXECUTED_MARKER_FILE).exists() {
+    if Path::new(DEVICE_ONBOARDING_EXECUTED_MARKER_FILE).exists() {
         log::info!(
-            "SDO marker file {} exists, not rerunning",
-            SDO_EXECUTED_MARKER_FILE
+            "Device Onboarding marker file {} exists, not rerunning",
+            DEVICE_ONBOARDING_EXECUTED_MARKER_FILE
         );
         return Ok(());
     }
 
-    let devcred_path = device_credential_path()
-        .context("Error getting device credential from DEVICE_CREDENTIAL environment variable")?;
-
-    let dc: DeviceCredential = {
-        let dc_file = fs::File::open(&devcred_path).with_context(|| {
-            format!(
-                "Error opening device credential at {}",
-                devcred_path.display()
-            )
-        })?;
-        serde_cbor::from_reader(dc_file).context("Error loading device credential")?
+    let devcred_location = match device_credential_locations::find() {
+        None => {
+            log::info!("No usable device credential located, skipping Device Onboarding");
+            return Ok(());
+        }
+        Some(Err(e)) => {
+            log::error!("Error opening device credential: {:?}", e);
+            return Err(e).context("Error getting device credential at any of the known locations");
+        }
+        Some(Ok(dc)) => dc,
     };
+
+    log::info!("Found device credential at {:?}", devcred_location);
+
+    let dc: DeviceCredential = devcred_location
+        .read()
+        .context("Error reading device credential")?;
     log::trace!("Device credential: {:?}", dc);
 
     if !dc.active {
-        log::info!("Device Onboarding not active");
+        log::info!("Device credential deactivated, skipping Device Onboarding");
         return Ok(());
     }
 
@@ -499,7 +448,7 @@ async fn main() -> Result<()> {
         bail!("No valid TO2 addresses received");
     }
 
-    perform_to2(&dc, &to2_addresses)
+    perform_to2(devcred_location.borrow(), &dc, &to2_addresses)
         .await
         .context("Error performing TO2 ownership protocol")?;
 
