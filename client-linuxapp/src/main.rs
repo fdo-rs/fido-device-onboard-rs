@@ -88,7 +88,13 @@ fn get_to2_urls(entries: &[TO2AddressEntry]) -> Vec<String> {
     urls
 }
 
-async fn get_client(rv_info: Vec<RendezvousInterpretedDirective>) -> Result<ServiceClient> {
+async fn get_client_list(
+    rv_info: Vec<RendezvousInterpretedDirective>,
+) -> Result<Vec<ServiceClient>> {
+    if rv_info.is_empty() {
+        bail!("No rendezvous entries found we can construct a client for");
+    }
+    let mut service_client_list = Vec::new();
     for rv_entry in rv_info {
         let urls = rv_entry.get_urls();
         if urls.is_empty() {
@@ -103,11 +109,11 @@ async fn get_client(rv_info: Vec<RendezvousInterpretedDirective>) -> Result<Serv
         if rv_entry.user_input {
             todo!();
         }
-        return Ok(fdo_http_wrapper::client::ServiceClient::new(
-            &urls.first().unwrap(),
-        ));
+        for url in &urls {
+            service_client_list.push(fdo_http_wrapper::client::ServiceClient::new(&url));
+        }
     }
-    bail!("No rendezvous entries found we can construct a client for");
+    return Ok(service_client_list);
 }
 
 async fn perform_to1(devcred: &DeviceCredential, client: &mut ServiceClient) -> Result<COSESign> {
@@ -169,14 +175,21 @@ async fn get_to1d_from_rv(devcred: &DeviceCredential) -> Result<COSESign> {
     }
     log::trace!("Rendezvous info: {:?}", rv_info);
 
-    let mut client = get_client(rv_info)
+    let mut client_list = get_client_list(rv_info)
         .await
         .context("Error getting usable rendezvous client")?;
-    log::trace!("Got a usable client: {:?}", client);
+    log::trace!("Got a list of usable clients: {:?}", client_list);
 
-    perform_to1(devcred, &mut client)
-        .await
-        .context("Error performing TO1")
+    for client in client_list.as_mut_slice() {
+        match perform_to1(devcred, client)
+            .await
+            .context("Error performing TO1")
+        {
+            Ok(to1) => return Ok(to1),
+            Err(e) => log::trace!("{}", e),
+        }
+    }
+    bail!("no client replied!")
 }
 
 async fn get_ov_entries(client: &mut ServiceClient, num_entries: u16) -> Result<Vec<Vec<u8>>> {
