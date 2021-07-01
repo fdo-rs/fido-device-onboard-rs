@@ -281,6 +281,19 @@ async fn perform_to2(devcred: &DeviceCredential, urls: &[String]) -> Result<()> 
         ov_hmac
     };
 
+    // Validate the PubKeyHash
+    {
+        let header = prove_ov_hdr_payload.get_unverified_value().ov_header();
+        devcred
+            .pubkey_hash
+            .compare_data(
+                &header
+                    .get_raw_public_key()
+                    .context("Error serializing public key")?,
+            )
+            .context("Error validating manufacturer public key")?;
+    }
+
     // Get nonce6
     let nonce6: Nonce = {
         prove_ov_hdr
