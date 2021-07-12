@@ -24,13 +24,14 @@ use serde_yaml::Value;
 
 use fdo_data_formats::{
     constants::{HashType, PublicKeyType, RendezvousVariable, TransportProtocol},
+    devicecredential::FileDeviceCredential,
     enhanced_types::RendezvousInterpreterSide,
     messages,
     ownershipvoucher::{OwnershipVoucher, OwnershipVoucherHeader},
     publickey::{PublicKey, PublicKeyBody, X5Chain},
     types::{
-        COSESign, DeviceCredential, Guid, HMac, Hash, RendezvousDirective, RendezvousInfo, TO0Data,
-        TO1DataPayload, TO2AddressEntry,
+        COSESign, Guid, HMac, Hash, RendezvousDirective, RendezvousInfo, TO0Data, TO1DataPayload,
+        TO2AddressEntry,
     },
     PROTOCOL_VERSION,
 };
@@ -428,7 +429,7 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
 
     // Build device credential
     let device_guid = Guid::new().context("Error generating guid")?;
-    let devcred = DeviceCredential {
+    let devcred = FileDeviceCredential {
         active: true,
         protver: PROTOCOL_VERSION,
         hmac_secret: hmac_key_buf.to_vec(),
@@ -551,7 +552,7 @@ fn dump_voucher(matches: &ArgMatches) -> Result<(), Error> {
 fn dump_devcred(matches: &ArgMatches) -> Result<(), Error> {
     let devcred_path = matches.value_of("path").unwrap();
 
-    let dc: DeviceCredential = {
+    let dc: FileDeviceCredential = {
         let dc_file = fs::File::open(&devcred_path)
             .with_context(|| format!("Error opening device credential at {}", devcred_path))?;
         serde_cbor::from_reader(dc_file).context("Error loading device credential")?
