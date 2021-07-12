@@ -28,6 +28,17 @@ impl TryFrom<HashType> for MessageDigest {
     }
 }
 
+impl HashType {
+    pub fn get_md(&self) -> MessageDigest {
+        match self {
+            HashType::Sha256 => MessageDigest::sha256(),
+            HashType::Sha384 => MessageDigest::sha384(),
+            HashType::HmacSha256 => MessageDigest::sha256(),
+            HashType::HmacSha384 => MessageDigest::sha384(),
+        }
+    }
+}
+
 impl TryFrom<MessageDigest> for HashType {
     type Error = Error;
 

@@ -278,7 +278,7 @@ pub(super) async fn prove_device(
     };
 
     let eat = token
-        .get_eat(&dev_pubkey)
+        .get_eat(dev_pubkey.as_ref())
         .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?;
 
     let eat_payload: TO2ProveDevicePayload = match eat

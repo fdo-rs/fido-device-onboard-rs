@@ -3,18 +3,18 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::{anyhow, bail, Context, Result};
-use openssl::{hash::MessageDigest, pkey::PKey, sign::Signer};
 
 use fdo_data_formats::{
-    constants::{DeviceSigType, HashType, HeaderKeys, TransportProtocol},
+    constants::{DeviceSigType, HeaderKeys, TransportProtocol},
     enhanced_types::{RendezvousInterpretedDirective, RendezvousInterpreterSide},
     messages,
     ownershipvoucher::OwnershipVoucher,
     types::{
-        new_eat, COSEHeaderMap, COSESign, CipherSuite, DeviceCredential, EATokenPayload, HMac,
-        KexSuite, KeyDeriveSide, KeyExchange, Nonce, PayloadCreating, SigInfo, TO1DataPayload,
-        TO2AddressEntry, TO2ProveDevicePayload, TO2ProveOVHdrPayload, UnverifiedValue,
+        new_eat, COSEHeaderMap, COSESign, CipherSuite, EATokenPayload, KexSuite, KeyDeriveSide,
+        KeyExchange, Nonce, PayloadCreating, SigInfo, TO1DataPayload, TO2AddressEntry,
+        TO2ProveDevicePayload, TO2ProveOVHdrPayload, UnverifiedValue,
     },
+    DeviceCredential,
 };
 use fdo_http_wrapper::client::{RequestResult, ServiceClient};
 
@@ -82,7 +82,10 @@ async fn get_client(rv_info: Vec<RendezvousInterpretedDirective>) -> Result<Serv
     bail!("No rendezvous entries found we can construct a client for");
 }
 
-async fn perform_to1(devcred: &DeviceCredential, client: &mut ServiceClient) -> Result<COSESign> {
+async fn perform_to1(
+    devcred: &dyn DeviceCredential,
+    client: &mut ServiceClient,
+) -> Result<COSESign> {
     log::trace!(
         "Starting TO1 with credential {:?} and client {:?}",
         devcred,
@@ -92,8 +95,10 @@ async fn perform_to1(devcred: &DeviceCredential, client: &mut ServiceClient) -> 
     let sig_type = DeviceSigType::StSECP384R1;
 
     // Send: HelloRV, Receive: HelloRVAck
-    let hello_rv =
-        messages::to1::HelloRV::new(devcred.guid.clone(), SigInfo::new(sig_type, vec![]));
+    let hello_rv = messages::to1::HelloRV::new(
+        devcred.device_guid().clone(),
+        SigInfo::new(sig_type, vec![]),
+    );
     let hello_rv_ack: RequestResult<messages::to1::HelloRVAck> =
         client.send_request(hello_rv, None).await;
     let hello_rv_ack = hello_rv_ack.context("Error sending HelloRV")?;
@@ -111,13 +116,13 @@ async fn perform_to1(devcred: &DeviceCredential, client: &mut ServiceClient) -> 
 
     // Create EAT payload
     let eat: EATokenPayload<PayloadCreating> =
-        new_eat::<bool>(None, nonce4.clone(), devcred.guid.clone())
+        new_eat::<bool>(None, nonce4.clone(), devcred.device_guid().clone())
             .context("Error creating EATokenPayload")?;
 
     // Create signature over nonce4
-    let privkey = PKey::private_key_from_der(&devcred.private_key)
-        .context("Error loading private key from device credential")?;
-    let token = COSESign::from_eat(eat, None, &privkey).context("Error signing new token")?;
+    let signer = devcred.get_signer().context("Error getting COSE signer")?;
+    let token =
+        COSESign::from_eat(eat, None, signer.as_ref()).context("Error signing new token")?;
     log::trace!("Sending token: {:?}", token);
 
     // Send: ProveToRV, Receive: RVRedirect
@@ -130,10 +135,10 @@ async fn perform_to1(devcred: &DeviceCredential, client: &mut ServiceClient) -> 
     Ok(rv_redirect.into_to1d())
 }
 
-async fn get_to1d_from_rv(devcred: &DeviceCredential) -> Result<COSESign> {
+async fn get_to1d_from_rv(devcred: &dyn DeviceCredential) -> Result<COSESign> {
     // Determine RV info
     let rv_info = devcred
-        .rvinfo
+        .rendezvous_info()
         .to_interpreted(RendezvousInterpreterSide::Device)
         .context("Error parsing rendezvous directives")?;
     if rv_info.is_empty() {
@@ -179,7 +184,7 @@ async fn get_ov_entries(client: &mut ServiceClient, num_entries: u16) -> Result<
 
 async fn perform_to2(
     devcredloc: &dyn UsableDeviceCredentialLocation,
-    devcred: &DeviceCredential,
+    devcred: &dyn DeviceCredential,
     urls: &[String],
 ) -> Result<()> {
     log::info!("Performing TO2 protocol, URLs: {:?}", urls);
@@ -196,7 +201,7 @@ async fn perform_to2(
     let prove_ov_hdr: RequestResult<messages::to2::ProveOVHdr> = client
         .send_request(
             messages::to2::HelloDevice::new(
-                devcred.guid.clone(),
+                devcred.device_guid().clone(),
                 nonce5.clone(),
                 kexsuite,
                 ciphersuite,
@@ -239,29 +244,20 @@ async fn perform_to2(
         let ov_hdr_vec =
             serde_cbor::to_vec(&prove_ov_hdr_payload.get_unverified_value().ov_header())
                 .context("Error parsing Ownership Voucher header")?;
-        let hmac_key = PKey::hmac(&devcred.hmac_secret).context("Error building hmac key")?;
-        let mut hmac_signer = Signer::new(MessageDigest::sha384(), &hmac_key)
-            .context("Error creating hmac signer")?;
-        hmac_signer
-            .update(&ov_hdr_vec)
-            .context("Error feeding OV into hmac")?;
-        let ov_hmac = hmac_signer
-            .sign_to_vec()
-            .context("Error computing OV HMac")?;
-        let ov_hmac = HMac::new_from_data(HashType::Sha384, ov_hmac);
-
-        if &ov_hmac != prove_ov_hdr_payload.get_unverified_value().hmac() {
-            bail!("HMac over ownership voucher was invalid");
-        }
+        let ov_hdr_hmac = prove_ov_hdr_payload.get_unverified_value().hmac();
+        devcred
+            .verify_hmac(&ov_hdr_vec, &ov_hdr_hmac)
+            .context("Error verifying ownership voucher HMAC")?;
         log::trace!("Ownership Voucher HMAC validated");
-        ov_hmac
+
+        ov_hdr_hmac.clone()
     };
 
     // Validate the PubKeyHash
     {
         let header = prove_ov_hdr_payload.get_unverified_value().ov_header();
         devcred
-            .pubkey_hash
+            .manufacturer_pubkey_hash()
             .compare_data(
                 &header
                     .get_raw_public_key()
@@ -336,19 +332,18 @@ async fn perform_to2(
     let prove_device_eat = new_eat(
         Some(&prove_device_payload),
         nonce6.clone(),
-        devcred.guid.clone(),
+        devcred.device_guid().clone(),
     )
     .context("Error building provedevice EAT")?;
     let mut prove_device_eat_unprotected = COSEHeaderMap::new();
     prove_device_eat_unprotected
         .insert(HeaderKeys::CUPHNonce, &nonce7)
         .context("Error adding nonce7 to unprotected")?;
-    let privkey = PKey::private_key_from_der(&devcred.private_key)
-        .context("Error loading private key from device credential")?;
+    let signer = devcred.get_signer().context("Error getting COSE signer")?;
     let prove_device_token = COSESign::from_eat(
         prove_device_eat,
         Some(prove_device_eat_unprotected),
-        &privkey,
+        signer.as_ref(),
     )
     .context("Error signing ProveDevice EAT")?;
 
@@ -421,18 +416,18 @@ async fn main() -> Result<()> {
 
     log::info!("Found device credential at {:?}", devcred_location);
 
-    let dc: DeviceCredential = devcred_location
+    let dc = devcred_location
         .read()
         .context("Error reading device credential")?;
     log::trace!("Device credential: {:?}", dc);
 
-    if !dc.active {
+    if !dc.is_active() {
         log::info!("Device credential deactivated, skipping Device Onboarding");
         return Ok(());
     }
 
     // Get owner info
-    let to1d = get_to1d_from_rv(&dc)
+    let to1d = get_to1d_from_rv(dc.as_ref())
         .await
         .context("Error getting to1d from rendezvous server")?;
     log::trace!("Received a usable to1d structure:: {:?}", to1d);
@@ -448,7 +443,7 @@ async fn main() -> Result<()> {
         bail!("No valid TO2 addresses received");
     }
 
-    perform_to2(devcred_location.borrow(), &dc, &to2_addresses)
+    perform_to2(devcred_location.borrow(), dc.as_ref(), &to2_addresses)
         .await
         .context("Error performing TO2 ownership protocol")?;
 

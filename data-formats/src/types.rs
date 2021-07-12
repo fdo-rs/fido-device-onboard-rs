@@ -1,7 +1,7 @@
 use std::{convert::TryInto, ops::Deref, str::FromStr, string::ToString};
 
+use aws_nitro_enclaves_cose::crypto::{SigningPrivateKey, SigningPublicKey};
 use aws_nitro_enclaves_cose::COSESign1 as COSESignInner;
-use openssl::pkey::{PKeyRef, Private, Public};
 use serde_tuple::Serialize_tuple;
 
 use crate::{
@@ -863,20 +863,6 @@ impl std::fmt::Debug for KeyExchange {
     }
 }
 
-#[derive(Debug, Serialize_tuple, Deserialize)]
-pub struct DeviceCredential {
-    pub active: bool,           // Active
-    pub protver: u16,           // ProtVer
-    pub hmac_secret: Vec<u8>,   // HmacSecret
-    pub device_info: String,    // DeviceInfo
-    pub guid: Guid,             // Guid
-    pub rvinfo: RendezvousInfo, // RVInfo
-    pub pubkey_hash: Hash,      // PubKeyHash
-
-    // Custom from here
-    pub private_key: Vec<u8>,
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MessageProtocolInfo {
     token: Option<Vec<u8>>,
@@ -1406,7 +1392,7 @@ impl COSESign {
     pub fn new<T>(
         payload: T,
         unprotected: Option<COSEHeaderMap>,
-        sign_key: &PKeyRef<Private>,
+        sign_key: &dyn SigningPrivateKey,
     ) -> Result<Self, Error>
     where
         T: Serialize,
@@ -1426,7 +1412,7 @@ impl COSESign {
     pub fn from_eat<ES>(
         eat: EATokenPayload<ES>,
         unprotected: Option<COSEHeaderMap>,
-        sign_key: &PKeyRef<Private>,
+        sign_key: &dyn SigningPrivateKey,
     ) -> Result<Self, Error>
     where
         ES: PayloadState,
@@ -1451,7 +1437,7 @@ impl COSESign {
         Ok(UnverifiedValue(serde_cbor::from_slice(&payload)?))
     }
 
-    pub fn get_payload<T>(&self, key: &PKeyRef<Public>) -> Result<T, Error>
+    pub fn get_payload<T>(&self, key: &dyn SigningPublicKey) -> Result<T, Error>
     where
         T: serde::de::DeserializeOwned,
     {
@@ -1466,7 +1452,10 @@ impl COSESign {
         eat_from_map(claims)
     }
 
-    pub fn get_eat(&self, key: &PKeyRef<Public>) -> Result<EATokenPayload<PayloadVerified>, Error> {
+    pub fn get_eat(
+        &self,
+        key: &dyn SigningPublicKey,
+    ) -> Result<EATokenPayload<PayloadVerified>, Error> {
         let claims: COSEHeaderMapType = self.get_payload(key)?;
         let claims = COSEHeaderMap(claims);
 

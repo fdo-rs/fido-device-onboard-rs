@@ -7,6 +7,9 @@ pub const PROTOCOL_VERSION: u16 = (PROTOCOL_MAJOR_VERSION * 100) + PROTOCOL_MINO
 
 pub mod constants;
 
+pub mod devicecredential;
+pub use crate::devicecredential::DeviceCredential;
+
 pub mod types;
 
 pub mod enhanced_types;

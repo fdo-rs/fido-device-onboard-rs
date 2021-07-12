@@ -4,7 +4,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, Context, Result};
 
-use fdo_data_formats::types::DeviceCredential;
+use fdo_data_formats::{devicecredential::FileDeviceCredential, DeviceCredential};
 
 pub fn find() -> Option<Result<Box<dyn UsableDeviceCredentialLocation>>> {
     let device_credential_locations: &[Box<dyn DeviceCredentialLocation>] = &[
@@ -41,23 +41,8 @@ pub trait DeviceCredentialLocation: std::fmt::Debug {
 }
 
 pub trait UsableDeviceCredentialLocation: DeviceCredentialLocation {
-    fn read(&self) -> Result<DeviceCredential>;
+    fn read(&self) -> Result<Box<dyn DeviceCredential>>;
     fn deactivate(&self) -> Result<()>;
-}
-
-trait DeactivatableDeviceCredentialLocation: UsableDeviceCredentialLocation {
-    fn perform_deactivation(&self) -> Result<()> {
-        let mut dc: DeviceCredential = self
-            .read()
-            .context("Error opening device credential for deactivation")?;
-        dc.active = false;
-        let new_dc_contents =
-            serde_cbor::to_vec(&dc).context("Error serializing deactivated device credential")?;
-        self.write(new_dc_contents)
-            .context("Error writing out new device credential for deactivation")
-    }
-
-    fn write(&self, new_contents: Vec<u8>) -> Result<()>;
 }
 
 #[derive(Debug, Clone)]
@@ -78,11 +63,12 @@ impl DeviceCredentialLocation for FileSystemPath {
 }
 
 impl UsableDeviceCredentialLocation for FileSystemPath {
-    fn read(&self) -> Result<DeviceCredential> {
+    fn read(&self) -> Result<Box<dyn DeviceCredential>> {
         let contents = fs::read(&self.path)
             .with_context(|| format!("Error reading (device credential) file at {}", &self.path))?;
-        serde_cbor::from_slice(&contents)
-            .with_context(|| format!("Error parsing device credential from {}", &self.path))
+        let fdc: FileDeviceCredential = serde_cbor::from_slice(&contents)
+            .with_context(|| format!("Error parsing device credential from {}", &self.path))?;
+        Ok(Box::new(fdc))
     }
 
     fn deactivate(&self) -> Result<()> {
@@ -95,7 +81,20 @@ impl UsableDeviceCredentialLocation for FileSystemPath {
     }
 }
 
-impl DeactivatableDeviceCredentialLocation for FileSystemPath {
+impl FileSystemPath {
+    fn perform_deactivation(&self) -> Result<()> {
+        let contents = fs::read(&self.path)
+            .with_context(|| format!("Error reading (device credential) file at {}", &self.path))?;
+        let mut fdc: FileDeviceCredential = serde_cbor::from_slice(&contents)
+            .with_context(|| format!("Error parsing device credential from {}", &self.path))?;
+
+        fdc.active = false;
+        let new_dc_contents =
+            serde_cbor::to_vec(&fdc).context("Error serializing deactivated device credential")?;
+        self.write(new_dc_contents)
+            .context("Error writing out new device credential for deactivation")
+    }
+
     fn write(&self, new_contents: Vec<u8>) -> Result<()> {
         fs::write(&self.path, &new_contents)
             .with_context(|| format!("Error writing to file at {}", &self.path))
