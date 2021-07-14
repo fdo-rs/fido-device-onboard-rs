@@ -185,10 +185,9 @@ async fn get_ov_entries(client: &mut ServiceClient, num_entries: u16) -> Result<
 async fn perform_to2(
     devcredloc: &dyn UsableDeviceCredentialLocation,
     devcred: &dyn DeviceCredential,
-    urls: &[String],
+    url: &str,
 ) -> Result<()> {
-    log::info!("Performing TO2 protocol, URLs: {:?}", urls);
-    let url = urls.first().unwrap();
+    log::info!("Performing TO2 protocol, URL: {:?}", url);
 
     let nonce5 = Nonce::new().context("Error generating nonce5")?;
     let sigtype = DeviceSigType::StSECP384R1;
@@ -443,9 +442,21 @@ async fn main() -> Result<()> {
         bail!("No valid TO2 addresses received");
     }
 
-    perform_to2(devcred_location.borrow(), dc.as_ref(), &to2_addresses)
-        .await
-        .context("Error performing TO2 ownership protocol")?;
+    for to2_address in to2_addresses {
+        match perform_to2(devcred_location.borrow(), dc.as_ref(), &to2_address)
+            .await
+            .context("Error performing TO2 ownership protocol")
+        {
+            Ok(_) => break,
+            Err(_) => {
+                log::trace!(
+                    "Couldn't perform TO2 ownership protocol with {}",
+                    to2_address
+                );
+                continue;
+            }
+        }
+    }
 
     log::info!("Secure Device Onboarding DONE");
 
