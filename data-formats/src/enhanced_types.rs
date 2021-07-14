@@ -146,7 +146,7 @@ impl RendezvousInterpretedDirective {
                     if side == RendezvousInterpreterSide::Device {
                         bypass = true;
                     } else {
-                        // No bpyass possible on owner server
+                        // No bypass possible on owner server
                         return Ok(None);
                     }
                 }
