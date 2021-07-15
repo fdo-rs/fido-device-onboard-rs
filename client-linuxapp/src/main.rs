@@ -60,7 +60,13 @@ fn get_to2_urls(entries: &[TO2AddressEntry]) -> Vec<String> {
     urls
 }
 
-async fn get_client(rv_info: Vec<RendezvousInterpretedDirective>) -> Result<ServiceClient> {
+async fn get_client_list(
+    rv_info: Vec<RendezvousInterpretedDirective>,
+) -> Result<Vec<ServiceClient>> {
+    if rv_info.is_empty() {
+        bail!("No rendezvous entries found we can construct a client for");
+    }
+    let mut service_client_list = Vec::new();
     for rv_entry in rv_info {
         let urls = rv_entry.get_urls();
         if urls.is_empty() {
@@ -75,11 +81,12 @@ async fn get_client(rv_info: Vec<RendezvousInterpretedDirective>) -> Result<Serv
         if rv_entry.user_input {
             todo!();
         }
-        return Ok(fdo_http_wrapper::client::ServiceClient::new(
-            &urls.first().unwrap(),
-        ));
+        for url in &urls {
+            service_client_list.push(fdo_http_wrapper::client::ServiceClient::new(&url));
+        }
     }
-    bail!("No rendezvous entries found we can construct a client for");
+
+    Ok(service_client_list)
 }
 
 async fn perform_to1(
@@ -135,7 +142,7 @@ async fn perform_to1(
     Ok(rv_redirect.into_to1d())
 }
 
-async fn get_to1d_from_rv(devcred: &dyn DeviceCredential) -> Result<COSESign> {
+fn get_rv_info(devcred: &dyn DeviceCredential) -> Result<Vec<RendezvousInterpretedDirective>> {
     // Determine RV info
     let rv_info = devcred
         .rendezvous_info()
@@ -145,15 +152,28 @@ async fn get_to1d_from_rv(devcred: &dyn DeviceCredential) -> Result<COSESign> {
         bail!("No rendezvous information found that's usable for the device");
     }
     log::trace!("Rendezvous info: {:?}", rv_info);
+    Ok(rv_info)
+}
 
-    let mut client = get_client(rv_info)
-        .await
-        .context("Error getting usable rendezvous client")?;
-    log::trace!("Got a usable client: {:?}", client);
-
-    perform_to1(devcred, &mut client)
-        .await
-        .context("Error performing TO1")
+async fn get_to1d(
+    devcred: &dyn DeviceCredential,
+    mut client_list: Vec<ServiceClient>,
+) -> Result<COSESign> {
+    for client in client_list.as_mut_slice() {
+        match perform_to1(devcred, client)
+            .await
+            .context("Error performing TO1")
+        {
+            Ok(to1) => {
+                return Ok(to1);
+            }
+            Err(e) => {
+                log::trace!("{} with {:?}", e, client);
+                continue;
+            }
+        }
+    }
+    bail!("Couldn't get TO1 from any Rendezvous server!")
 }
 
 async fn get_ov_entries(client: &mut ServiceClient, num_entries: u16) -> Result<Vec<Vec<u8>>> {
@@ -425,11 +445,15 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    // Get owner info
-    let to1d = get_to1d_from_rv(dc.as_ref())
+    // Get rv entries
+    let rv_info = get_rv_info(dc.as_ref());
+
+    let client_list = get_client_list(rv_info.unwrap())
         .await
-        .context("Error getting to1d from rendezvous server")?;
-    log::trace!("Received a usable to1d structure:: {:?}", to1d);
+        .context("Error getting usable rendezvous client")?;
+
+    // Get owner info
+    let to1d = get_to1d(dc.as_ref(), client_list).await?;
 
     let to1d_payload: UnverifiedValue<TO1DataPayload> = to1d
         .get_payload_unverified()
