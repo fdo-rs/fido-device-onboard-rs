@@ -17,7 +17,22 @@ The fido-fdo-rs implements all core components of the FIDO Device Onboard Specif
 - Transfer Ownership Protocol 2 (TO2)
 
 ## Crates and parts
-- *fido-iot-stream-message*: Implements the stream message creation/parsing of StreamMsg. Currently not implemented
-- *fido-iot-data-formats* [DI, TO0, TO1, TO2]: Implements the different low-level messaging formats used.
+- fdo-iot-stream-message: Implements the stream message creation/parsing of StreamMsg. Currently not implemented
+- fdo-iot-data-formats: [DI, TO0, TO1, TO2]: Implements the different low-level messaging formats used.
+- fdo-data-formats:
+- fdo-http-wrapper:
+- fdo-store:
+- fdo-owner-onboarding-service:
+- fdo-owner-tool:
+- fdo-rendezvous-server:
+- fdo-client-linuxapp:
 
-### fido-iot-data-formats
+## Building
+
+To build on Fedora/RHEL/CentOS you can do the following:
+````
+sudo yum install -y cargo git-core openssl-devel
+git clone https://github.com/fedora-iot/fido-device-onboard-rs.git
+cd fido-device-onboard-rs
+cargo build --release
+````
