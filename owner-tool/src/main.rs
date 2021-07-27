@@ -7,6 +7,7 @@ use std::{
 
 use anyhow::{bail, Context, Error, Result};
 use clap::{App, Arg, ArgMatches, SubCommand};
+use json::object;
 use openssl::{
     asn1::{Asn1Integer, Asn1Time},
     bn::BigNum,
@@ -504,21 +505,29 @@ fn dump_voucher(matches: &ArgMatches) -> Result<(), Error> {
         );
     }
 
-    println!("Header:");
-    println!("\tProtocol Version: {}", ov_header.protocol_version);
-    println!("\tDevice GUID: {}", ov_header.guid.to_string());
-    println!("\tRendezvous Info:");
+    let mut data_to_dump = object!{
+        "header": {
+            "protocol_version": ov_header.protocol_version,
+            "device_guid": ov_header.guid.to_string(),
+            "rendezvous_info": [],
+            "device_info": ov_header.device_info,
+            "manufacturer_public_key": ov_header.public_key.to_string(),
+            "device_certificate_chain_hash": match ov_header.device_certificate_chain_hash {
+                None => "<none>".to_string(),
+                Some(v) => v.to_string(),
+            },
+        },
+        "header_hmac": ov.header_hmac().to_string(),
+        "device_certificate_chain": {},
+        "entries": {}
+    };
     for rv_entry in ov_header.rendezvous_info.values() {
-        println!("\t\t- {:?}", rv_entry);
+        let mut info = object!{};
+        for (key, value) in rv_entry.iter() {
+            info[format!("{:?}", key)] = format!("{:?}", value).into();
+        }
+        data_to_dump["header"]["rendezvous_info"].push(info).expect("Couldn't push info");
     }
-    println!("\tDevice Info: {}", ov_header.device_info);
-    println!("\tManufacturer public key: {}", ov_header.public_key);
-    match ov_header.device_certificate_chain_hash {
-        None => println!("\tDevice certificate chain hash: <none>"),
-        Some(v) => println!("\tDevice certificate chain hash: {}", v),
-    }
-
-    println!("Header HMAC: {}", ov.header_hmac());
 
     let dev_cert = ov
         .device_certificate()
@@ -526,26 +535,25 @@ fn dump_voucher(matches: &ArgMatches) -> Result<(), Error> {
     let dev_cert_signers = ov
         .device_cert_signers()
         .context("Error parsing the device certificate chain")?;
-    println!("Device certificate chain:");
     if let Some(dev_cert) = dev_cert {
-        println!("\tDevice certificate: {:?}", &dev_cert);
+        data_to_dump["device_certificate_chain"]["device certificate"] = format!("{:?}", &dev_cert).into();
     }
     for (num, dev_cert_signer) in dev_cert_signers.iter().enumerate() {
-        println!("\tSigner {}: {:?}", num, dev_cert_signer);
+        data_to_dump["device_certificate_chain"][format!("signer_{}", num)] = format!("{:?}", dev_cert_signer).into();
     }
 
     let ov_iter = ov.iter_entries().context("Error creating OV iterator")?;
 
-    println!("Entries:");
     for (pos, entry) in ov_iter.enumerate() {
         let entry = entry.with_context(|| format!("Error parsing entry {}", pos))?;
-
-        println!("\tEntry {}", pos);
-        println!("\t\tPrevious entry hash: {}", entry.hash_previous_entry);
-        println!("\t\tHeader info hash: {}", entry.hash_header_info);
-        println!("\t\tPublic key: {}", entry.public_key);
+        let json_entry = object!{
+            "previous_entry_hash": entry.hash_previous_entry.to_string(),
+            "header_info_hash": entry.hash_header_info.to_string(),
+            "public_key": entry.public_key.to_string()
+        };
+        data_to_dump["entries"][pos.to_string()] = json_entry;
     }
-
+    println!("{:#}", data_to_dump);
     Ok(())
 }
 

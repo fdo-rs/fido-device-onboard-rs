@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0"
 clap = "2"
+json = "0.12.4"
 openssl = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_cbor = "0.11"
