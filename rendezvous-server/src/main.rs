@@ -81,7 +81,7 @@ async fn main() -> Result<()> {
 
     let mut settings = config::Config::default();
     settings
-        .merge(config::File::with_name("rendezvous-service"))
+        .merge(config::File::with_name("rendezvous-service").required(false))
         .context("Loading configuration files")?
         .merge(config::Environment::with_prefix("rendezvous"))
         .context("Loading configuration from environment variables")?;
