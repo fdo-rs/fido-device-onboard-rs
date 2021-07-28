@@ -129,7 +129,7 @@ async fn main() -> Result<()> {
 
     let mut settings = config::Config::default();
     settings
-        .merge(config::File::with_name("owner-onboarding-service"))
+        .merge(config::File::with_name("owner-onboarding-service").required(false))
         .context("Loading configuration files")?
         .merge(config::Environment::with_prefix("owner-onboarding-service"))
         .context("Loading configuration from environment variables")?;
