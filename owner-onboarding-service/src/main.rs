@@ -131,7 +131,7 @@ async fn main() -> Result<()> {
     settings
         .merge(config::File::with_name("owner-onboarding-service").required(false))
         .context("Loading configuration files")?
-        .merge(config::Environment::with_prefix("owner-onboarding-service"))
+        .merge(config::Environment::with_prefix("owner_onboarding_service"))
         .context("Loading configuration from environment variables")?;
     let settings: Settings = settings.try_into().context("Error parsing configuration")?;
 
