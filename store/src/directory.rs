@@ -89,7 +89,7 @@ where
     V: Serialize + DeserializeOwned + Send + Sync + Clone + 'static,
 {
     async fn load_data(&self, key: &K) -> Result<Option<V>, StoreError> {
-        let path = self.get_path(&key);
+        let path = self.get_path(key);
         log::trace!("Attempting to load data from {}", path.display());
 
         let file = match File::open(&path) {
@@ -172,7 +172,7 @@ where
     }
 
     async fn destroy_data(&self, key: &K) -> Result<(), StoreError> {
-        let path = self.get_path(&key);
+        let path = self.get_path(key);
         log::trace!("Attempting to delete data at {}", path.display());
 
         fs::remove_file(&path).map_err(|e| {

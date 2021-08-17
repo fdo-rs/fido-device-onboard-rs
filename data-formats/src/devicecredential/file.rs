@@ -37,7 +37,7 @@ impl DeviceCredential for FileDeviceCredential {
 
         let hmac_key = PKey::hmac(&self.hmac_secret)?;
         let mut hmac_signer = Signer::new(hmac_type.get_md(), &hmac_key)?;
-        hmac_signer.update(&data)?;
+        hmac_signer.update(data)?;
         let ov_hmac = hmac_signer.sign_to_vec()?;
         let ov_hmac = HMac::new_from_data(hmac_type, ov_hmac);
 

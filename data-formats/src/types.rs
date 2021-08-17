@@ -675,14 +675,14 @@ impl KeyExchange {
     pub fn get_public(&self) -> Result<Vec<u8>, Error> {
         match self {
             KeyExchange::Dhkex(suite, key) => {
-                let key = BigNum::from_slice(&key)?;
+                let key = BigNum::from_slice(key)?;
                 let dh_params = suite.get_dh_params()?;
                 let key = dh_params.set_private_key(key)?;
                 Ok(key.public_key().to_vec())
             }
             KeyExchange::Ecdh(suite, key, our_random) => {
                 let ec_group = suite.get_ecdh_group()?;
-                let key = EcKey::private_key_from_der(&key)?;
+                let key = EcKey::private_key_from_der(key)?;
 
                 let mut public_x = BigNum::new()?;
                 let mut public_y = BigNum::new()?;
@@ -698,7 +698,7 @@ impl KeyExchange {
                 let public_x = public_x.to_vec();
                 let public_y = public_y.to_vec();
 
-                Ok(self.encode_ecdh_bstr(&public_x, &public_y, &our_random))
+                Ok(self.encode_ecdh_bstr(&public_x, &public_y, our_random))
             }
         }
     }
@@ -707,13 +707,13 @@ impl KeyExchange {
         let mut out = Vec::with_capacity(2 + ax.len() + 2 + ax.len() + 2 + random.len());
 
         out.extend_from_slice(&(ax.len() as u16).to_be_bytes());
-        out.extend_from_slice(&ax);
+        out.extend_from_slice(ax);
 
         out.extend_from_slice(&(ay.len() as u16).to_be_bytes());
-        out.extend_from_slice(&ay);
+        out.extend_from_slice(ay);
 
         out.extend_from_slice(&(random.len() as u16).to_be_bytes());
-        out.extend_from_slice(&random);
+        out.extend_from_slice(random);
 
         out
     }
@@ -744,9 +744,9 @@ impl KeyExchange {
 
     fn derive_key_dh(&self, other: &[u8]) -> Result<(Vec<u8>, Vec<u8>), Error> {
         if let KeyExchange::Dhkex(suite, key) = self {
-            let other = BigNum::from_slice(&other)?;
+            let other = BigNum::from_slice(other)?;
 
-            let key = BigNum::from_slice(&key)?;
+            let key = BigNum::from_slice(key)?;
             let dh_params = suite.get_dh_params()?;
             let key = dh_params.set_private_key(key)?;
 
@@ -764,7 +764,7 @@ impl KeyExchange {
         if let KeyExchange::Ecdh(suite, key, our_random) = self {
             let ec_group = suite.get_ecdh_group()?;
 
-            let (other_x, other_y, other_random) = self.decode_ecdh_bstr(&other)?;
+            let (other_x, other_y, other_random) = self.decode_ecdh_bstr(other)?;
             if other_random.len() != suite.get_ecdh_random_size() {
                 return Err(Error::KeyExchangeError("Other random is invalid size"));
             }
@@ -774,7 +774,7 @@ impl KeyExchange {
                 EcKey::from_public_key_affine_coordinates(&ec_group, &other_x, &other_y)?;
             other_pub.check_key()?;
 
-            let our_key = EcKey::private_key_from_der(&key)?;
+            let our_key = EcKey::private_key_from_der(key)?;
 
             let mut bnctx = BigNumContext::new()?;
 
@@ -804,12 +804,12 @@ impl KeyExchange {
             shared_secret.extend_from_slice(&derived_x);
             match our_side {
                 KeyDeriveSide::Device => {
-                    shared_secret.extend_from_slice(&our_random);
+                    shared_secret.extend_from_slice(our_random);
                     shared_secret.extend_from_slice(&other_random);
                 }
                 KeyDeriveSide::OwnerService => {
                     shared_secret.extend_from_slice(&other_random);
-                    shared_secret.extend_from_slice(&our_random);
+                    shared_secret.extend_from_slice(our_random);
                 }
             }
 
@@ -835,10 +835,10 @@ impl KeyExchange {
         kdf.set_kb_mac_type(KdfMacType::Hmac)?;
         kdf.set_digest(cipher.kdf_digest())?;
         // Label
-        kdf.set_salt(&KEY_DERIVE_LABEL)?;
+        kdf.set_salt(KEY_DERIVE_LABEL)?;
         // Context
         let mut context = Vec::with_capacity(KEY_DERIVE_CONTEXT_PREFIX.len() + context_rand.len());
-        context.extend_from_slice(&KEY_DERIVE_CONTEXT_PREFIX);
+        context.extend_from_slice(KEY_DERIVE_CONTEXT_PREFIX);
         context.extend_from_slice(&context_rand);
         kdf.set_kb_info(&context)?;
         // Key
@@ -1190,7 +1190,7 @@ where
     {
         match &self.payload {
             None => Ok(None),
-            Some(val) => Ok(Some(serde_cbor::from_slice(&val)?)),
+            Some(val) => Ok(Some(serde_cbor::from_slice(val)?)),
         }
     }
 

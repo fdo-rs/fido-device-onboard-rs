@@ -55,7 +55,7 @@ impl OwnershipVoucher {
     fn hdr_hash(&self) -> Vec<u8> {
         let mut hdr_hash = Vec::with_capacity(self.header.len() + self.header_hmac.value().len());
         hdr_hash.extend_from_slice(&self.header);
-        hdr_hash.extend_from_slice(&self.header_hmac.value());
+        hdr_hash.extend_from_slice(self.header_hmac.value());
         hdr_hash
     }
 
@@ -64,7 +64,7 @@ impl OwnershipVoucher {
             return Ok(Vec::new());
         }
         Ok(
-            X5Chain::from_slice(&self.device_certificate_chain.as_ref().unwrap())?
+            X5Chain::from_slice(self.device_certificate_chain.as_ref().unwrap())?
                 .into_chain()
                 .drain(..)
                 .skip(1)
@@ -79,7 +79,7 @@ impl OwnershipVoucher {
     pub fn entry(&self, entry_num: u16) -> Result<Option<COSESign>> {
         match self.entries.get(entry_num as usize) {
             None => Ok(None),
-            Some(v) => Ok(Some(COSESign::from_bytes(&v)?)),
+            Some(v) => Ok(Some(COSESign::from_bytes(v)?)),
         }
     }
 
@@ -88,7 +88,7 @@ impl OwnershipVoucher {
             return Ok(None);
         }
         Ok(
-            X5Chain::from_slice(&self.device_certificate_chain.as_ref().unwrap())?
+            X5Chain::from_slice(self.device_certificate_chain.as_ref().unwrap())?
                 .into_chain()
                 .drain(..)
                 .next(),
@@ -109,7 +109,7 @@ impl OwnershipVoucher {
             )
         } else {
             let lastrawentry = &self.entries[self.entries.len() - 1];
-            let lastsignedentry = COSESign::from_bytes(&lastrawentry)?;
+            let lastsignedentry = COSESign::from_bytes(lastrawentry)?;
             let lastentry: UnverifiedValue<OwnershipVoucherEntryPayload> =
                 lastsignedentry.get_payload_unverified()?;
             // Check whether the hash_type passed is identical to the previous entry, or is not passed at all.
@@ -134,7 +134,7 @@ impl OwnershipVoucher {
                 lastentry.get_unverified_value().public_key.clone(),
             )
         };
-        if !owner_pubkey.matches_pkey(&owner_private_key)? {
+        if !owner_pubkey.matches_pkey(owner_private_key)? {
             return Err(Error::NonOwnerKey);
         }
 
@@ -225,7 +225,7 @@ impl<'a> EntryIter<'a> {
         let mut hdr_hash =
             Vec::with_capacity(self.voucher.header.len() + self.voucher.header_hmac.value().len());
         hdr_hash.extend_from_slice(&self.voucher.header);
-        hdr_hash.extend_from_slice(&self.voucher.header_hmac.value());
+        hdr_hash.extend_from_slice(self.voucher.header_hmac.value());
         let other = if self.index == 0 {
             &hdr_hash
         } else {
@@ -277,7 +277,7 @@ impl OwnershipVoucherHeader {
         let device_info_bytes = self.device_info.as_bytes();
         let mut hdrinfo = Vec::with_capacity(self.guid.len() + device_info_bytes.len());
         hdrinfo.extend_from_slice(&self.guid);
-        hdrinfo.extend_from_slice(&device_info_bytes);
+        hdrinfo.extend_from_slice(device_info_bytes);
 
         Ok(hdrinfo)
     }
