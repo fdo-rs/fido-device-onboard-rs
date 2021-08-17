@@ -155,10 +155,10 @@ impl X5Chain {
     }
 
     pub fn from_slice(data: &[u8]) -> Result<Self> {
-        let chain: Vec<Vec<u8>> = serde_cbor::from_slice(&data)?;
+        let chain: Vec<Vec<u8>> = serde_cbor::from_slice(data)?;
         let chain = chain
             .iter()
-            .map(|cert| X509::from_der(&cert).map_err(Error::from))
+            .map(|cert| X509::from_der(cert).map_err(Error::from))
             .collect::<Result<Vec<X509>>>()?;
         Ok(X5Chain { chain })
     }

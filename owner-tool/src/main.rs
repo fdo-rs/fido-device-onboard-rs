@@ -250,7 +250,7 @@ fn load_rendezvous_info(path: &str) -> Result<RendezvousInfo, Error> {
                 Value::String(val) => val,
                 _ => bail!("Invalid key type"),
             };
-            let key = RendezvousVariable::from_str(&key)
+            let key = RendezvousVariable::from_str(key)
                 .with_context(|| format!("Error parsing rendezvous key '{}'", key))?;
 
             let val = yaml_to_cbor(val)?;
@@ -322,7 +322,7 @@ fn build_device_cert<T: openssl::pkey::HasPublic>(
     let serial = BigNum::from_slice(&serial_buf).context("Error parsing serial number")?;
     let serial = Asn1Integer::from_bn(&serial).context("Error converting serial number to asn1")?;
     builder
-        .set_serial_number(&serial.as_ref())
+        .set_serial_number(serial.as_ref())
         .context("Error setting serial number")?;
 
     // Sign and return
@@ -343,7 +343,7 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
     let device_cert_ca_chain_path = matches.value_of("device-cert-ca-chain").unwrap();
     let rendezvous_info_path = matches.value_of("rendezvous-info").unwrap();
 
-    let manufacturer_cert = load_x509(&manufacturer_cert_path).with_context(|| {
+    let manufacturer_cert = load_x509(manufacturer_cert_path).with_context(|| {
         format!(
             "Error loading manufacturer cert at {}",
             manufacturer_cert_path
@@ -359,21 +359,21 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
     )
     .context("Error hashing manufacturer public key")?;
 
-    let device_cert_ca_private_key = load_private_key(&device_cert_ca_private_key_path)
+    let device_cert_ca_private_key = load_private_key(device_cert_ca_private_key_path)
         .with_context(|| {
             format!(
                 "Error loading device CA private key at {}",
                 device_cert_ca_private_key_path
             )
         })?;
-    let device_cert_ca_chain = load_x509s(&device_cert_ca_chain_path).with_context(|| {
+    let device_cert_ca_chain = load_x509s(device_cert_ca_chain_path).with_context(|| {
         format!(
             "Error loading device cert ca chain at {}",
             device_cert_ca_chain_path
         )
     })?;
 
-    let rendezvous_info = load_rendezvous_info(&rendezvous_info_path)
+    let rendezvous_info = load_rendezvous_info(rendezvous_info_path)
         .with_context(|| format!("Error loading rendezvous info at {}", rendezvous_info_path))?;
 
     if Path::new(&device_credential_out).exists() {
@@ -402,7 +402,7 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
     let device_key =
         PKey::from_ec_key(device_key).context("Error converting device key to pkey")?;
     let device_cert = build_device_cert(
-        &device_subject,
+        device_subject,
         &device_key,
         &device_cert_ca_private_key,
         &device_cert_ca_chain,
@@ -607,14 +607,14 @@ fn extend_voucher(matches: &ArgMatches) -> Result<(), Error> {
         );
     }
 
-    let current_owner_private_key = load_private_key(&current_owner_private_key_path)
-        .with_context(|| {
+    let current_owner_private_key =
+        load_private_key(current_owner_private_key_path).with_context(|| {
             format!(
                 "Error loading current owner private key at {}",
                 current_owner_private_key_path
             )
         })?;
-    let new_owner_cert = load_x509(&new_owner_cert_path).with_context(|| {
+    let new_owner_cert = load_x509(new_owner_cert_path).with_context(|| {
         format!(
             "Error loading new owner certificate at {}",
             new_owner_cert_path
@@ -725,7 +725,7 @@ impl TryFrom<RemoteConnection> for Vec<TO2AddressEntry> {
         for addr in &rc.addresses {
             match addr {
                 RemoteAddress::IP { ip_address } => {
-                    let addr = std::net::IpAddr::from_str(&ip_address)
+                    let addr = std::net::IpAddr::from_str(ip_address)
                         .with_context(|| format!("Error parsing IP address '{}'", ip_address))?;
                     results.push(TO2AddressEntry::new(
                         Some(addr.into()),
@@ -777,7 +777,7 @@ async fn report_to_rendezvous(matches: &ArgMatches<'_>) -> Result<(), Error> {
         );
     }
 
-    let owner_private_key = load_private_key(&owner_private_key_path).with_context(|| {
+    let owner_private_key = load_private_key(owner_private_key_path).with_context(|| {
         format!(
             "Error loading owner private key from {}",
             owner_private_key_path
@@ -819,7 +819,7 @@ async fn report_to_rendezvous(matches: &ArgMatches<'_>) -> Result<(), Error> {
 
     println!("Using rendezvous server at url {}", rv_url);
 
-    let mut rv_client = fdo_http_wrapper::client::ServiceClient::new(&rv_url);
+    let mut rv_client = fdo_http_wrapper::client::ServiceClient::new(rv_url);
 
     // Send: Hello, Receive: HelloAck
     let hello_ack: RequestResult<messages::to0::HelloAck> = rv_client

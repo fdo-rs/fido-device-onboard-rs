@@ -82,7 +82,7 @@ async fn get_client_list(
             todo!();
         }
         for url in &urls {
-            service_client_list.push(fdo_http_wrapper::client::ServiceClient::new(&url));
+            service_client_list.push(fdo_http_wrapper::client::ServiceClient::new(url));
         }
     }
 
@@ -214,7 +214,7 @@ async fn perform_to2(
     let kexsuite = KexSuite::Ecdh384;
     let ciphersuite = CipherSuite::A256Gcm;
 
-    let mut client = fdo_http_wrapper::client::ServiceClient::new(&url);
+    let mut client = fdo_http_wrapper::client::ServiceClient::new(url);
 
     // Send: HelloDevice, Receive: ProveOVHdr
     let prove_ov_hdr: RequestResult<messages::to2::ProveOVHdr> = client
@@ -265,7 +265,7 @@ async fn perform_to2(
                 .context("Error parsing Ownership Voucher header")?;
         let ov_hdr_hmac = prove_ov_hdr_payload.get_unverified_value().hmac();
         devcred
-            .verify_hmac(&ov_hdr_vec, &ov_hdr_hmac)
+            .verify_hmac(&ov_hdr_vec, ov_hdr_hmac)
             .context("Error verifying ownership voucher HMAC")?;
         log::trace!("Ownership Voucher HMAC validated");
 
@@ -336,7 +336,7 @@ async fn perform_to2(
     let b_key_exchange =
         KeyExchange::new(kexsuite).context("Error creating device side of key exchange")?;
     let new_keys = b_key_exchange
-        .derive_key(KeyDeriveSide::Device, ciphersuite, &a_key_exchange)
+        .derive_key(KeyDeriveSide::Device, ciphersuite, a_key_exchange)
         .context("Error performing key derivation")?;
     let new_keys = fdo_http_wrapper::EncryptionKeys::from_derived(ciphersuite, new_keys);
 
@@ -459,7 +459,7 @@ async fn main() -> Result<()> {
         .get_payload_unverified()
         .context("Error getting the TO2 payload")?;
     let to2_addresses = to1d_payload.get_unverified_value().to2_addresses();
-    let to2_addresses = get_to2_urls(&to2_addresses);
+    let to2_addresses = get_to2_urls(to2_addresses);
     log::info!("Got TO2 addresses: {:?}", to2_addresses);
 
     if to2_addresses.is_empty() {
