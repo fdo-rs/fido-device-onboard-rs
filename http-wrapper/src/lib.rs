@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use aws_nitro_enclaves_cose::error::COSEError;
-use aws_nitro_enclaves_cose::{COSEEncrypt0, CipherConfiguration};
+use aws_nitro_enclaves_cose::error::CoseError;
+use aws_nitro_enclaves_cose::{CipherConfiguration, CoseEncrypt0};
 use fdo_data_formats::types::{CipherSuite, DerivedKeys};
 
 #[cfg(feature = "server")]
@@ -31,7 +31,7 @@ impl EncryptionKeys {
         }
     }
 
-    fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>, COSEError> {
+    fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>, CoseError> {
         if self.cipher_suite.is_none() {
             Ok(plaintext.to_vec())
         } else {
@@ -39,12 +39,12 @@ impl EncryptionKeys {
                 Some(DerivedKeys::Combined { sevk: k }) => k,
                 _ => panic!(),
             };
-            COSEEncrypt0::new(plaintext, CipherConfiguration::Gcm, &k[..])
+            CoseEncrypt0::new(plaintext, CipherConfiguration::Gcm, &k[..])
                 .map(|c| c.as_bytes(true))?
         }
     }
 
-    fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>, COSEError> {
+    fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>, CoseError> {
         if self.cipher_suite.is_none() {
             Ok(ciphertext.to_vec())
         } else {
@@ -52,7 +52,7 @@ impl EncryptionKeys {
                 Some(DerivedKeys::Combined { sevk: k }) => k,
                 _ => panic!(),
             };
-            match COSEEncrypt0::from_bytes(ciphertext) {
+            match CoseEncrypt0::from_bytes(ciphertext) {
                 Ok(v) => match v.decrypt(k) {
                     Ok((_, _, payload)) => Ok(payload),
                     Err(e) => Err(e),

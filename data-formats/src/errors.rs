@@ -10,7 +10,7 @@ pub enum Error {
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_cbor::Error),
     #[error("COSE error: {0}")]
-    Cose(#[from] aws_nitro_enclaves_cose::error::COSEError),
+    Cose(#[from] aws_nitro_enclaves_cose::error::CoseError),
     #[error("Invalid hash value")]
     IncorrectHash,
     #[error("Incorrect nonce value")]
