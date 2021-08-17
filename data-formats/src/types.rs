@@ -1,7 +1,7 @@
 use std::{convert::TryInto, ops::Deref, str::FromStr, string::ToString};
 
 use aws_nitro_enclaves_cose::crypto::{SigningPrivateKey, SigningPublicKey};
-use aws_nitro_enclaves_cose::COSESign1 as COSESignInner;
+use aws_nitro_enclaves_cose::CoseSign1 as COSESignInner;
 use serde_tuple::Serialize_tuple;
 
 use crate::{

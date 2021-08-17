@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use aws_nitro_enclaves_cose::error::COSEError;
+use aws_nitro_enclaves_cose::error::CoseError;
 use fdo_data_formats::messages::{ClientMessage, ErrorMessage, Message, ServerMessage};
 
 use crate::EncryptionKeys;
@@ -8,7 +8,7 @@ use crate::EncryptionKeys;
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Cryptographic error encrypting/decrypting")]
-    Crypto(COSEError),
+    Crypto(CoseError),
     #[error("Serialization/deserialization error")]
     Serde(#[from] serde_cbor::Error),
     #[error("Error parsing or generating request")]
@@ -25,8 +25,8 @@ pub enum Error {
     Error(ErrorMessage),
 }
 
-impl From<COSEError> for Error {
-    fn from(e: COSEError) -> Self {
+impl From<CoseError> for Error {
+    fn from(e: CoseError) -> Self {
         Error::Crypto(e)
     }
 }
