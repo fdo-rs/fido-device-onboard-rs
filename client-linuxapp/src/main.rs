@@ -60,32 +60,25 @@ fn get_to2_urls(entries: &[TO2AddressEntry]) -> Vec<String> {
     urls
 }
 
-async fn get_client_list(
-    rv_info: Vec<RendezvousInterpretedDirective>,
-) -> Result<Vec<ServiceClient>> {
-    if rv_info.is_empty() {
-        bail!("No rendezvous entries found we can construct a client for");
-    }
+async fn get_client_list(rv_entry: &RendezvousInterpretedDirective) -> Result<Vec<ServiceClient>> {
     let mut service_client_list = Vec::new();
-    for rv_entry in rv_info {
-        let urls = rv_entry.get_urls();
-        if urls.is_empty() {
-            continue;
-        }
-        if rv_entry.bypass {
-            todo!();
-        }
-        if rv_entry.wifi_ssid.is_some() {
-            todo!();
-        }
-        if rv_entry.user_input {
-            todo!();
-        }
-        for url in &urls {
-            service_client_list.push(fdo_http_wrapper::client::ServiceClient::new(url));
-        }
-    }
 
+    let urls = rv_entry.get_urls();
+    if urls.is_empty() {
+        bail!("No URLs found in this RV_entry");
+    }
+    if rv_entry.bypass {
+        todo!();
+    }
+    if rv_entry.wifi_ssid.is_some() {
+        todo!();
+    }
+    if rv_entry.user_input {
+        todo!();
+    }
+    for url in &urls {
+        service_client_list.push(fdo_http_wrapper::client::ServiceClient::new(url));
+    }
     Ok(service_client_list)
 }
 
@@ -127,7 +120,7 @@ async fn perform_to1(
             .context("Error creating EATokenPayload")?;
 
     // Create signature over nonce4
-    let signer = devcred.get_signer().context("Error getting COSE signer")?;
+    let signer = devcred.get_signer().context("Error getting Cose signer")?;
     let token =
         COSESign::from_eat(eat, None, signer.as_ref()).context("Error signing new token")?;
     log::trace!("Sending token: {:?}", token);
@@ -358,7 +351,7 @@ async fn perform_to2(
     prove_device_eat_unprotected
         .insert(HeaderKeys::CUPHNonce, &nonce7)
         .context("Error adding nonce7 to unprotected")?;
-    let signer = devcred.get_signer().context("Error getting COSE signer")?;
+    let signer = devcred.get_signer().context("Error getting Cose signer")?;
     let prove_device_token = COSESign::from_eat(
         prove_device_eat,
         Some(prove_device_eat_unprotected),
@@ -446,36 +439,55 @@ async fn main() -> Result<()> {
     }
 
     // Get rv entries
-    let rv_info = get_rv_info(dc.as_ref());
+    let rv_info = get_rv_info(dc.as_ref())?;
+    let mut rv_entry_it = rv_info.iter().cycle();
 
-    let client_list = get_client_list(rv_info.unwrap())
-        .await
-        .context("Error getting usable rendezvous client")?;
-
-    // Get owner info
-    let to1d = get_to1d(dc.as_ref(), client_list).await?;
-
-    let to1d_payload: UnverifiedValue<TO1DataPayload> = to1d
-        .get_payload_unverified()
-        .context("Error getting the TO2 payload")?;
-    let to2_addresses = to1d_payload.get_unverified_value().to2_addresses();
-    let to2_addresses = get_to2_urls(to2_addresses);
-    log::info!("Got TO2 addresses: {:?}", to2_addresses);
-
-    if to2_addresses.is_empty() {
-        bail!("No valid TO2 addresses received");
-    }
-
-    for to2_address in to2_addresses {
-        match perform_to2(devcred_location.borrow(), dc.as_ref(), &to2_address)
+    loop {
+        let rv_entry = rv_entry_it.next().unwrap();
+        let client_list = get_client_list(rv_entry)
             .await
-            .context("Error performing TO2 ownership protocol")
-        {
-            Ok(_) => break,
+            .context("Error getting usable rendezvous client")?;
+        log::trace!("Client list: {:?}", client_list);
+
+        // Get owner info
+        let to1d = get_to1d(dc.as_ref(), client_list).await;
+        match to1d {
             Err(e) => {
-                log::trace!("{:?} with TO2 address {}", e, to2_address);
+                log::trace!("Error getting TO1d {:?} with rv_entry {:?}", e, rv_entry);
                 continue;
             }
+            _ => println!("lololo"), //Obvs, a big TO-DO here
+        }
+        let to1d_payload: UnverifiedValue<TO1DataPayload> = to1d?
+            .get_payload_unverified()
+            .context("Error getting the TO2 payload")?;
+
+        let to2_addresses = to1d_payload.get_unverified_value().to2_addresses();
+        let to2_addresses = get_to2_urls(to2_addresses);
+        log::info!("Got TO2 addresses: {:?}", to2_addresses);
+
+        if to2_addresses.is_empty() {
+            bail!("No valid TO2 addresses received");
+        }
+        let mut to2_performed = false;
+
+        for to2_address in to2_addresses {
+            match perform_to2(devcred_location.borrow(), dc.as_ref(), &to2_address)
+                .await
+                .context("Error performing TO2 ownership protocol")
+            {
+                Ok(_) => {
+                    to2_performed = true;
+                    break;
+                }
+                Err(e) => {
+                    log::trace!("{:?} with TO2 address {}", e, to2_address);
+                    continue;
+                }
+            }
+        }
+        if to2_performed {
+            break;
         }
     }
 
