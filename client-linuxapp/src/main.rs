@@ -1,6 +1,7 @@
 use std::borrow::Borrow;
 use std::fs;
 use std::path::Path;
+use std::{thread, time};
 
 use anyhow::{anyhow, bail, Context, Result};
 
@@ -22,8 +23,14 @@ mod device_credential_locations;
 mod serviceinfo;
 
 use device_credential_locations::UsableDeviceCredentialLocation;
+use rand::Rng;
 
 const DEVICE_ONBOARDING_EXECUTED_MARKER_FILE: &str = "/etc/device_onboarding_performed";
+
+// Rendezvous delays related variables
+const RV_DEFAULT_DELAY_SEC: f32 = 120.0;
+const RV_DEFAULT_DELAY_OFFSET: f32 = 30.0;
+const RV_USER_DEFINED_DELAY_OFFSET: f32 = 0.25;
 
 fn mark_device_onboarding_executed() -> Result<()> {
     fs::write(&DEVICE_ONBOARDING_EXECUTED_MARKER_FILE, "executed")
@@ -61,11 +68,12 @@ fn get_to2_urls(entries: &[TO2AddressEntry]) -> Vec<String> {
 }
 
 async fn get_client_list(rv_entry: &RendezvousInterpretedDirective) -> Result<Vec<ServiceClient>> {
+    log::trace!("Getting client list from rv_entry {:?}", rv_entry);
     let mut service_client_list = Vec::new();
 
     let urls = rv_entry.get_urls();
     if urls.is_empty() {
-        bail!("No URLs found in this RV_entry");
+        log::trace!("No URLs found");
     }
     if rv_entry.bypass {
         todo!();
@@ -79,6 +87,7 @@ async fn get_client_list(rv_entry: &RendezvousInterpretedDirective) -> Result<Ve
     for url in &urls {
         service_client_list.push(fdo_http_wrapper::client::ServiceClient::new(url));
     }
+    log::trace!("Client list: {:?}", service_client_list);
     Ok(service_client_list)
 }
 
@@ -402,6 +411,29 @@ async fn perform_to2(
     Ok(())
 }
 
+fn get_delay_between_retries(rv_entry_delay: u32) -> u64 {
+    let mut rng = rand::thread_rng();
+    let rv_delay_sec: f32;
+    if rv_entry_delay == 0 {
+        rv_delay_sec = rng.gen_range(
+            RV_DEFAULT_DELAY_SEC - RV_DEFAULT_DELAY_OFFSET
+                ..=RV_DEFAULT_DELAY_SEC + RV_DEFAULT_DELAY_OFFSET,
+        );
+    } else {
+        let lower_delay = rv_entry_delay as f32 * (1.0 - RV_USER_DEFINED_DELAY_OFFSET);
+        let upper_delay = rv_entry_delay as f32 * (1.0 + RV_USER_DEFINED_DELAY_OFFSET);
+        rv_delay_sec = rng.gen_range(lower_delay..=upper_delay);
+    }
+    rv_delay_sec as u64
+}
+
+fn sleep_between_retries(rv_entry_delay: u32) {
+    let rv_delay_sec = get_delay_between_retries(rv_entry_delay);
+    let sleep_time = time::Duration::from_secs(rv_delay_sec);
+    log::trace!("Sleeping for {} seconds", rv_delay_sec);
+    thread::sleep(sleep_time);
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     pretty_env_logger::init();
@@ -440,58 +472,86 @@ async fn main() -> Result<()> {
 
     // Get rv entries
     let rv_info = get_rv_info(dc.as_ref())?;
-    let mut rv_entry_it = rv_info.iter().cycle();
+    let rv_info_it = rv_info.iter();
+
+    let mut onboarding_performed = false;
+    let mut rv_entry_delay = 0;
 
     loop {
-        let rv_entry = rv_entry_it.next().unwrap();
-        let client_list = get_client_list(rv_entry)
-            .await
-            .context("Error getting usable rendezvous client")?;
-        log::trace!("Client list: {:?}", client_list);
+        for rv_entry in rv_info_it.clone() {
+            rv_entry_delay = rv_entry.delay;
 
-        // Get owner info
-        let to1d = get_to1d(dc.as_ref(), client_list).await;
-        match to1d {
-            Err(e) => {
-                log::trace!("Error getting TO1d {:?} with rv_entry {:?}", e, rv_entry);
-                continue;
-            }
-            _ => println!("lololo"), //Obvs, a big TO-DO here
-        }
-        let to1d_payload: UnverifiedValue<TO1DataPayload> = to1d?
-            .get_payload_unverified()
-            .context("Error getting the TO2 payload")?;
-
-        let to2_addresses = to1d_payload.get_unverified_value().to2_addresses();
-        let to2_addresses = get_to2_urls(to2_addresses);
-        log::info!("Got TO2 addresses: {:?}", to2_addresses);
-
-        if to2_addresses.is_empty() {
-            bail!("No valid TO2 addresses received");
-        }
-        let mut to2_performed = false;
-
-        for to2_address in to2_addresses {
-            match perform_to2(devcred_location.borrow(), dc.as_ref(), &to2_address)
-                .await
-                .context("Error performing TO2 ownership protocol")
-            {
-                Ok(_) => {
-                    to2_performed = true;
-                    break;
-                }
+            let client_list = match get_client_list(rv_entry).await {
+                Ok(client_list) => client_list,
                 Err(e) => {
-                    log::trace!("{:?} with TO2 address {}", e, to2_address);
+                    log::trace!(
+                        "Error {:?} getting usable rendezvous client list from rv_entry {:?}",
+                        e,
+                        rv_entry
+                    );
                     continue;
                 }
+            };
+
+            // Get owner info
+            let to1d = get_to1d(dc.as_ref(), client_list).await;
+
+            let to1d_payload: UnverifiedValue<TO1DataPayload> = match to1d {
+                Ok(to1d) => match to1d.get_payload_unverified() {
+                    Ok(to1d_payload) => to1d_payload,
+                    Err(e) => {
+                        log::trace!(
+                            "Error getting TO1 payload unverified {:?} with rv_entry {:?}",
+                            e,
+                            rv_entry
+                        );
+                        continue;
+                    }
+                },
+                Err(e) => {
+                    log::trace!("Error getting TO1d {:?} with rv_entry {:?}", e, rv_entry);
+                    continue;
+                }
+            };
+
+            // Contact owner and perform ownership transfer
+            let to2_addresses = to1d_payload.get_unverified_value().to2_addresses();
+            let to2_addresses = get_to2_urls(to2_addresses);
+            log::info!("Got TO2 addresses: {:?}", to2_addresses);
+
+            if to2_addresses.is_empty() {
+                log::trace!(
+                    "No valid TO2 addresses received with rv_entry {:?}",
+                    rv_entry
+                );
+                continue;
+            }
+
+            for to2_address in to2_addresses {
+                match perform_to2(devcred_location.borrow(), dc.as_ref(), &to2_address)
+                    .await
+                    .context("Error performing TO2 ownership protocol")
+                {
+                    Ok(_) => {
+                        onboarding_performed = true;
+                        break;
+                    }
+                    Err(e) => {
+                        log::trace!("{:?} with TO2 address {}", e, to2_address);
+                        continue;
+                    }
+                }
+            }
+            if onboarding_performed {
+                break;
             }
         }
-        if to2_performed {
+        if onboarding_performed {
             break;
+        } else {
+            sleep_between_retries(rv_entry_delay);
         }
     }
-
     log::info!("Secure Device Onboarding DONE");
-
     Ok(())
 }
