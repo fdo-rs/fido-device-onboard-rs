@@ -12,5 +12,5 @@ pull_request_rules:
     actions:
       queue:
         name: fido-device-onboard-rs
-        method: rebase
+        method: merge
         rebase_fallback: none
