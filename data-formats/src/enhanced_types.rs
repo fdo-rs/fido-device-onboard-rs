@@ -1,12 +1,16 @@
-use std::net::IpAddr;
+use std::{collections::HashMap, net::IpAddr};
 
-use openssl::x509::{X509Ref, X509VerifyResult, X509};
+use openssl::{
+    hash::MessageDigest,
+    x509::{X509Ref, X509VerifyResult, X509},
+};
 use serde_cbor::value::from_value;
 
 use crate::{
     constants::{RendezvousProtocolValue, RendezvousVariable},
     publickey::{PublicKey, PublicKeyBody},
     types::{Hash, RendezvousDirective, RendezvousInfo},
+    Error,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -204,14 +208,49 @@ impl<T: std::error::Error> From<T> for X509ValidationError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct X5Bag {
-    trusted_certs: Vec<X509>,
+    certs: HashMap<Vec<u8>, X509>,
 }
 
 impl X5Bag {
-    pub fn new(trusted_certs: Vec<X509>) -> Self {
-        X5Bag { trusted_certs }
+    pub fn new() -> Self {
+        X5Bag {
+            certs: HashMap::new(),
+        }
+    }
+
+    pub fn with_certs(certs: Vec<X509>) -> Result<Self, Error> {
+        let mut bag = X5Bag {
+            certs: HashMap::with_capacity(certs.len()),
+        };
+
+        for cert in certs {
+            bag.add_cert(cert)?;
+        }
+
+        Ok(bag)
+    }
+
+    pub fn add_cert(&mut self, cert: X509) -> Result<(), Error> {
+        let cert_digest = cert.digest(MessageDigest::sha256())?;
+        self.certs.insert(cert_digest.to_vec(), cert);
+        Ok(())
+    }
+
+    pub fn contains(&self, to_find: &X509) -> bool {
+        let to_find_digest = match to_find.digest(MessageDigest::sha256()) {
+            Ok(v) => v,
+            Err(_) => return false,
+        };
+        match self.certs.get_key_value(to_find_digest.as_ref()) {
+            None => false,
+            Some((digest, _)) => openssl::memcmp::eq(&to_find_digest, digest),
+        }
+    }
+
+    pub fn into_vec(mut self) -> Vec<X509> {
+        self.certs.drain().map(|(_, v)| v).collect()
     }
 
     fn build_chains(
@@ -237,7 +276,7 @@ impl X5Bag {
         for (pos, entry) in chain.iter().enumerate() {
             if pos == chain.len() - 1 {
                 // This is the last item, check if it's signed fully
-                for trusted in &self.trusted_certs {
+                for trusted in self.certs.values() {
                     if trusted.issued(entry) == X509VerifyResult::OK {
                         let trusted_key = trusted.public_key()?;
                         match entry.verify(&trusted_key) {

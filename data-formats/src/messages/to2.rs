@@ -1,9 +1,12 @@
 use serde::{Deserialize, Serialize};
 use serde_tuple::Serialize_tuple;
 
-use super::{ClientMessage, Message, ServerMessage};
+use super::{ClientMessage, EncryptionRequirement, Message, ServerMessage};
 
-use crate::types::{COSESign, CipherSuite, Guid, HMac, KexSuite, Nonce, ServiceInfo, SigInfo};
+use crate::{
+    constants::MessageType,
+    types::{COSESign, CipherSuite, Guid, HMac, KexSuite, Nonce, ServiceInfo, SigInfo},
+};
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct HelloDevice {
@@ -53,8 +56,16 @@ impl HelloDevice {
 }
 
 impl Message for HelloDevice {
-    fn message_type() -> u8 {
-        60
+    fn message_type() -> MessageType {
+        MessageType::TO2HelloDevice
+    }
+
+    fn is_valid_previous_message(message_type: Option<MessageType>) -> bool {
+        matches!(message_type, None)
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        Some(EncryptionRequirement::MustNotBeEncrypted)
     }
 }
 
@@ -74,8 +85,16 @@ impl ProveOVHdr {
 }
 
 impl Message for ProveOVHdr {
-    fn message_type() -> u8 {
-        61
+    fn message_type() -> MessageType {
+        MessageType::TO2ProveOVHdr
+    }
+
+    fn is_valid_previous_message(message_type: Option<MessageType>) -> bool {
+        matches!(message_type, Some(MessageType::TO2HelloDevice))
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        Some(EncryptionRequirement::MustNotBeEncrypted)
     }
 }
 
@@ -97,8 +116,19 @@ impl GetOVNextEntry {
 }
 
 impl Message for GetOVNextEntry {
-    fn message_type() -> u8 {
-        62
+    fn message_type() -> MessageType {
+        MessageType::TO2GetOVNextEntry
+    }
+
+    fn is_valid_previous_message(message_type: Option<MessageType>) -> bool {
+        matches!(
+            message_type,
+            Some(MessageType::TO2ProveOVHdr) | Some(MessageType::TO2OVNextEntry)
+        )
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        Some(EncryptionRequirement::MustNotBeEncrypted)
     }
 }
 
@@ -125,8 +155,16 @@ impl OVNextEntry {
 }
 
 impl Message for OVNextEntry {
-    fn message_type() -> u8 {
-        63
+    fn message_type() -> MessageType {
+        MessageType::TO2OVNextEntry
+    }
+
+    fn is_valid_previous_message(message_type: Option<MessageType>) -> bool {
+        matches!(message_type, Some(MessageType::TO2GetOVNextEntry))
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        Some(EncryptionRequirement::MustNotBeEncrypted)
     }
 }
 
@@ -146,8 +184,16 @@ impl ProveDevice {
 }
 
 impl Message for ProveDevice {
-    fn message_type() -> u8 {
-        64
+    fn message_type() -> MessageType {
+        MessageType::TO2ProveDevice
+    }
+
+    fn is_valid_previous_message(message_type: Option<MessageType>) -> bool {
+        matches!(message_type, Some(MessageType::TO2OVNextEntry))
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        Some(EncryptionRequirement::MustNotBeEncrypted)
     }
 }
 
@@ -167,8 +213,16 @@ impl SetupDevice {
 }
 
 impl Message for SetupDevice {
-    fn message_type() -> u8 {
-        65
+    fn message_type() -> MessageType {
+        MessageType::TO2SetupDevice
+    }
+
+    fn is_valid_previous_message(message_type: Option<MessageType>) -> bool {
+        matches!(message_type, Some(MessageType::TO2ProveDevice))
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        Some(EncryptionRequirement::MustBeEncrypted)
     }
 }
 
@@ -198,8 +252,16 @@ impl DeviceServiceInfoReady {
 }
 
 impl Message for DeviceServiceInfoReady {
-    fn message_type() -> u8 {
-        66
+    fn message_type() -> MessageType {
+        MessageType::TO2DeviceServiceInfoReady
+    }
+
+    fn is_valid_previous_message(message_type: Option<MessageType>) -> bool {
+        matches!(message_type, Some(MessageType::TO2SetupDevice))
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        Some(EncryptionRequirement::MustBeEncrypted)
     }
 }
 
@@ -223,8 +285,16 @@ impl OwnerServiceInfoReady {
 }
 
 impl Message for OwnerServiceInfoReady {
-    fn message_type() -> u8 {
-        67
+    fn message_type() -> MessageType {
+        MessageType::TO2OwnerServiceInfoReady
+    }
+
+    fn is_valid_previous_message(message_type: Option<MessageType>) -> bool {
+        matches!(message_type, Some(MessageType::TO2DeviceServiceInfoReady))
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        Some(EncryptionRequirement::MustBeEncrypted)
     }
 }
 
@@ -254,8 +324,19 @@ impl DeviceServiceInfo {
 }
 
 impl Message for DeviceServiceInfo {
-    fn message_type() -> u8 {
-        68
+    fn message_type() -> MessageType {
+        MessageType::TO2DeviceServiceInfo
+    }
+
+    fn is_valid_previous_message(message_type: Option<MessageType>) -> bool {
+        matches!(
+            message_type,
+            Some(MessageType::TO2OwnerServiceInfoReady) | Some(MessageType::TO2OwnerServiceInfo)
+        )
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        Some(EncryptionRequirement::MustBeEncrypted)
     }
 }
 
@@ -291,8 +372,16 @@ impl OwnerServiceInfo {
 }
 
 impl Message for OwnerServiceInfo {
-    fn message_type() -> u8 {
-        69
+    fn message_type() -> MessageType {
+        MessageType::TO2OwnerServiceInfo
+    }
+
+    fn is_valid_previous_message(message_type: Option<MessageType>) -> bool {
+        matches!(message_type, Some(MessageType::TO2DeviceServiceInfo))
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        Some(EncryptionRequirement::MustBeEncrypted)
     }
 }
 
@@ -314,8 +403,16 @@ impl Done {
 }
 
 impl Message for Done {
-    fn message_type() -> u8 {
-        70
+    fn message_type() -> MessageType {
+        MessageType::TO2Done
+    }
+
+    fn is_valid_previous_message(message_type: Option<MessageType>) -> bool {
+        matches!(message_type, Some(MessageType::TO2OwnerServiceInfo))
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        Some(EncryptionRequirement::MustBeEncrypted)
     }
 }
 
@@ -337,8 +434,16 @@ impl Done2 {
 }
 
 impl Message for Done2 {
-    fn message_type() -> u8 {
-        71
+    fn message_type() -> MessageType {
+        MessageType::TO2Done2
+    }
+
+    fn is_valid_previous_message(message_type: Option<MessageType>) -> bool {
+        matches!(message_type, Some(MessageType::TO2Done))
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        Some(EncryptionRequirement::MustBeEncrypted)
     }
 }
 

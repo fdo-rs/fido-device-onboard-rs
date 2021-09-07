@@ -2,7 +2,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::constants::ErrorCode;
+use crate::constants::{ErrorCode, MessageType};
 
 mod error;
 pub use error::ErrorMessage;
@@ -23,8 +23,18 @@ pub enum ParseError {
     InvalidBody,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum EncryptionRequirement {
+    MustBeEncrypted,
+    MustNotBeEncrypted,
+}
+
 pub trait Message: Send + Serialize + DeserializeOwned + Sized {
-    fn message_type() -> u8;
+    fn message_type() -> MessageType;
+
+    fn is_valid_previous_message(message_type: Option<MessageType>) -> bool;
+
+    fn encryption_requirement() -> Option<EncryptionRequirement>;
 
     fn to_wire(&self) -> Result<Vec<u8>, ParseError> {
         Ok(serde_cbor::to_vec(&self)?)
