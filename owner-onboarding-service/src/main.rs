@@ -155,7 +155,8 @@ async fn main() -> Result<()> {
         })?;
         X509::stack_from_pem(&contents).context("Error parsing trusted device keys")?
     };
-    let trusted_device_keys = X5Bag::new(trusted_device_keys);
+    let trusted_device_keys = X5Bag::with_certs(trusted_device_keys)
+        .context("Error building trusted device keys X5Bag")?;
 
     // Our private key
     let owner_key = load_private_key(&settings.owner_private_key_path).with_context(|| {

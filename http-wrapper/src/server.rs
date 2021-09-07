@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use super::EncryptionKeys;
 use fdo_data_formats::{
-    constants::ErrorCode,
-    messages::{self, ClientMessage, Message, ServerMessage},
+    constants::{ErrorCode, MessageType},
+    messages::{self, ClientMessage, EncryptionRequirement, Message, ServerMessage},
 };
 use fdo_store::Store;
 
@@ -72,12 +72,16 @@ pub enum SessionError {
 pub struct Error(messages::ErrorMessage);
 
 impl Error {
-    pub fn new(error_code: ErrorCode, previous_message_id: u8, error_string: &str) -> Self {
+    pub fn new(
+        error_code: ErrorCode,
+        previous_message_type: MessageType,
+        error_string: &str,
+    ) -> Self {
         let new_uuid = uuid::Uuid::new_v4();
 
         Error(messages::ErrorMessage::new(
             error_code,
-            previous_message_id,
+            previous_message_type,
             error_string.to_string(),
             new_uuid.to_u128_le() & 0xFFFFFFFFFFFFFFFF,
         ))
@@ -89,7 +93,7 @@ impl Error {
         ET: std::error::Error,
     {
         log::error!(
-            "Error occured while processing message type {}: {:?}",
+            "Error occured while processing message type {:?}: {:?}",
             M::message_type(),
             err
         );
@@ -111,15 +115,23 @@ pub async fn handle_rejection(err: Rejection) -> Result<warp::reply::Response, I
     let err = if let Some(err) = err.find::<Error>() {
         err
     } else if let Some(ParseError) = err.find() {
-        local_err = Error::new(ErrorCode::MessageBodyError, 0, "Invalid request body");
+        local_err = Error::new(
+            ErrorCode::MessageBodyError,
+            MessageType::Invalid,
+            "Invalid request body",
+        );
         &local_err
     } else if err.is_not_found() {
-        local_err = Error::new(ErrorCode::MessageBodyError, 0, "Invalid request type");
+        local_err = Error::new(
+            ErrorCode::MessageBodyError,
+            MessageType::Invalid,
+            "Invalid request type",
+        );
         &local_err
     } else {
         local_err = Error::new(
             ErrorCode::InternalServerError,
-            0,
+            MessageType::Invalid,
             "Error processing response",
         );
         &local_err
@@ -136,6 +148,7 @@ struct ParseError;
 impl warp::reject::Reject for ParseError {}
 
 const ENCRYPTION_KEYS_SES_KEY: &str = "_encryption_keys_";
+const LAST_MSG_SES_KEY: &str = "_last_message_type_";
 
 async fn parse_request<IM>(
     inbound: warp::hyper::body::Bytes,
@@ -144,10 +157,34 @@ async fn parse_request<IM>(
 where
     IM: messages::Message,
 {
+    let last_msg_type: Option<MessageType> = ses_with_store.session.get(LAST_MSG_SES_KEY);
+    if !IM::is_valid_previous_message(last_msg_type) {
+        todo!();
+    }
+
     let keys: EncryptionKeys = ses_with_store
         .session
         .get(ENCRYPTION_KEYS_SES_KEY)
         .unwrap_or_else(EncryptionKeys::unencrypted);
+
+    if let Some(req_enc_requirement) = IM::encryption_requirement() {
+        if req_enc_requirement == EncryptionRequirement::MustBeEncrypted && keys.is_none() {
+            return Err(Error::new(
+                ErrorCode::InternalServerError,
+                IM::message_type(),
+                "IM encryption requirement not met",
+            )
+            .into());
+        }
+        if req_enc_requirement == EncryptionRequirement::MustNotBeEncrypted && keys.is_some() {
+            return Err(Error::new(
+                ErrorCode::InternalServerError,
+                IM::message_type(),
+                "IM encryption requirement not met",
+            )
+            .into());
+        }
+    }
 
     let inbound = match keys.decrypt(&inbound) {
         Ok(v) => v,
@@ -190,11 +227,23 @@ where
 
 async fn store_session<IM, OM>(
     response: OM,
-    ses_with_store: SessionWithStore,
+    mut ses_with_store: SessionWithStore,
 ) -> Result<(OM, Option<String>, EncryptionKeys), warp::Rejection>
 where
     IM: Message,
+    OM: Message,
 {
+    ses_with_store
+        .session
+        .insert(LAST_MSG_SES_KEY, OM::message_type())
+        .map_err(|e| {
+            log::error!("Error storing last message: {:?}", e);
+            Error::new(
+                ErrorCode::InternalServerError,
+                IM::message_type(),
+                "Error storing last message",
+            )
+        })?;
     let keys = ses_with_store
         .session
         .get(ENCRYPTION_KEYS_SES_KEY)
@@ -223,7 +272,7 @@ where
 {
     let mut builder = warp::http::response::Response::builder()
         .status(MT::status_code())
-        .header("Message-Type", MT::message_type().to_string());
+        .header("Message-Type", (MT::message_type() as u8).to_string());
 
     if let Some(token) = token {
         if !token.is_empty() {
@@ -270,12 +319,21 @@ where
     IM: messages::Message + ClientMessage + 'static,
     OM: messages::Message + ServerMessage + 'static,
 {
+    if !OM::is_valid_previous_message(Some(IM::message_type())) {
+        // This is a programming error, let's just check this on start
+        panic!(
+            "Programming error: IM {:?} is not valid for OM {:?}",
+            IM::message_type(),
+            OM::message_type()
+        );
+    }
+
     warp::post()
         // Construct expected HTTP path
         .and(warp::path("fdo"))
         .and(warp::path("100"))
         .and(warp::path("msg"))
-        .and(warp::path(IM::message_type().to_string()))
+        .and(warp::path((IM::message_type() as u8).to_string()))
         // Parse the request
         .and(warp::body::content_length_limit(1024 * 16))
         .and(warp::body::bytes())

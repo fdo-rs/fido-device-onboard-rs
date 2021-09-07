@@ -1,9 +1,12 @@
 use serde::{Deserialize, Serialize};
 use serde_tuple::Serialize_tuple;
 
-use super::{ClientMessage, Message, ServerMessage};
+use super::{ClientMessage, EncryptionRequirement, Message, ServerMessage};
 
-use crate::types::{COSESign, Guid, Nonce, SigInfo};
+use crate::{
+    constants::MessageType,
+    types::{COSESign, Guid, Nonce, SigInfo},
+};
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct HelloRV {
@@ -29,8 +32,16 @@ impl HelloRV {
 }
 
 impl Message for HelloRV {
-    fn message_type() -> u8 {
-        30
+    fn message_type() -> MessageType {
+        MessageType::TO1HelloRV
+    }
+
+    fn is_valid_previous_message(message_type: Option<crate::constants::MessageType>) -> bool {
+        matches!(message_type, None)
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        Some(EncryptionRequirement::MustNotBeEncrypted)
     }
 }
 
@@ -60,8 +71,16 @@ impl HelloRVAck {
 }
 
 impl Message for HelloRVAck {
-    fn message_type() -> u8 {
-        31
+    fn message_type() -> MessageType {
+        MessageType::TO1HelloRVAck
+    }
+
+    fn is_valid_previous_message(message_type: Option<MessageType>) -> bool {
+        matches!(message_type, Some(MessageType::TO1HelloRV))
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        Some(EncryptionRequirement::MustNotBeEncrypted)
     }
 }
 
@@ -81,8 +100,16 @@ impl ProveToRV {
 }
 
 impl Message for ProveToRV {
-    fn message_type() -> u8 {
-        32
+    fn message_type() -> MessageType {
+        MessageType::TO1ProveToRV
+    }
+
+    fn is_valid_previous_message(message_type: Option<MessageType>) -> bool {
+        matches!(message_type, Some(MessageType::TO1HelloRVAck))
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        Some(EncryptionRequirement::MustNotBeEncrypted)
     }
 }
 
@@ -106,8 +133,16 @@ impl RVRedirect {
 }
 
 impl Message for RVRedirect {
-    fn message_type() -> u8 {
-        33
+    fn message_type() -> MessageType {
+        MessageType::TO1RVRedirect
+    }
+
+    fn is_valid_previous_message(message_type: Option<MessageType>) -> bool {
+        matches!(message_type, Some(MessageType::TO1ProveToRV))
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        Some(EncryptionRequirement::MustNotBeEncrypted)
     }
 }
 
