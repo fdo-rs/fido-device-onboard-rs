@@ -292,6 +292,24 @@ where
     IM: Message + ClientMessage,
     OM: Message + ServerMessage,
 {
+    if let Some(enc_requirement) = OM::encryption_requirement() {
+        if enc_requirement == EncryptionRequirement::MustBeEncrypted && enc_keys.is_none() {
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                IM::message_type(),
+                "Sequence error: must be encrypted",
+            )
+            .into());
+        }
+        if enc_requirement == EncryptionRequirement::MustNotBeEncrypted && enc_keys.is_some() {
+            return Err(Error::new(
+                ErrorCode::InvalidMessageError,
+                IM::message_type(),
+                "Sequence error: must not be encrypted",
+            )
+            .into());
+        }
+    }
     let val = match enc_keys.encrypt(&val) {
         Ok(v) => v,
         Err(_) => {

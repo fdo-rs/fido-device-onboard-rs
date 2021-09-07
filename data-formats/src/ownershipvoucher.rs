@@ -219,7 +219,7 @@ impl<'a> EntryIter<'a> {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize_tuple)]
+#[derive(Clone, Debug, Deserialize, Serialize_tuple)]
 pub struct OwnershipVoucherHeader {
     pub protocol_version: u16,
     pub guid: Guid,
@@ -246,6 +246,10 @@ impl OwnershipVoucherHeader {
             public_key,
             device_certificate_chain_hash,
         }
+    }
+
+    pub fn guid(&self) -> &Guid {
+        &self.guid
     }
 
     fn get_info(&self) -> Result<Vec<u8>> {

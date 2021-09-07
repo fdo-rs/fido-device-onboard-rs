@@ -166,6 +166,7 @@ impl Display for PublicKey {
     }
 }
 
+// X5Chain order: [leaf, intermediate1, ..., intermediateN, root]
 #[derive(Debug, Clone)]
 pub struct X5Chain {
     chain: Vec<X509>,
