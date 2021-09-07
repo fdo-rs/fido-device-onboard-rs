@@ -13,7 +13,33 @@ pub enum StoreError {
     Configuration(String),
 }
 
-pub trait Store<K, V>: Send + Sync {
+mod private {
+    pub trait Sealed {}
+
+    // Implement for those same types, but no others.
+    impl Sealed for super::ReadWriteOpen {}
+    impl Sealed for super::ReadOnlyOpen {}
+    impl Sealed for super::WriteOnlyOpen {}
+}
+
+pub trait Readable: private::Sealed {}
+pub trait Writable: private::Sealed {}
+pub trait StoreOpenMode: private::Sealed {}
+
+pub struct ReadWriteOpen();
+impl StoreOpenMode for ReadWriteOpen {}
+impl Readable for ReadWriteOpen {}
+impl Writable for ReadWriteOpen {}
+
+pub struct ReadOnlyOpen();
+impl StoreOpenMode for ReadOnlyOpen {}
+impl Readable for ReadOnlyOpen {}
+
+pub struct WriteOnlyOpen();
+impl StoreOpenMode for WriteOnlyOpen {}
+impl Writable for WriteOnlyOpen {}
+
+pub trait Store<OT: StoreOpenMode, K, V>: Send + Sync {
     fn load_data<'life0, 'life1, 'async_trait>(
         &'life0 self,
         key: &'life1 K,
@@ -21,7 +47,8 @@ pub trait Store<K, V>: Send + Sync {
     where
         'life0: 'async_trait,
         'life1: 'async_trait,
-        Self: 'async_trait;
+        Self: 'async_trait,
+        OT: Readable;
 
     fn store_data<'life0, 'async_trait>(
         &'life0 self,
@@ -31,7 +58,8 @@ pub trait Store<K, V>: Send + Sync {
     ) -> Pin<Box<dyn Future<Output = Result<(), StoreError>> + 'async_trait + Send>>
     where
         'life0: 'async_trait,
-        Self: 'async_trait;
+        Self: 'async_trait,
+        OT: Writable;
 
     fn destroy_data<'life0, 'life1, 'async_trait>(
         &'life0 self,
@@ -40,14 +68,16 @@ pub trait Store<K, V>: Send + Sync {
     where
         'life0: 'async_trait,
         'life1: 'async_trait,
-        Self: 'async_trait;
+        Self: 'async_trait,
+        OT: Writable;
 
     fn perform_maintenance<'life0, 'async_trait>(
         &'life0 self,
     ) -> Pin<Box<dyn Future<Output = Result<(), StoreError>> + 'async_trait + Send>>
     where
         'life0: 'async_trait,
-        Self: 'async_trait;
+        Self: 'async_trait,
+        OT: Writable;
 }
 
 #[cfg(feature = "directory")]
@@ -62,11 +92,12 @@ pub enum StoreDriver {
 }
 
 impl StoreDriver {
-    pub fn initialize<K, V>(
+    pub fn initialize<OT, K, V>(
         &self,
         cfg: Option<config::Value>,
-    ) -> Result<Box<dyn Store<K, V>>, StoreError>
+    ) -> Result<Box<dyn Store<OT, K, V>>, StoreError>
     where
+        OT: StoreOpenMode + 'static,
         // K and V are supersets of the possible requirements for the different implementations
         K: Eq + std::hash::Hash + Send + Sync + std::string::ToString + std::str::FromStr + 'static,
         V: Send + Sync + Clone + Serialize + DeserializeOwned + 'static,

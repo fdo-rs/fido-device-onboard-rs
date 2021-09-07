@@ -31,7 +31,7 @@ struct OwnerServiceUD {
     trusted_device_keys: X5Bag,
 
     // Stores
-    ownership_voucher_store: Box<dyn Store<Guid, OwnershipVoucher>>,
+    ownership_voucher_store: Box<dyn Store<fdo_store::ReadWriteOpen, Guid, OwnershipVoucher>>,
     session_store: Arc<fdo_http_wrapper::server::SessionStore>,
 
     // Our keys
