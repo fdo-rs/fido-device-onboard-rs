@@ -1,7 +1,12 @@
+use std::convert::TryInto;
+
 use thiserror::Error;
 
 use aws_nitro_enclaves_cose::error::CoseError;
-use fdo_data_formats::messages::{ClientMessage, ErrorMessage, Message, ServerMessage};
+use fdo_data_formats::{
+    constants::MessageType,
+    messages::{ClientMessage, EncryptionRequirement, ErrorMessage, Message, ServerMessage},
+};
 
 use crate::EncryptionKeys;
 
@@ -19,10 +24,18 @@ pub enum Error {
     MissingMessageType,
     #[error("Invalid message type {0} encountered")]
     InvalidMessageType(String),
-    #[error("Invalid message type {0} encountered, expected {1}")]
-    InvalidMessage(u8, u8),
+    #[error("Invalid message type {0:?} encountered, expected {1:?}")]
+    InvalidMessage(MessageType, MessageType),
     #[error("Error returned by server: {0:?}")]
     Error(ErrorMessage),
+    #[error("Request message encryption requirement not met: {0:?}")]
+    RequestEncryptionNotSatisfied(EncryptionRequirement),
+    #[error("Response message encryption requirement not met: {0:?}")]
+    ResponseEncryptionNotSatisfied(EncryptionRequirement),
+    #[error("Programming error: invalid message sequence for request")]
+    InvalidSequenceRequest,
+    #[error("Programming error: invalid message sequence for expected response")]
+    InvalidSequenceResponse,
 }
 
 impl From<CoseError> for Error {
@@ -39,6 +52,7 @@ pub struct ServiceClient {
     client: reqwest::Client,
     authorization_token: Option<String>,
     encryption_keys: EncryptionKeys,
+    last_message_type: Option<MessageType>,
 }
 
 impl ServiceClient {
@@ -48,6 +62,7 @@ impl ServiceClient {
             client: reqwest::Client::new(),
             authorization_token: None,
             encryption_keys: EncryptionKeys::unencrypted(),
+            last_message_type: None,
         }
     }
 
@@ -60,10 +75,48 @@ impl ServiceClient {
         OM: Message + ClientMessage,
         SM: Message + ServerMessage,
     {
+        if !OM::is_valid_previous_message(self.last_message_type) {
+            return Err(Error::InvalidSequenceRequest);
+        }
+        if !SM::is_valid_previous_message(Some(OM::message_type())) {
+            return Err(Error::InvalidSequenceResponse);
+        }
+        self.last_message_type = Some(SM::message_type());
+
+        if let Some(req_enc_requirement) = OM::encryption_requirement() {
+            if req_enc_requirement == EncryptionRequirement::MustBeEncrypted
+                && self.encryption_keys.is_none()
+            {
+                return Err(Error::RequestEncryptionNotSatisfied(req_enc_requirement));
+            }
+            if req_enc_requirement == EncryptionRequirement::MustNotBeEncrypted
+                && self.encryption_keys.is_some()
+            {
+                return Err(Error::RequestEncryptionNotSatisfied(req_enc_requirement));
+            }
+        }
+        if let Some(resp_enc_requirement) = SM::encryption_requirement() {
+            let is_response_encrypted = self.encryption_keys.is_some() || new_keys.is_some();
+            if resp_enc_requirement == EncryptionRequirement::MustBeEncrypted
+                && !is_response_encrypted
+            {
+                return Err(Error::ResponseEncryptionNotSatisfied(resp_enc_requirement));
+            }
+            if resp_enc_requirement == EncryptionRequirement::MustNotBeEncrypted
+                && is_response_encrypted
+            {
+                return Err(Error::ResponseEncryptionNotSatisfied(resp_enc_requirement));
+            }
+        }
+
         let to_send = to_send.to_wire()?;
         let to_send = self.encryption_keys.encrypt(&to_send)?;
 
-        let url = format!("{}/fdo/100/msg/{}", &self.base_url, OM::message_type());
+        let url = format!(
+            "{}/fdo/100/msg/{}",
+            &self.base_url,
+            OM::message_type() as u8
+        );
 
         let mut req = self
             .client
@@ -89,7 +142,9 @@ impl ServiceClient {
             .map_err(|_| Error::MissingMessageType)?;
         let msgtype = msgtype
             .parse::<u8>()
-            .map_err(|_| Error::InvalidMessageType(msgtype.to_string()))?;
+            .map_err(|_| Error::InvalidMessageType(msgtype.to_string()))?
+            .try_into()
+            .unwrap();
 
         if let Some(val) = resp.headers().get("authorization") {
             self.authorization_token = Some(val.to_str().unwrap().to_string());

@@ -24,6 +24,14 @@ impl EncryptionKeys {
         }
     }
 
+    pub fn is_none(&self) -> bool {
+        self.cipher_suite.is_none() || self.keys.is_none()
+    }
+
+    pub fn is_some(&self) -> bool {
+        !self.is_none()
+    }
+
     pub fn from_derived(cipher_suite: CipherSuite, derived_keys: DerivedKeys) -> Self {
         EncryptionKeys {
             cipher_suite: Some(cipher_suite),

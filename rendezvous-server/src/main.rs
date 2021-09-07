@@ -21,7 +21,7 @@ struct RendezvousUD {
     max_wait_seconds: u32,
     trusted_manufacturer_keys: X5Bag,
     trusted_device_keys: X5Bag,
-    store: Box<dyn Store<Guid, (PublicKey, COSESign)>>,
+    store: Box<dyn Store<fdo_store::ReadWriteOpen, Guid, (PublicKey, COSESign)>>,
 
     session_store: Arc<fdo_http_wrapper::server::SessionStore>,
 }
@@ -116,7 +116,8 @@ async fn main() -> Result<()> {
         })?;
         X509::stack_from_pem(&contents).context("Error parsing trusted manufacturer keys")?
     };
-    let trusted_manufacturer_keys = X5Bag::new(trusted_manufacturer_keys);
+    let trusted_manufacturer_keys = X5Bag::with_certs(trusted_manufacturer_keys)
+        .context("Error building trusted manufacturer keys X5Bag")?;
     let trusted_device_keys = {
         let trusted_keys_path = settings.trusted_device_keys_path;
         let contents = std::fs::read(&trusted_keys_path).with_context(|| {
@@ -127,7 +128,8 @@ async fn main() -> Result<()> {
         })?;
         X509::stack_from_pem(&contents).context("Error parsing trusted device keys")?
     };
-    let trusted_device_keys = X5Bag::new(trusted_device_keys);
+    let trusted_device_keys = X5Bag::with_certs(trusted_device_keys)
+        .context("Error building trusted device keys X5Bag")?;
 
     // Initialize handler stores
     let user_data = Arc::new(RendezvousUD {
