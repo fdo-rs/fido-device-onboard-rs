@@ -17,10 +17,11 @@ struct MemoryStore<K, V> {
     store: Arc<RwLock<HashMap<K, ValueT<V>>>>,
 }
 
-pub(super) fn initialize<K, V>(
+pub(super) fn initialize<OT, K, V>(
     _cfg: Option<config::Value>,
-) -> Result<Box<dyn Store<K, V>>, StoreError>
+) -> Result<Box<dyn Store<OT, K, V>>, StoreError>
 where
+    OT: crate::StoreOpenMode,
     K: std::string::ToString + Eq + std::hash::Hash + Send + Sync + 'static,
     V: Send + Sync + Clone + 'static,
 {
@@ -30,8 +31,9 @@ where
 }
 
 #[async_trait]
-impl<K, V> Store<K, V> for MemoryStore<K, V>
+impl<OT, K, V> Store<OT, K, V> for MemoryStore<K, V>
 where
+    OT: crate::StoreOpenMode,
     K: std::string::ToString + Eq + std::hash::Hash + Send + Sync,
     V: Send + Sync + Clone,
 {

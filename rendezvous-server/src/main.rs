@@ -21,7 +21,7 @@ struct RendezvousUD {
     max_wait_seconds: u32,
     trusted_manufacturer_keys: X5Bag,
     trusted_device_keys: X5Bag,
-    store: Box<dyn Store<Guid, (PublicKey, COSESign)>>,
+    store: Box<dyn Store<fdo_store::ReadWriteOpen, Guid, (PublicKey, COSESign)>>,
 
     session_store: Arc<fdo_http_wrapper::server::SessionStore>,
 }

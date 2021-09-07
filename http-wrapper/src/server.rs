@@ -21,11 +21,11 @@ pub struct SessionWithStore {
 type SessionStoreT = Arc<SessionStore>;
 
 pub struct SessionStore {
-    store: Box<dyn Store<String, Session>>,
+    store: Box<dyn Store<fdo_store::ReadWriteOpen, String, Session>>,
 }
 
 impl SessionStore {
-    pub fn new(store: Box<dyn Store<String, Session>>) -> Arc<Self> {
+    pub fn new(store: Box<dyn Store<fdo_store::ReadWriteOpen, String, Session>>) -> Arc<Self> {
         Arc::new(SessionStore { store })
     }
 }
