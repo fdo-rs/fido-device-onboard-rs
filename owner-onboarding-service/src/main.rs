@@ -9,16 +9,13 @@ use openssl::{
     ec::{EcGroup, EcKey},
     nid::Nid,
     pkey::{PKey, Private},
-    x509::{X509Builder, X509},
+    x509::X509,
 };
 use serde::Deserialize;
 use warp::Filter;
 
 use fdo_data_formats::{
-    enhanced_types::X5Bag,
-    ownershipvoucher::OwnershipVoucher,
-    publickey::{PublicKey, PublicKeyBody},
-    types::Guid,
+    enhanced_types::X5Bag, ownershipvoucher::OwnershipVoucher, publickey::PublicKey, types::Guid,
 };
 use fdo_store::{Store, StoreDriver};
 
@@ -108,17 +105,8 @@ fn generate_owner2_keys() -> Result<(PKey<Private>, PublicKey)> {
     let owner2_key =
         PKey::from_ec_key(owner2_key).context("ERror converting owner2 key to PKey")?;
 
-    let mut builder = X509Builder::new().context("Error creating X509Builder")?;
-    builder
-        .set_pubkey(&owner2_key)
-        .context("Error setting public key")?;
-    builder
-        .sign(&owner2_key, openssl::hash::MessageDigest::sha384())
-        .context("Error signing certificate")?;
-
-    let cert = builder.build();
-    let cert = PublicKeyBody::X509(cert);
-    let pubkey = PublicKey::try_from(cert).context("Error converting PKB to PK")?;
+    let pubkey =
+        PublicKey::try_from(&owner2_key).context("Error converting ephemeral owner2 key to PK")?;
 
     Ok((owner2_key, pubkey))
 }

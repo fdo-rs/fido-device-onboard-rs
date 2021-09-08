@@ -1,14 +1,11 @@
 use std::{collections::HashMap, net::IpAddr};
 
-use openssl::{
-    hash::MessageDigest,
-    x509::{X509Ref, X509VerifyResult, X509},
-};
+use openssl::{hash::MessageDigest, pkey::PKeyRef, x509::X509};
 use serde_cbor::value::from_value;
 
 use crate::{
     constants::{RendezvousProtocolValue, RendezvousVariable},
-    publickey::{PublicKey, PublicKeyBody},
+    publickey::PublicKey,
     types::{Hash, RendezvousDirective, RendezvousInfo},
     Error,
 };
@@ -249,94 +246,23 @@ impl X5Bag {
         }
     }
 
+    pub fn contains_publickey(&self, to_find: &PublicKey) -> bool {
+        self.contains_pkey(to_find.pkey())
+    }
+
+    pub fn contains_pkey<P>(&self, to_find: &PKeyRef<P>) -> bool
+    where
+        P: openssl::pkey::HasPublic,
+    {
+        for (_, cert) in self.certs.iter() {
+            if cert.public_key().unwrap().public_eq(to_find) {
+                return true;
+            }
+        }
+        false
+    }
+
     pub fn into_vec(mut self) -> Vec<X509> {
         self.certs.drain().map(|(_, v)| v).collect()
-    }
-
-    fn build_chains(
-        &self,
-        under_consideration: &X509Ref,
-        intermediates: &[X509],
-    ) -> Result<Vec<Vec<X509>>, X509ValidationError> {
-        let mut chains = Vec::new();
-
-        // TODO: Possibly actually do chain building....
-        // Let's for now assume that 'intermediates' is an x5chain, i.e. in order
-        let mut chain = intermediates.to_vec();
-        chain.insert(0, under_consideration.to_owned());
-
-        chains.push(chain);
-
-        Ok(chains)
-    }
-
-    fn validate_chain(&self, chain: &[X509]) -> Result<(), X509ValidationError> {
-        log::trace!("Validating chain {:?}", chain);
-
-        for (pos, entry) in chain.iter().enumerate() {
-            if pos == chain.len() - 1 {
-                // This is the last item, check if it's signed fully
-                for trusted in self.certs.values() {
-                    if trusted.issued(entry) == X509VerifyResult::OK {
-                        let trusted_key = trusted.public_key()?;
-                        match entry.verify(&trusted_key) {
-                            Err(e) => return Err(X509ValidationError::from(e)),
-                            Ok(false) => {
-                                log::info!("Signature at pos {} invalid", pos);
-                                return Err(X509ValidationError);
-                            }
-                            Ok(true) => return Ok(()),
-                        }
-                    }
-                }
-            } else {
-                // This is an intermediate cert
-                let signer = &chain[pos + 1];
-                if signer.issued(entry) != X509VerifyResult::OK {
-                    log::info!("Certificate at pos {} is not issued by next", pos);
-                    return Err(X509ValidationError);
-                }
-                let signer_key = signer.public_key()?;
-                match entry.verify(&signer_key) {
-                    Err(e) => return Err(X509ValidationError::from(e)),
-                    Ok(false) => {
-                        log::info!("Signature at pos {} invalid", pos);
-                        return Err(X509ValidationError);
-                    }
-                    Ok(true) => {}
-                }
-            }
-        }
-
-        log::warn!("Validation ended up at the very end without trusted cert");
-        Err(X509ValidationError)
-    }
-
-    pub fn validate(
-        &self,
-        under_consideration: &PublicKey,
-        intermediates: &[X509],
-    ) -> Result<(), X509ValidationError> {
-        let (_, under_consideration) = under_consideration
-            .get_body()
-            .map_err(X509ValidationError::from)?;
-        let under_consideration = match under_consideration {
-            PublicKeyBody::X509(cert) => cert,
-            _ => {
-                log::warn!("Non-x509 public keys not yet supported");
-                return Err(X509ValidationError);
-            }
-        };
-
-        for chain in self.build_chains(&under_consideration, intermediates)? {
-            // Check signatures, build_chains only look sat the signers
-            log::trace!("Checking possible chain");
-            if self.validate_chain(&chain).is_ok() {
-                return Ok(());
-            }
-        }
-
-        log::info!("No valid chain found that is validly signed");
-        Err(X509ValidationError)
     }
 }
