@@ -10,6 +10,8 @@ pub enum ChainError {
     InvalidSignedCert(usize),
     #[error("No trusted root encountered")]
     NoTrustedRoot,
+    #[error("Non-issuer certificate at position {0}")]
+    NonIssuer(usize),
 }
 
 #[derive(Error, Debug)]

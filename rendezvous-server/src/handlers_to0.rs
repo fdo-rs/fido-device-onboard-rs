@@ -1,13 +1,13 @@
 use core::time::Duration;
 use std::convert::TryFrom;
 
-use fdo_data_formats::messages;
 use fdo_data_formats::{
     constants::ErrorCode,
     messages::Message,
     publickey::{PublicKey, PublicKeyBody},
     types::{Nonce, TO1DataPayload},
 };
+use fdo_data_formats::{messages, publickey::X5Chain};
 
 use fdo_http_wrapper::server::Error;
 use fdo_http_wrapper::server::SessionWithStore;
@@ -80,13 +80,27 @@ pub(super) async fn ownersign(
             )
         })?
         .public_key;
+    let (_, manufacturer_pubkey) = manufacturer_pubkey
+        .get_body()
+        .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
+    let manufacturer_pubkey = if let PublicKeyBody::X509(manufacturer_pubkey) = manufacturer_pubkey
+    {
+        manufacturer_pubkey
+    } else {
+        return Err(Error::new(
+            ErrorCode::InvalidMessageError,
+            messages::to0::OwnerSign::message_type(),
+            "Unsupported manufacturer key",
+        )
+        .into());
+    };
+    let manufacturer_pubkeys = X5Chain::new(vec![manufacturer_pubkey]);
     log::trace!(
         "Checking whether manufacturer key {:?} is trusted",
-        manufacturer_pubkey
+        manufacturer_pubkeys
     );
-    if user_data
-        .trusted_manufacturer_keys
-        .validate(&manufacturer_pubkey, &[])
+    if manufacturer_pubkeys
+        .verify_from_x5bag(&user_data.trusted_manufacturer_keys)
         .is_err()
     {
         return Err(Error::new(
@@ -188,11 +202,22 @@ pub(super) async fn ownersign(
         .into());
     }
     let device_pubkey = PublicKeyBody::X509(device_cert.unwrap());
+    let device_pubkey_chain = if let PublicKeyBody::X509(device_pubkey) = device_pubkey.clone() {
+        let mut chain = device_cert_signers;
+        chain.push(device_pubkey);
+        X5Chain::new(chain)
+    } else {
+        return Err(Error::new(
+            ErrorCode::InvalidOwnershipVoucher,
+            messages::to0::OwnerSign::message_type(),
+            "Unsupported device public key",
+        )
+        .into());
+    };
     let device_pubkey = PublicKey::try_from(device_pubkey)
         .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
-    if user_data
-        .trusted_device_keys
-        .validate(&device_pubkey, &device_cert_signers)
+    if device_pubkey_chain
+        .verify_from_x5bag(&user_data.trusted_device_keys)
         .is_err()
     {
         return Err(Error::new(

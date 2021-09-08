@@ -6,7 +6,7 @@ use std::fmt::Display;
 use openssl::{
     nid::Nid,
     pkey::{PKey, PKeyRef, Public},
-    x509::X509,
+    x509::{X509VerifyResult, X509},
 };
 use serde::Deserialize;
 use serde_tuple::Serialize_tuple;
@@ -173,6 +173,8 @@ impl X5Chain {
     where
         F: Fn(&UD, &X509) -> bool,
     {
+        log::trace!("Validating X5Chain {:?}", self);
+
         match self.chain.len() {
             0 => Err(Error::InvalidChain(ChainError::Empty)),
             1 => {
@@ -187,6 +189,9 @@ impl X5Chain {
                 for certpos in 0..self.chain.len() - 1 {
                     let cert = &self.chain[certpos];
                     let issuer = &self.chain[certpos + 1];
+                    if issuer.issued(&cert) == X509VerifyResult::OK {
+                        return Err(Error::InvalidChain(ChainError::NonIssuer(certpos)));
+                    }
                     if !cert.verify(&issuer.public_key().unwrap())? {
                         return Err(Error::InvalidChain(ChainError::InvalidSignedCert(certpos)));
                     }
