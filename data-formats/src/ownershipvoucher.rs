@@ -1,9 +1,6 @@
 use std::convert::TryFrom;
 
-use openssl::{
-    pkey::{PKeyRef, Private},
-    x509::X509,
-};
+use openssl::pkey::{PKeyRef, Private};
 use serde::Deserialize;
 use serde_tuple::Serialize_tuple;
 
@@ -21,7 +18,7 @@ pub struct OwnershipVoucher {
     //  validated (digests or signature)
     header: Vec<u8>,
     header_hmac: HMac,
-    device_certificate_chain: Option<Vec<u8>>,
+    device_certificate_chain: Option<X5Chain>,
     entries: Vec<Vec<u8>>,
 }
 
@@ -29,7 +26,7 @@ impl OwnershipVoucher {
     pub fn new(
         header: Vec<u8>,
         header_hmac: HMac,
-        device_certificate_chain: Option<Vec<u8>>,
+        device_certificate_chain: Option<X5Chain>,
     ) -> Self {
         OwnershipVoucher {
             header,
@@ -59,17 +56,8 @@ impl OwnershipVoucher {
         hdr_hash
     }
 
-    pub fn device_cert_signers(&self) -> Result<Vec<X509>> {
-        if self.device_certificate_chain.is_none() {
-            return Ok(Vec::new());
-        }
-        Ok(
-            X5Chain::from_slice(self.device_certificate_chain.as_ref().unwrap())?
-                .into_chain()
-                .drain(..)
-                .skip(1)
-                .collect(),
-        )
+    pub fn device_certificate_chain(&self) -> Option<&X5Chain> {
+        self.device_certificate_chain.as_ref()
     }
 
     pub fn num_entries(&self) -> u16 {
@@ -81,18 +69,6 @@ impl OwnershipVoucher {
             None => Ok(None),
             Some(v) => Ok(Some(COSESign::from_bytes(v)?)),
         }
-    }
-
-    pub fn device_certificate(&self) -> Result<Option<X509>> {
-        if self.device_certificate_chain.is_none() {
-            return Ok(None);
-        }
-        Ok(
-            X5Chain::from_slice(self.device_certificate_chain.as_ref().unwrap())?
-                .into_chain()
-                .drain(..)
-                .next(),
-        )
     }
 
     pub fn extend(

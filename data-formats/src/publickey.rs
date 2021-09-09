@@ -8,11 +8,15 @@ use openssl::{
     pkey::{self, PKey, PKeyRef, Public},
     x509::{X509Ref, X509VerifyResult, X509},
 };
-use serde::Deserialize;
+use serde::{
+    de::Error as _,
+    ser::{Error as _, SerializeSeq},
+    Deserialize, Serialize,
+};
 use serde_tuple::Serialize_tuple;
 
 use crate::{
-    constants::{PublicKeyEncoding, PublicKeyType},
+    constants::{HashType, PublicKeyEncoding, PublicKeyType},
     enhanced_types::X5Bag,
     errors::{ChainError, Error, Result},
     types::Hash,
@@ -162,9 +166,55 @@ impl Display for PublicKey {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct X5Chain {
     chain: Vec<X509>,
+}
+
+impl<'de> Deserialize<'de> for X5Chain {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct X5ChainVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for X5ChainVisitor {
+            type Value = X5Chain;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a vector of X509")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut chain = Vec::new();
+
+                while let Some(x509) = seq.next_element::<Vec<u8>>()? {
+                    let x509 = X509::from_der(&x509).map_err(A::Error::custom)?;
+                    chain.push(x509);
+                }
+                Ok(X5Chain { chain })
+            }
+        }
+
+        deserializer.deserialize_seq(X5ChainVisitor)
+    }
+}
+
+impl Serialize for X5Chain {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(self.chain.len()))?;
+        for cert in &self.chain {
+            let cert = cert.to_der().map_err(S::Error::custom)?;
+            seq.serialize_element(&cert)?;
+        }
+        seq.end()
+    }
 }
 
 impl X5Chain {
@@ -242,29 +292,20 @@ impl X5Chain {
         }
     }
 
-    pub fn to_vec(&self) -> Result<Vec<u8>> {
-        let chain = self
-            .chain
-            .iter()
-            .map(|cert| cert.to_der().map_err(Error::from))
-            .collect::<Result<Vec<Vec<u8>>>>()?;
-        Ok(serde_cbor::to_vec(&chain)?)
+    pub fn leaf_certificate(&self) -> Option<&X509> {
+        self.chain.get(0)
+    }
+
+    pub fn hash(&self, hash_type: HashType) -> Result<Hash> {
+        let serialized = serde_cbor::to_vec(&self)?;
+        Hash::new(Some(hash_type), &serialized)
     }
 
     pub fn from_slice(data: &[u8]) -> Result<Self> {
-        let chain: Vec<Vec<u8>> = serde_cbor::from_slice(data)?;
-        let chain = chain
-            .iter()
-            .map(|cert| X509::from_der(cert).map_err(Error::from))
-            .collect::<Result<Vec<X509>>>()?;
-        Ok(X5Chain { chain })
+        serde_cbor::from_slice(data).map_err(Error::from)
     }
 
     pub fn chain(&self) -> &[X509] {
         &self.chain
-    }
-
-    pub fn into_chain(self) -> Vec<X509> {
-        self.chain
     }
 }
