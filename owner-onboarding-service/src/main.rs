@@ -125,7 +125,7 @@ fn generate_owner2_keys() -> Result<(PKey<Private>, PublicKey)> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    pretty_env_logger::init_timed();
+    fdo_http_wrapper::init_logging();
 
     let mut settings = config::Config::default();
     settings
