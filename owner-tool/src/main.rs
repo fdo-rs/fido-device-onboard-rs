@@ -23,12 +23,12 @@ use serde_cbor::Value as CborValue;
 use serde_yaml::Value;
 
 use fdo_data_formats::{
-    constants::{HashType, PublicKeyType, RendezvousVariable, TransportProtocol},
+    constants::{HashType, RendezvousVariable, TransportProtocol},
     devicecredential::FileDeviceCredential,
     enhanced_types::RendezvousInterpreterSide,
     messages,
     ownershipvoucher::{OwnershipVoucher, OwnershipVoucherHeader},
-    publickey::{PublicKey, PublicKeyBody, X5Chain},
+    publickey::{PublicKey, X5Chain},
     types::{
         COSESign, Guid, HMac, Hash, RendezvousDirective, RendezvousInfo, TO0Data, TO1DataPayload,
         TO2AddressEntry,
@@ -349,8 +349,7 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
             manufacturer_cert_path
         )
     })?;
-    let manufacturer_cert = PublicKeyBody::X509(manufacturer_cert);
-    let manufacturer_pubkey = PublicKey::new(PublicKeyType::SECP256R1, manufacturer_cert)
+    let manufacturer_pubkey = PublicKey::try_from(&manufacturer_cert)
         .context("Error creating manufacturer public key representation")?;
     let manufacturer_pubkey_hash = Hash::new(
         None,
@@ -620,10 +619,8 @@ fn extend_voucher(matches: &ArgMatches) -> Result<(), Error> {
             new_owner_cert_path
         )
     })?;
-
-    let new_owner_cert = PublicKeyBody::X509(new_owner_cert);
-    let new_owner_pubkey = PublicKey::new(PublicKeyType::SECP256R1, new_owner_cert)
-        .context("Error creating new public key")?;
+    let new_owner_pubkey =
+        PublicKey::try_from(&new_owner_cert).context("Error serializing owner public key")?;
 
     ov.extend(&current_owner_private_key, None, &new_owner_pubkey)
         .context("Error extending ownership voucher")?;

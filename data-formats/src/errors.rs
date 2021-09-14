@@ -3,6 +3,18 @@ use thiserror::Error;
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Error, Debug)]
+pub enum ChainError {
+    #[error("Chain is empty")]
+    Empty,
+    #[error("Invalid signed certificate at position {0}")]
+    InvalidSignedCert(usize),
+    #[error("No trusted root encountered")]
+    NoTrustedRoot,
+    #[error("Non-issuer certificate at position {0}")]
+    NonIssuer(usize),
+}
+
+#[derive(Error, Debug)]
 #[non_exhaustive]
 pub enum Error {
     #[error("Cryptographic error stack: {0}")]
@@ -29,4 +41,6 @@ pub enum Error {
     InvalidEntryNum,
     #[error("Error in key exchange: {0}")]
     KeyExchangeError(&'static str),
+    #[error("Invalid certificate chain encountered: {0}")]
+    InvalidChain(ChainError),
 }

@@ -218,8 +218,7 @@ impl<'a> EntryIter<'a> {
 
     fn process_element(&mut self, element: &'a [u8]) -> Result<OwnershipVoucherEntryPayload> {
         let entry = COSESign::from_bytes(element)?;
-        let key = self.pubkey.as_pkey()?;
-        let entry: OwnershipVoucherEntryPayload = entry.get_payload(&key)?;
+        let entry: OwnershipVoucherEntryPayload = entry.get_payload(self.pubkey.pkey())?;
 
         // Compare the HashPreviousEntry to either (HeaderTag || HeaderHmac) or the previous entry
         let mut hdr_hash =

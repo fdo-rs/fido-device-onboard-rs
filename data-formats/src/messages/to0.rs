@@ -1,9 +1,12 @@
 use serde::{Deserialize, Serialize};
 use serde_tuple::Serialize_tuple;
 
-use super::{ClientMessage, Message, ServerMessage};
+use super::{ClientMessage, EncryptionRequirement, Message, ServerMessage};
 
-use crate::types::{COSESign, Nonce, TO0Data};
+use crate::{
+    constants::MessageType,
+    types::{COSESign, Nonce, TO0Data},
+};
 
 #[derive(Debug, Deserialize)]
 pub struct Hello {}
@@ -16,8 +19,16 @@ impl Hello {
 }
 
 impl Message for Hello {
-    fn message_type() -> u8 {
-        20
+    fn message_type() -> MessageType {
+        MessageType::TO0Hello
+    }
+
+    fn is_valid_previous_message(message_type: Option<MessageType>) -> bool {
+        matches!(message_type, None)
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        Some(EncryptionRequirement::MustNotBeEncrypted)
     }
 }
 
@@ -50,8 +61,16 @@ impl HelloAck {
 }
 
 impl Message for HelloAck {
-    fn message_type() -> u8 {
-        21
+    fn message_type() -> MessageType {
+        MessageType::TO0HelloAck
+    }
+
+    fn is_valid_previous_message(message_type: Option<MessageType>) -> bool {
+        matches!(message_type, Some(MessageType::TO0Hello))
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        Some(EncryptionRequirement::MustNotBeEncrypted)
     }
 }
 
@@ -78,8 +97,16 @@ impl OwnerSign {
 }
 
 impl Message for OwnerSign {
-    fn message_type() -> u8 {
-        22
+    fn message_type() -> MessageType {
+        MessageType::TO0OwnerSign
+    }
+
+    fn is_valid_previous_message(message_type: Option<MessageType>) -> bool {
+        matches!(message_type, Some(MessageType::TO0HelloAck))
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        Some(EncryptionRequirement::MustNotBeEncrypted)
     }
 }
 
@@ -101,8 +128,16 @@ impl AcceptOwner {
 }
 
 impl Message for AcceptOwner {
-    fn message_type() -> u8 {
-        23
+    fn message_type() -> MessageType {
+        MessageType::TO0AcceptOwner
+    }
+
+    fn is_valid_previous_message(message_type: Option<MessageType>) -> bool {
+        matches!(message_type, Some(MessageType::TO0OwnerSign))
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        Some(EncryptionRequirement::MustNotBeEncrypted)
     }
 }
 

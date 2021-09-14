@@ -1,52 +1,66 @@
 use serde::{Deserialize, Serialize};
 
-use super::{ClientMessage, Message, ServerMessage};
+use super::{ClientMessage, EncryptionRequirement, Message, ServerMessage};
 
-use crate::constants::ErrorCode;
+use crate::constants::{ErrorCode, MessageType};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ErrorMessage(ErrorCode, u8, String, Option<serde_cbor::Value>, u128);
+pub struct ErrorMessage {
+    error_code: ErrorCode,
+    previous_message_type: MessageType,
+    error_string: String,
+    error_timestamp: Option<serde_cbor::Value>,
+    error_uuid: u128,
+}
 
 impl ErrorMessage {
     pub fn new(
         error_code: ErrorCode,
-        previous_message_id: u8,
+        previous_message_type: MessageType,
         error_string: String,
         error_uuid: u128,
     ) -> Self {
-        ErrorMessage(
+        ErrorMessage {
             error_code,
-            previous_message_id,
+            previous_message_type,
             error_string,
-            None,
+            error_timestamp: None,
             error_uuid,
-        )
+        }
     }
 
     pub fn error_code(&self) -> ErrorCode {
-        self.0
+        self.error_code
     }
 
-    pub fn previous_message_id(&self) -> u8 {
-        self.1
+    pub fn previous_message_type(&self) -> MessageType {
+        self.previous_message_type
     }
 
     pub fn error_string(&self) -> &str {
-        &self.2
+        &self.error_string
     }
 
     pub fn error_timestamp(&self) -> Option<&serde_cbor::Value> {
-        self.3.as_ref()
+        self.error_timestamp.as_ref()
     }
 
     pub fn error_uuid(&self) -> u128 {
-        self.4
+        self.error_uuid
     }
 }
 
 impl Message for ErrorMessage {
-    fn message_type() -> u8 {
-        255
+    fn message_type() -> MessageType {
+        MessageType::Error
+    }
+
+    fn is_valid_previous_message(_message_type: Option<MessageType>) -> bool {
+        true
+    }
+
+    fn encryption_requirement() -> Option<EncryptionRequirement> {
+        None
     }
 
     fn status_code() -> http::StatusCode {

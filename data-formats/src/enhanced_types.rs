@@ -1,12 +1,13 @@
-use std::net::IpAddr;
+use std::{collections::HashMap, net::IpAddr};
 
-use openssl::x509::{X509Ref, X509VerifyResult, X509};
+use openssl::{hash::MessageDigest, pkey::PKeyRef, x509::X509};
 use serde_cbor::value::from_value;
 
 use crate::{
     constants::{RendezvousProtocolValue, RendezvousVariable},
-    publickey::{PublicKey, PublicKeyBody},
+    publickey::PublicKey,
     types::{Hash, RendezvousDirective, RendezvousInfo},
+    Error,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -204,100 +205,64 @@ impl<T: std::error::Error> From<T> for X509ValidationError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct X5Bag {
-    trusted_certs: Vec<X509>,
+    certs: HashMap<Vec<u8>, X509>,
 }
 
 impl X5Bag {
-    pub fn new(trusted_certs: Vec<X509>) -> Self {
-        X5Bag { trusted_certs }
-    }
-
-    fn build_chains(
-        &self,
-        under_consideration: &X509Ref,
-        intermediates: &[X509],
-    ) -> Result<Vec<Vec<X509>>, X509ValidationError> {
-        let mut chains = Vec::new();
-
-        // TODO: Possibly actually do chain building....
-        // Let's for now assume that 'intermediates' is an x5chain, i.e. in order
-        let mut chain = intermediates.to_vec();
-        chain.insert(0, under_consideration.to_owned());
-
-        chains.push(chain);
-
-        Ok(chains)
-    }
-
-    fn validate_chain(&self, chain: &[X509]) -> Result<(), X509ValidationError> {
-        log::trace!("Validating chain {:?}", chain);
-
-        for (pos, entry) in chain.iter().enumerate() {
-            if pos == chain.len() - 1 {
-                // This is the last item, check if it's signed fully
-                for trusted in &self.trusted_certs {
-                    if trusted.issued(entry) == X509VerifyResult::OK {
-                        let trusted_key = trusted.public_key()?;
-                        match entry.verify(&trusted_key) {
-                            Err(e) => return Err(X509ValidationError::from(e)),
-                            Ok(false) => {
-                                log::info!("Signature at pos {} invalid", pos);
-                                return Err(X509ValidationError);
-                            }
-                            Ok(true) => return Ok(()),
-                        }
-                    }
-                }
-            } else {
-                // This is an intermediate cert
-                let signer = &chain[pos + 1];
-                if signer.issued(entry) != X509VerifyResult::OK {
-                    log::info!("Certificate at pos {} is not issued by next", pos);
-                    return Err(X509ValidationError);
-                }
-                let signer_key = signer.public_key()?;
-                match entry.verify(&signer_key) {
-                    Err(e) => return Err(X509ValidationError::from(e)),
-                    Ok(false) => {
-                        log::info!("Signature at pos {} invalid", pos);
-                        return Err(X509ValidationError);
-                    }
-                    Ok(true) => {}
-                }
-            }
+    pub fn new() -> Self {
+        X5Bag {
+            certs: HashMap::new(),
         }
-
-        log::warn!("Validation ended up at the very end without trusted cert");
-        Err(X509ValidationError)
     }
 
-    pub fn validate(
-        &self,
-        under_consideration: &PublicKey,
-        intermediates: &[X509],
-    ) -> Result<(), X509ValidationError> {
-        let (_, under_consideration) = under_consideration
-            .get_body()
-            .map_err(X509ValidationError::from)?;
-        let under_consideration = match under_consideration {
-            PublicKeyBody::X509(cert) => cert,
-            _ => {
-                log::warn!("Non-x509 public keys not yet supported");
-                return Err(X509ValidationError);
-            }
+    pub fn with_certs(certs: Vec<X509>) -> Result<Self, Error> {
+        let mut bag = X5Bag {
+            certs: HashMap::with_capacity(certs.len()),
         };
 
-        for chain in self.build_chains(&under_consideration, intermediates)? {
-            // Check signatures, build_chains only look sat the signers
-            log::trace!("Checking possible chain");
-            if self.validate_chain(&chain).is_ok() {
-                return Ok(());
-            }
+        for cert in certs {
+            bag.add_cert(cert)?;
         }
 
-        log::info!("No valid chain found that is validly signed");
-        Err(X509ValidationError)
+        Ok(bag)
+    }
+
+    pub fn add_cert(&mut self, cert: X509) -> Result<(), Error> {
+        let cert_digest = cert.digest(MessageDigest::sha256())?;
+        self.certs.insert(cert_digest.to_vec(), cert);
+        Ok(())
+    }
+
+    pub fn contains(&self, to_find: &X509) -> bool {
+        let to_find_digest = match to_find.digest(MessageDigest::sha256()) {
+            Ok(v) => v,
+            Err(_) => return false,
+        };
+        match self.certs.get_key_value(to_find_digest.as_ref()) {
+            None => false,
+            Some((digest, _)) => openssl::memcmp::eq(&to_find_digest, digest),
+        }
+    }
+
+    pub fn contains_publickey(&self, to_find: &PublicKey) -> bool {
+        self.contains_pkey(to_find.pkey())
+    }
+
+    pub fn contains_pkey<P>(&self, to_find: &PKeyRef<P>) -> bool
+    where
+        P: openssl::pkey::HasPublic,
+    {
+        for (_, cert) in self.certs.iter() {
+            if cert.public_key().unwrap().public_eq(to_find) {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn into_vec(mut self) -> Vec<X509> {
+        self.certs.drain().map(|(_, v)| v).collect()
     }
 }

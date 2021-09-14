@@ -11,10 +11,11 @@ use xattr::FileExt;
 use super::Store;
 use super::StoreError;
 
-pub(super) fn initialize<K, V>(
+pub(super) fn initialize<OT, K, V>(
     cfg: Option<config::Value>,
-) -> Result<Box<dyn Store<K, V>>, StoreError>
+) -> Result<Box<dyn Store<OT, K, V>>, StoreError>
 where
+    OT: crate::StoreOpenMode,
     K: std::str::FromStr + std::string::ToString + Send + Sync + 'static,
     V: Serialize + DeserializeOwned + Send + Sync + Clone + 'static,
 {
@@ -83,8 +84,9 @@ fn ttl_to_disk(ttl: SystemTime) -> Result<Vec<u8>, StoreError> {
 const XATTR_NAME_TTL: &str = "user.store_ttl";
 
 #[async_trait]
-impl<K, V> Store<K, V> for DirectoryStore<K, V>
+impl<OT, K, V> Store<OT, K, V> for DirectoryStore<K, V>
 where
+    OT: crate::StoreOpenMode,
     K: std::str::FromStr + std::string::ToString + Send + Sync + 'static,
     V: Serialize + DeserializeOwned + Send + Sync + Clone + 'static,
 {
