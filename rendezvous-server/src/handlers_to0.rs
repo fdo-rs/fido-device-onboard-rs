@@ -1,13 +1,13 @@
 use core::time::Duration;
 use std::convert::TryFrom;
 
-use fdo_data_formats::messages;
 use fdo_data_formats::{
     constants::ErrorCode,
     messages::Message,
-    publickey::{PublicKey, PublicKeyBody},
+    publickey::PublicKey,
     types::{Nonce, TO1DataPayload},
 };
+use fdo_data_formats::{messages, publickey::X5Chain};
 
 use fdo_http_wrapper::server::Error;
 use fdo_http_wrapper::server::SessionWithStore;
@@ -84,10 +84,9 @@ pub(super) async fn ownersign(
         "Checking whether manufacturer key {:?} is trusted",
         manufacturer_pubkey
     );
-    if user_data
+    if !user_data
         .trusted_manufacturer_keys
-        .validate(&manufacturer_pubkey, &[])
-        .is_err()
+        .contains_publickey(&manufacturer_pubkey)
     {
         return Err(Error::new(
             ErrorCode::InvalidOwnershipVoucher,
@@ -124,25 +123,13 @@ pub(super) async fn ownersign(
         }
         Some(Ok(owner)) => owner,
     };
-    let owner_pubkey = match owner.public_key.as_pkey() {
-        Err(e) => {
-            log::error!("Error in converting OV pubkey: {:?}", e);
-            return Err(Error::new(
-                ErrorCode::InvalidOwnershipVoucher,
-                messages::to0::OwnerSign::message_type(),
-                "Invalid OV",
-            )
-            .into());
-        }
-        Ok(v) => v,
-    };
 
     // Verify the signature on to1d
     log::trace!(
         "Checking whether to1d payload is signed by owner public key {:?}",
-        owner_pubkey
+        owner.public_key,
     );
-    let to1d_payload: TO1DataPayload = match msg.to1d().get_payload(&owner_pubkey) {
+    let to1d_payload: TO1DataPayload = match msg.to1d().get_payload(owner.public_key.pkey()) {
         Err(e) => {
             log::error!("Error verifying to1d: {:?}", e);
             return Err(Error::new(
@@ -174,27 +161,32 @@ pub(super) async fn ownersign(
         .ownership_voucher()
         .device_cert_signers()
         .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
-    let device_cert = msg
+    let device_cert = match msg
         .to0d()
         .ownership_voucher()
         .device_certificate()
-        .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
-    if device_cert.is_none() {
-        return Err(Error::new(
-            ErrorCode::InvalidOwnershipVoucher,
-            messages::to0::OwnerSign::message_type(),
-            "No device certificate",
-        )
-        .into());
-    }
-    let device_pubkey = PublicKeyBody::X509(device_cert.unwrap());
-    let device_pubkey = PublicKey::try_from(device_pubkey)
-        .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
-    if user_data
-        .trusted_device_keys
-        .validate(&device_pubkey, &device_cert_signers)
-        .is_err()
+        .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?
     {
+        Some(k) => k,
+        None => {
+            return Err(Error::new(
+                ErrorCode::InvalidOwnershipVoucher,
+                messages::to0::OwnerSign::message_type(),
+                "No device certificate",
+            )
+            .into());
+        }
+    };
+    let device_pubkey = PublicKey::try_from(&device_cert)
+        .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
+    let device_cert_chain = X5Chain::new({
+        let mut chain = device_cert_signers;
+        chain.insert(0, device_cert);
+        chain
+    });
+    if let Err(cert_chain_err) = device_cert_chain.verify_from_x5bag(&user_data.trusted_device_keys)
+    {
+        log::debug!("Error verifying device certificate: {:?}", cert_chain_err);
         return Err(Error::new(
             ErrorCode::InvalidOwnershipVoucher,
             messages::to0::OwnerSign::message_type(),

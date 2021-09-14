@@ -324,14 +324,13 @@ async fn perform_to2(
     log::trace!("Got owner entry: {:?}", ov_owner_entry);
 
     // Now, we can finally verify the OV Header signature we got at the top!
-    let owner_pubkey = ov_owner_entry
-        .public_key
-        .as_pkey()
-        .context("Error parsing owner public key")?;
     let prove_ov_hdr_payload: TO2ProveOVHdrPayload = prove_ov_hdr
-        .get_payload(&owner_pubkey)
+        .get_payload(ov_owner_entry.public_key.pkey())
         .context("Error validating ProveOVHdr signature")?;
-    log::trace!("ProveOVHdr validated with public key: {:?}", owner_pubkey);
+    log::trace!(
+        "ProveOVHdr validated with public key: {:?}",
+        ov_owner_entry.public_key
+    );
 
     // Perform the key derivation
     let a_key_exchange = prove_ov_hdr_payload.a_key_exchange();

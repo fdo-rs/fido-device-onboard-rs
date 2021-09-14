@@ -131,11 +131,7 @@ pub(super) async fn prove_to_rv(
     };
 
     // Check if token is signed
-    let dev_pkey = dev_pkey
-        .as_pkey()
-        .map_err(Error::from_error::<messages::to1::ProveToRV, _>)?;
-
-    let device_eat = msg.token().get_eat(&dev_pkey).map_err(|e| {
+    let device_eat = msg.token().get_eat(dev_pkey.pkey()).map_err(|e| {
         log::debug!("Error parsing EAToken: {:?}", e);
         Error::new(
             ErrorCode::InvalidMessageError,
