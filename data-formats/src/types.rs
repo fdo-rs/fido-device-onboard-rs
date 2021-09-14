@@ -226,7 +226,7 @@ pub struct IP4(std::net::Ipv4Addr);
 #[derive(Debug, Serialize, Deserialize)]
 pub struct IP6(std::net::Ipv6Addr);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IPAddress(std::net::IpAddr);
 
 impl From<std::net::IpAddr> for IPAddress {
@@ -337,7 +337,7 @@ pub type RendezvousInstruction = (RendezvousVariable, CborSimpleType);
 // TODO: This sends serde_cbor outwards. Possibly re-do this
 pub type CborSimpleType = serde_cbor::Value;
 
-#[derive(Debug, Serialize_tuple, Deserialize)]
+#[derive(Debug, Serialize_tuple, Deserialize, Clone)]
 pub struct TO2AddressEntry {
     ip: Option<IPAddress>,       // RVIP
     dns: Option<DNSAddress>,     // RVDNS

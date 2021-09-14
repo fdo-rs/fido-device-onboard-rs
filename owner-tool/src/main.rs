@@ -794,55 +794,72 @@ async fn report_to_rendezvous(matches: &ArgMatches<'_>) -> Result<(), Error> {
     let owner_addresses: Result<Vec<Vec<TO2AddressEntry>>> =
         owner_addresses.drain(..).map(|v| v.try_into()).collect();
     let mut owner_addresses = owner_addresses.context("Error parsing owner addresses")?;
-    let owner_addresses = owner_addresses.drain(..).flatten().collect();
+    let owner_addresses: Vec<TO2AddressEntry> = owner_addresses.drain(..).flatten().collect();
 
     // Determine the RV IP
-    let rv_info = ov
-        .get_header()
-        .context("Error getting OV header")?
+    let rv_info = ov_header
         .rendezvous_info
         .to_interpreted(RendezvousInterpreterSide::Owner)
         .context("Error parsing rendezvous directives")?;
     if rv_info.is_empty() {
         bail!("No rendezvous information found that's usable for the owner");
     }
-    // Use the first entry
-    let rv_info = rv_info.first().unwrap();
-    let rv_urls = rv_info.get_urls();
-    if rv_urls.is_empty() {
-        bail!("No usable rendezvous URLs were found");
+    let mut rendezvous_performed = false;
+    for rv_directive in rv_info {
+        let rv_urls = rv_directive.get_urls();
+        if rv_urls.is_empty() {
+            log::info!(
+                "No usable rendezvous URLs were found for RV directive: {:?}",
+                rv_directive
+            );
+            continue;
+        }
+
+        for rv_url in rv_urls {
+            println!("Using rendezvous server at url {}", rv_url);
+
+            let mut rv_client = fdo_http_wrapper::client::ServiceClient::new(&rv_url);
+
+            // Send: Hello, Receive: HelloAck
+            let hello_ack: RequestResult<messages::to0::HelloAck> = rv_client
+                .send_request(messages::to0::Hello::new(), None)
+                .await;
+
+            let hello_ack = match hello_ack {
+                Ok(hello_ack) => hello_ack,
+                Err(e) => {
+                    log::info!("Error requesting nonce from rendezvous server: {:?}", e);
+                    continue;
+                }
+            };
+
+            // Build to0d and to1d
+            let to0d = TO0Data::new(ov.clone(), wait_time, hello_ack.nonce3().clone());
+            let to0d_vec = serde_cbor::to_vec(&to0d).context("Error serializing to0d")?;
+            let to0d_hash = Hash::new(None, &to0d_vec).context("Error hashing to0d")?;
+            let to1d_payload = TO1DataPayload::new(owner_addresses.clone(), to0d_hash);
+            let to1d = COSESign::new(&to1d_payload, None, &owner_private_key)
+                .context("Error signing to1d")?;
+
+            // Send: OwnerSign, Receive: AcceptOwner
+            let accept_owner: RequestResult<messages::to0::AcceptOwner> = rv_client
+                .send_request(messages::to0::OwnerSign::new(to0d, to1d), None)
+                .await;
+            let accept_owner =
+                accept_owner.context("Error registering self to rendezvous server")?;
+
+            // Done!
+            println!(
+                "Rendezvous server registered us for {} seconds",
+                accept_owner.wait_seconds()
+            );
+            rendezvous_performed = true;
+            break;
+        }
+
+        if rendezvous_performed {
+            break;
+        }
     }
-    let rv_url = rv_urls.first().unwrap();
-
-    println!("Using rendezvous server at url {}", rv_url);
-
-    let mut rv_client = fdo_http_wrapper::client::ServiceClient::new(rv_url);
-
-    // Send: Hello, Receive: HelloAck
-    let hello_ack: RequestResult<messages::to0::HelloAck> = rv_client
-        .send_request(messages::to0::Hello::new(), None)
-        .await;
-    let hello_ack = hello_ack.context("Error requesting nonce from rendezvous server")?;
-
-    // Build to0d and to1d
-    let to0d = TO0Data::new(ov, wait_time, hello_ack.nonce3().clone());
-    let to0d_vec = serde_cbor::to_vec(&to0d).context("Error serializing to0d")?;
-    let to0d_hash = Hash::new(None, &to0d_vec).context("Error hashing to0d")?;
-    let to1d_payload = TO1DataPayload::new(owner_addresses, to0d_hash);
-    let to1d =
-        COSESign::new(&to1d_payload, None, &owner_private_key).context("Error signing to1d")?;
-
-    // Send: OwnerSign, Receive: AcceptOwner
-    let accept_owner: RequestResult<messages::to0::AcceptOwner> = rv_client
-        .send_request(messages::to0::OwnerSign::new(to0d, to1d), None)
-        .await;
-    let accept_owner = accept_owner.context("Error registering self to rendezvous server")?;
-
-    // Done!
-    println!(
-        "Rendezvous server registered us for {} seconds",
-        accept_owner.wait_seconds()
-    );
-
     Ok(())
 }
