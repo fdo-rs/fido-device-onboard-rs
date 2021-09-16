@@ -1,9 +1,10 @@
 ---
 - dns: localhost
-  device_port: 8081
-  owner_port: 8081
-  protocol: http
-- dns: localhost
   device_port: 8082
   owner_port: 8082
+  protocol: http
+- dns: localhost
+  delay: 30
+  device_port: 8081
+  owner_port: 8081
   protocol: http
