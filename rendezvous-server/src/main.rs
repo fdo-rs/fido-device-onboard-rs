@@ -77,7 +77,7 @@ const DEFAULT_MAX_WAIT_SECONDS: u32 = 2592000;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    pretty_env_logger::init_timed();
+    fdo_http_wrapper::init_logging();
 
     let mut settings = config::Config::default();
     settings

@@ -435,7 +435,7 @@ fn sleep_between_retries(rv_entry_delay: u32) {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    pretty_env_logger::init();
+    fdo_http_wrapper::init_logging();
 
     if Path::new(DEVICE_ONBOARDING_EXECUTED_MARKER_FILE).exists() {
         log::info!(

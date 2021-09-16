@@ -39,6 +39,8 @@ use fdo_http_wrapper::client::RequestResult;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    fdo_http_wrapper::init_logging();
+
     let matches = App::new("owner_tool")
         .version("0.1")
         .subcommand(

@@ -21,5 +21,5 @@ cargo run --bin fdo-owner-tool report-to-rendezvous --ownership-voucher testdevi
     --wait-time 600
 GUUID=$(find rendezvous_registered/ -type f -printf "%f\n")
 cp testdevice1.ov ownership_vouchers/${GUUID}
-DEVICE_CREDENTIAL=testdevice1.dc RUST_LOG=trace cargo run --bin fdo-client-linuxapp
+DEVICE_CREDENTIAL=testdevice1.dc LOG_LEVEL=trace cargo run --bin fdo-client-linuxapp
 cat /root/.ssh/authorized_keys | grep testkey

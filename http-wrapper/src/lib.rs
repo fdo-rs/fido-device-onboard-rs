@@ -10,6 +10,10 @@ pub mod server;
 #[cfg(feature = "client")]
 pub mod client;
 
+pub fn init_logging() {
+    pretty_env_logger::try_init_timed_custom_env("LOG_LEVEL").unwrap();
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EncryptionKeys {
     cipher_suite: Option<CipherSuite>,
