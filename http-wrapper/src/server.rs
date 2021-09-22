@@ -325,6 +325,13 @@ where
     Ok(to_response::<OM>(val, token))
 }
 
+pub fn ping_handler() -> warp::filters::BoxedFilter<(warp::reply::Response,)> {
+    warp::post()
+        .and(warp::path("ping"))
+        .map(|| warp::reply::Response::new("pong".into()))
+        .boxed()
+}
+
 pub fn fdo_request_filter<UDT, IM, OM, F, FR>(
     user_data: UDT,
     session_store: SessionStoreT,
