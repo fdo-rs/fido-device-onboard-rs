@@ -1,0 +1,21 @@
+---
+session_store_driver: InMemory
+ownership_voucher_store_driver: Directory
+ownership_voucher_store_config: ownership_vouchers/
+bind: {{ bind }}
+rendezvous_info: []
+protocols:
+  diun:
+    key_path: {{ keys_path }}/diun_key.der
+    cert_path: {{ keys_path }}/diun_cert.pem
+    key_type: SECP256R1
+    mfg_string_type: SerialNumber
+    allowed_key_storage_types:
+    - FileSystem
+    - Tpm
+manufacturing:
+  manufacturer_cert_path: {{ keys_path }}/manufacturer_cert.pem
+  manufacturer_private_key: {{ keys_path }}/manufacturer_key.der
+  owner_cert_path: {{ keys_path }}/owner_cert.pem
+  device_cert_ca_private_key: {{ keys_path }}/device_ca_key.der
+  device_cert_ca_chain: {{ keys_path }}/device_ca_cert.pem
