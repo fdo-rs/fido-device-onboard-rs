@@ -1,7 +1,8 @@
 ---
 storage_driver: Directory
 storage_config: rendezvous_registered/
-session_store_driver: InMemory
+session_store_driver: Directory
+session_store_config: sessions/
 trusted_manufacturer_keys_path: {{ keys_path }}/manufacturer_cert.pem
 trusted_device_keys_path: {{ keys_path }}/device_ca_cert.pem
 bind: {{ bind }}

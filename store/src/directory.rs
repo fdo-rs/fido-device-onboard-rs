@@ -57,7 +57,7 @@ where
     K: std::string::ToString,
 {
     fn get_path(&self, key: &K) -> PathBuf {
-        self.directory.join(key.to_string())
+        self.directory.join(key.to_string().replace("/", "_slash_"))
     }
 }
 
