@@ -18,6 +18,7 @@ async fn test_to() -> Result<()> {
             |cfg| {
                 cfg.prepare_config_file(None, |_| Ok(()))?;
                 cfg.create_empty_storage_folder("rendezvous_registered")?;
+                cfg.create_empty_storage_folder("sessions")?;
                 Ok(())
             },
             |_| Ok(()),
@@ -29,6 +30,7 @@ async fn test_to() -> Result<()> {
             |cfg| {
                 cfg.prepare_config_file(None, |_| Ok(()))?;
                 cfg.create_empty_storage_folder("ownership_vouchers")?;
+                cfg.create_empty_storage_folder("sessions")?;
                 Ok(())
             },
             |_| Ok(()),
