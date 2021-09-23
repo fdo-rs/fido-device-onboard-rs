@@ -1,7 +1,7 @@
-use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
+use std::{env, fs};
+use std::{os::unix::fs::PermissionsExt, path::PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
 
@@ -38,23 +38,28 @@ fn set_perm_mode(path: &Path, mode: u32) -> Result<()> {
 }
 
 fn install_ssh_key(user: &str, key: &str) -> Result<()> {
-    let user_info = passwd::Passwd::from_name(user);
-    if user_info.is_none() {
-        bail!("User {} for SSH key installation missing", user);
-    }
-    let user_info = user_info.unwrap();
-    let ssh_dir = Path::new(&user_info.home_dir).join(".ssh");
-    if !ssh_dir.exists() {
-        log::debug!("Creating SSH directory at {}", ssh_dir.display());
-        fs::create_dir(&ssh_dir).context("Error creating SSH key directory")?;
-        set_perm_mode(&ssh_dir, 0o700).with_context(|| {
-            format!(
-                "Error setting permissions on SSH key directory {}",
-                ssh_dir.display()
-            )
-        })?;
-    }
-    let key_path = ssh_dir.join("authorized_keys");
+    let key_path = if let Ok(val) = env::var("SSH_KEY_PATH") {
+        PathBuf::from(&val)
+    } else {
+        let user_info = passwd::Passwd::from_name(user);
+        if user_info.is_none() {
+            bail!("User {} for SSH key installation missing", user);
+        }
+        let user_info = user_info.unwrap();
+        let ssh_dir = Path::new(&user_info.home_dir).join(".ssh");
+        if !ssh_dir.exists() {
+            log::debug!("Creating SSH directory at {}", ssh_dir.display());
+            fs::create_dir(&ssh_dir).context("Error creating SSH key directory")?;
+            set_perm_mode(&ssh_dir, 0o700).with_context(|| {
+                format!(
+                    "Error setting permissions on SSH key directory {}",
+                    ssh_dir.display()
+                )
+            })?;
+        }
+        ssh_dir.join("authorized_keys")
+    };
+    log::debug!("Writing SSH keys to {:?}", key_path);
     let contents = if key_path.exists() {
         log::debug!(
             "SSH authorized keys {} file exists, appending",
@@ -66,7 +71,7 @@ fn install_ssh_key(user: &str, key: &str) -> Result<()> {
         "".to_string()
     };
     let contents = format!(
-        "{}\n# These keys are installed by SDO\n{}\n# End of SDO keys\n",
+        "{}\n# These keys are installed by FIDO Device Onboarding\n{}\n# End of FIDO Device Onboarding keys\n",
         contents, key
     );
     fs::write(&key_path, contents.as_bytes()).context("Error writing SSH keys")?;
