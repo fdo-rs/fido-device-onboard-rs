@@ -1,9 +1,9 @@
 mod common;
-use common::*;
+use std::time::Duration;
+
+use common::{Binary, LogSide, TestContext};
 
 use anyhow::{bail, Context, Result};
-#[allow(unused_imports)]
-use pretty_assertions::{assert_eq, assert_ne};
 
 const L: LogSide = LogSide::Test;
 
@@ -28,12 +28,17 @@ async fn test_diun() -> Result<()> {
         .context("Error waiting for servers to start")?;
 
     let client_result = ctx
-        .run_client(Binary::ManufacturingClient, Some(&mfg_server), |cfg| {
-            cfg.env("DEVICE_CREDENTIAL_FILENAME", "devicecredential.dc")
-                .env("MANUFACTURING_INFO", "testdevice")
-                .env("DIUN_PUB_KEY_INSECURE", "true");
-            Ok(())
-        })
+        .run_client(
+            Binary::ManufacturingClient,
+            Some(&mfg_server),
+            |cfg| {
+                cfg.env("DEVICE_CREDENTIAL_FILENAME", "devicecredential.dc")
+                    .env("MANUFACTURING_INFO", "testdevice")
+                    .env("DIUN_PUB_KEY_INSECURE", "true");
+                Ok(())
+            },
+            Duration::from_secs(5),
+        )
         .context("Error running manufacturing client")?;
     client_result
         .expect_success()
