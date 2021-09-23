@@ -8,4 +8,8 @@ members = [
     "owner-onboarding-service",
     "owner-tool",
     "rendezvous-server",
+    "manufacturing-server",
+    "manufacturing-client",
+
+    "integration-tests",
 ]

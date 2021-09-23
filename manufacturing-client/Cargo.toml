@@ -1,0 +1,21 @@
+[package]
+name = "fdo-manufacturing-client"
+version = "0.1.0"
+authors = ["Patrick Uiterwijk <patrick@puiterwijk.org>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1"
+hex = "0.4"
+log = "0.4"
+openssl = "0.10"
+serde_cbor = "0.11"
+tokio = { version = "1", features = ["full"] }
+sys-info = "0.8"
+passwd = "0.0.1"
+rand = "0.8.4"
+
+fdo-data-formats = { path = "../data-formats" }
+fdo-http-wrapper = { path = "../http-wrapper", features = ["client"] }

@@ -4,6 +4,7 @@ use serde_tuple::Serialize_tuple;
 use super::{ClientMessage, EncryptionRequirement, Message, ServerMessage};
 use crate::{
     constants::MessageType,
+    ownershipvoucher::OwnershipVoucherHeader,
     types::{CborSimpleType, HMac},
 };
 
@@ -40,16 +41,20 @@ impl ClientMessage for AppStart {}
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct SetCredentials {
-    ov_header: Vec<u8>,
+    ov_header: OwnershipVoucherHeader,
 }
 
 impl SetCredentials {
-    pub fn new(ov_header: Vec<u8>) -> Self {
+    pub fn new(ov_header: OwnershipVoucherHeader) -> Self {
         SetCredentials { ov_header }
     }
 
-    pub fn ov_header(&self) -> &[u8] {
+    pub fn ov_header(&self) -> &OwnershipVoucherHeader {
         &self.ov_header
+    }
+
+    pub fn into_ov_header(self) -> OwnershipVoucherHeader {
+        self.ov_header
     }
 }
 

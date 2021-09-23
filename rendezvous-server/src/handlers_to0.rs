@@ -1,13 +1,12 @@
 use core::time::Duration;
-use std::convert::TryFrom;
+use std::convert::TryInto;
 
+use fdo_data_formats::messages;
 use fdo_data_formats::{
     constants::ErrorCode,
     messages::Message,
-    publickey::PublicKey,
     types::{Nonce, TO1DataPayload},
 };
-use fdo_data_formats::{messages, publickey::X5Chain};
 
 use fdo_http_wrapper::server::Error;
 use fdo_http_wrapper::server::SessionWithStore;
@@ -156,18 +155,7 @@ pub(super) async fn ownersign(
 
     // Okay, wew! We can now trust the to1d payload, and the other data!
     // First, verify the device certificate chain
-    let device_cert_signers = msg
-        .to0d()
-        .ownership_voucher()
-        .device_cert_signers()
-        .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
-    let device_cert = match msg
-        .to0d()
-        .ownership_voucher()
-        .device_certificate()
-        .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?
-    {
-        Some(k) => k,
+    let device_cert_chain = match msg.to0d().ownership_voucher().device_certificate_chain() {
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidOwnershipVoucher,
@@ -176,24 +164,22 @@ pub(super) async fn ownersign(
             )
             .into());
         }
+        Some(v) => v,
     };
-    let device_pubkey = PublicKey::try_from(&device_cert)
-        .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
-    let device_cert_chain = X5Chain::new({
-        let mut chain = device_cert_signers;
-        chain.insert(0, device_cert);
-        chain
-    });
-    if let Err(cert_chain_err) = device_cert_chain.verify_from_x5bag(&user_data.trusted_device_keys)
-    {
-        log::debug!("Error verifying device certificate: {:?}", cert_chain_err);
-        return Err(Error::new(
-            ErrorCode::InvalidOwnershipVoucher,
-            messages::to0::OwnerSign::message_type(),
-            "Device certificate not trusted",
-        )
-        .into());
-    }
+    let device_pubkey = match device_cert_chain.verify_from_x5bag(&user_data.trusted_device_keys) {
+        Err(cert_chain_err) => {
+            log::debug!("Error verifying device certificate: {:?}", cert_chain_err);
+            return Err(Error::new(
+                ErrorCode::InvalidOwnershipVoucher,
+                messages::to0::OwnerSign::message_type(),
+                "Device certificate not trusted",
+            )
+            .into());
+        }
+        Ok(v) => v
+            .try_into()
+            .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?,
+    };
 
     // Now compute the new wait_seconds and stuff to store
     let mut wait_seconds = msg.to0d().wait_seconds();

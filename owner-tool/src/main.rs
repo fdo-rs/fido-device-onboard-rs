@@ -414,11 +414,9 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
     let mut device_cert_chain = device_cert_ca_chain;
     device_cert_chain.insert(0, device_cert);
     let device_cert_chain = X5Chain::new(device_cert_chain);
-    let device_cert_chain = device_cert_chain
-        .to_vec()
-        .context("Error serializing device cert chain")?;
-    let device_cert_chain_hash = Hash::new(Some(HashType::Sha384), &device_cert_chain)
-        .context("Error computing digest over device cert chain")?;
+    let device_cert_chain_hash = device_cert_chain
+        .hash(HashType::Sha384)
+        .context("Error computing digest over device certificate chain")?;
 
     // Build device HMAC key
     let mut hmac_key_buf = [0; 32];
@@ -521,18 +519,14 @@ fn dump_voucher(matches: &ArgMatches) -> Result<(), Error> {
 
     println!("Header HMAC: {}", ov.header_hmac());
 
-    let dev_cert = ov
-        .device_certificate()
-        .context("Error parsing the device certificate")?;
-    let dev_cert_signers = ov
-        .device_cert_signers()
-        .context("Error parsing the device certificate chain")?;
     println!("Device certificate chain:");
-    if let Some(dev_cert) = dev_cert {
-        println!("\tDevice certificate: {:?}", &dev_cert);
-    }
-    for (num, dev_cert_signer) in dev_cert_signers.iter().enumerate() {
-        println!("\tSigner {}: {:?}", num, dev_cert_signer);
+    match ov.device_certificate_chain() {
+        None => println!("\t<none>"),
+        Some(v) => {
+            for (num, cert) in v.chain().iter().enumerate() {
+                println!("\tCertificate {}: {:?}", num, cert);
+            }
+        }
     }
 
     let ov_iter = ov.iter_entries().context("Error creating OV iterator")?;

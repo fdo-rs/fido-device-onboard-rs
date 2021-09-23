@@ -367,10 +367,33 @@ pub enum MfgStringType {
     SerialNumber = 0,
 }
 
+impl FromStr for MfgStringType {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        Ok(match &s.to_lowercase()[..] {
+            "serialnumber" | "serial_number" => MfgStringType::SerialNumber,
+            _ => return Err(Error::InconsistentValue("mfg-string-type")),
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, PartialEq, Eq)]
 #[repr(i8)]
 #[non_exhaustive]
 pub enum KeyStorageType {
     FileSystem = 0,
     Tpm = 1,
+}
+
+impl FromStr for KeyStorageType {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        Ok(match &s.to_lowercase()[..] {
+            "filesystem" => KeyStorageType::FileSystem,
+            "tpm" => KeyStorageType::Tpm,
+            _ => return Err(Error::InconsistentValue("storage-type")),
+        })
+    }
 }

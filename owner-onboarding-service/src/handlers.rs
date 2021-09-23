@@ -242,16 +242,23 @@ pub(super) async fn prove_device(
         }
         Some(dev) => dev,
     };
-    let device_certificate = match ownership_voucher
-        .device_certificate()
-        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?
-    {
-        Some(cert) => cert,
+    let device_certificate = match ownership_voucher.device_certificate_chain() {
+        Some(chain) => match chain.leaf_certificate() {
+            Some(cert) => cert,
+            None => {
+                return Err(Error::new(
+                    ErrorCode::InvalidMessageError,
+                    messages::to2::ProveDevice::message_type(),
+                    "Device certificate not supported",
+                )
+                .into())
+            }
+        },
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
                 messages::to2::ProveDevice::message_type(),
-                "Device certificate not supported",
+                "Device certificate chain not supported",
             )
             .into())
         }
