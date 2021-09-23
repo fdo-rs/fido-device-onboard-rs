@@ -1,7 +1,4 @@
-use std::borrow::Borrow;
-use std::fs;
-use std::path::Path;
-use std::{thread, time};
+use std::{borrow::Borrow, env, fs, path::PathBuf, thread, time};
 
 use anyhow::{anyhow, bail, Context, Result};
 
@@ -27,14 +24,21 @@ use rand::Rng;
 
 const DEVICE_ONBOARDING_EXECUTED_MARKER_FILE: &str = "/etc/device_onboarding_performed";
 
+fn marker_file_location() -> PathBuf {
+    if let Ok(path) = env::var("DEVICE_ONBOARDING_EXECUTED_MARKER_FILE_PATH") {
+        PathBuf::from(path)
+    } else {
+        PathBuf::from(DEVICE_ONBOARDING_EXECUTED_MARKER_FILE)
+    }
+}
+
 // Rendezvous delays related variables
 const RV_DEFAULT_DELAY_SEC: f32 = 120.0;
 const RV_DEFAULT_DELAY_OFFSET: f32 = 30.0;
 const RV_USER_DEFINED_DELAY_OFFSET: f32 = 0.25;
 
 fn mark_device_onboarding_executed() -> Result<()> {
-    fs::write(&DEVICE_ONBOARDING_EXECUTED_MARKER_FILE, "executed")
-        .context("Error creating executed marker file")
+    fs::write(&marker_file_location(), "executed").context("Error creating executed marker file")
 }
 
 fn get_to2_urls(entries: &[TO2AddressEntry]) -> Vec<String> {
@@ -437,10 +441,11 @@ fn sleep_between_retries(rv_entry_delay: u32) {
 async fn main() -> Result<()> {
     fdo_http_wrapper::init_logging();
 
-    if Path::new(DEVICE_ONBOARDING_EXECUTED_MARKER_FILE).exists() {
+    let marker_file = marker_file_location();
+    if marker_file.exists() {
         log::info!(
-            "Device Onboarding marker file {} exists, not rerunning",
-            DEVICE_ONBOARDING_EXECUTED_MARKER_FILE
+            "Device Onboarding marker file {:?} exists, not rerunning",
+            marker_file
         );
         return Ok(());
     }

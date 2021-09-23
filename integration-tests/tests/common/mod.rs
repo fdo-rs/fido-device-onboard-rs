@@ -2,10 +2,11 @@
 
 use std::{
     env,
-    fs::{create_dir, File},
+    fs::{self, create_dir, File},
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
-    process::{Child, Command, ExitStatus, Output},
+    process::{Child, Command, ExitStatus},
+    time::{Duration, Instant},
 };
 
 use anyhow::{bail, Context as _, Result};
@@ -18,11 +19,21 @@ use openssl::{
     pkey::PKey,
     x509::{X509Builder, X509NameBuilder},
 };
-#[allow(unused_imports)]
-use pretty_assertions::{assert_eq, assert_ne};
 
 const TARGET_TMPDIR: &str = env!("CARGO_TARGET_TMPDIR");
-const KEY_NAMES: &[&str] = &["manufacturer", "device_ca", "owner", "reseller", "diun"];
+const KEY_NAMES: &[&str] = &[
+    "manufacturer",
+    "device_ca",
+    "owner",
+    "reseller",
+    "diun",
+    "reseller",
+];
+
+const MAX_WAIT_FOR_OWNER_TOOL: Duration = Duration::from_millis(200);
+const MAX_WAIT_FOR_READY: Duration = Duration::from_secs(2);
+const WAIT_BETWEEN_READY_TESTS: Duration = Duration::from_millis(500);
+const WAIT_BETWEEN_DEADLINE: Duration = Duration::from_millis(500);
 
 lazy_static::lazy_static! {
     static ref TEMPLATES: tera::Tera = {
@@ -124,7 +135,7 @@ impl TestBinaryNumber {
         &self.name
     }
 
-    fn server_port(&self) -> Option<u16> {
+    pub fn server_port(&self) -> Option<u16> {
         if self.binary.is_server() {
             Some(8080 + self.number)
         } else {
@@ -214,8 +225,16 @@ impl TestContext {
             .map(PathBuf::from)
     }
 
+    pub fn keys_path(&self) -> PathBuf {
+        self.testpath.join("keys")
+    }
+
+    pub fn runner_path(&self, number: &TestBinaryNumber) -> PathBuf {
+        self.testpath.join(number.name())
+    }
+
     fn create_keys(&self) -> Result<()> {
-        let keys_path = self.testpath.join("keys");
+        let keys_path = self.keys_path();
         create_dir(&keys_path).context("Error creating keys directory")?;
 
         let key_group =
@@ -285,9 +304,9 @@ impl TestContext {
                 .context("Error converting certificate to PEM")?;
 
             // Now write them to disk
-            std::fs::write(keys_path.join(format!("{}_key.der", key_name)), private_key)
+            fs::write(keys_path.join(format!("{}_key.der", key_name)), private_key)
                 .context("Error writing private key")?;
-            std::fs::write(keys_path.join(format!("{}_cert.pem", key_name)), cert)
+            fs::write(keys_path.join(format!("{}_cert.pem", key_name)), cert)
                 .context("Error writing certificate")?;
         }
 
@@ -312,14 +331,13 @@ impl TestContext {
 
         let test_server_number = self.test_binary_number_generator.next(binary);
 
-        let server_path = self.testpath.join(test_server_number.name());
+        let server_path = self.runner_path(&test_server_number);
         create_dir(&server_path).context("Error creating directory")?;
 
         // Create the config file
         config_configurator(&mut TestServerConfigurator::new(
             binary,
-            self.testpath(),
-            &server_path,
+            &self,
             &test_server_number,
         ))
         .context("Error configuring server")?;
@@ -383,11 +401,16 @@ impl TestContext {
         working_dir: &Path,
         args: &[&str],
     ) -> Result<TestClientResult> {
-        self.run_client(Binary::OwnerTool, None, |cfg| {
-            cfg.current_dir(working_dir).args(args);
+        self.run_client(
+            Binary::OwnerTool,
+            None,
+            |cfg| {
+                cfg.current_dir(working_dir).args(args);
 
-            Ok(())
-        })
+                Ok(())
+            },
+            MAX_WAIT_FOR_OWNER_TOOL,
+        )
     }
 
     pub fn run_client<F>(
@@ -395,6 +418,7 @@ impl TestContext {
         binary: Binary,
         server: Option<&TestBinaryNumber>,
         configurator: F,
+        deadline: Duration,
     ) -> Result<TestClientResult>
     where
         F: FnOnce(&mut Command) -> Result<()>,
@@ -402,7 +426,9 @@ impl TestContext {
         self.check_test_servers_ready()?;
 
         let client_number = self.test_binary_number_generator.next(binary);
-        let client_path = self.testpath.join(client_number.name());
+        let client_path = self.runner_path(&client_number);
+        let stdout_path = client_path.join("stdout");
+        let stderr_path = client_path.join("stderr");
 
         create_dir(&client_path).context("Error creating directory")?;
 
@@ -410,15 +436,19 @@ impl TestContext {
         let mut cmd = Command::new(&cmd_path);
 
         L.l(format!(
-            "Running client {}, path: {:?}, client_path: {:?}, command: {:?}",
+            "Running client {}, path: {:?}, client_path: {:?}, command: {:?}, deadline: {:?}",
             client_number.name(),
             cmd_path,
             client_path,
-            cmd
+            cmd,
+            deadline,
         ));
 
         // Do initial configuration: everything can be overridden by the configurator
-        cmd.current_dir(&client_path).env("LOG_LEVEL", "trace");
+        cmd.current_dir(&client_path)
+            .env("LOG_LEVEL", "trace")
+            .stdout(File::create(&stdout_path).context("Error creating stdout")?)
+            .stderr(File::create(&stderr_path).context("Error creating stderr")?);
 
         if let Some(server) = server {
             if let Some(url_variable) = binary.url_environment_variable() {
@@ -439,10 +469,57 @@ impl TestContext {
         // Call Command configurator
         configurator(&mut cmd).context("Error configuring client command")?;
 
-        let output = cmd.output().context("Error running client")?;
-        let result = TestClientResult::new(client_number, client_path, output);
+        let start = Instant::now();
+        L.l(format!("Starting client at {:?}", start));
 
-        Ok(result)
+        let mut child = cmd.spawn().context("Error spawning client")?;
+        let exit_code = loop {
+            if start.elapsed() > deadline {
+                L.l("Client timed out!");
+                child.kill().context("Error killing client")?;
+                break child.wait().context("Error waiting for client")?;
+            }
+
+            let exit_code = child.try_wait().context("Error waiting for client")?;
+            if exit_code.is_some() {
+                break exit_code.unwrap();
+            }
+            L.l(format!(
+                "Client did not finish yet, waiting {:?}",
+                WAIT_BETWEEN_DEADLINE
+            ));
+            std::thread::sleep(WAIT_BETWEEN_DEADLINE);
+        };
+
+        TestClientResult::new(client_number, client_path, exit_code)
+    }
+
+    pub fn generate_config_file<F>(
+        &self,
+        output_path: &Path,
+        config_file_name: &str,
+        context_configurator: F,
+    ) -> Result<()>
+    where
+        F: FnOnce(&mut tera::Context) -> Result<()>,
+    {
+        L.l(format!(
+            "Preparing configuration file {:?} to {:?}",
+            config_file_name, output_path,
+        ));
+
+        let mut template_context = tera::Context::new();
+
+        // TODO: Insert defaults
+        template_context.insert("keys_path", &self.keys_path());
+
+        context_configurator(&mut template_context)
+            .context("Error running context configurator")?;
+
+        let config = TEMPLATES
+            .render(&format!("{}.j2", config_file_name), &template_context)
+            .context("Error rendering configuration template")?;
+        fs::write(&output_path, config).context("Error writing configuration file")
     }
 }
 
@@ -462,19 +539,24 @@ pub struct TestClientResult {
 }
 
 impl TestClientResult {
-    fn new(client_number: TestBinaryNumber, client_path: PathBuf, output: Output) -> Self {
+    fn new(
+        client_number: TestBinaryNumber,
+        client_path: PathBuf,
+        exit_status: ExitStatus,
+    ) -> Result<Self> {
         L.l(format!(
             "Client {} succeeded: {}",
             client_number.name(),
-            output.status.success()
+            exit_status.success()
         ));
 
-        let status = output.status;
-        let stdout: Vec<String> = String::from_utf8_lossy(&output.stdout)
+        let stdout: Vec<String> = fs::read_to_string(client_path.join("stdout"))
+            .context("Error reading client stdout")?
             .split('\n')
             .map(String::from)
             .collect();
-        let stderr: Vec<String> = String::from_utf8_lossy(&output.stderr)
+        let stderr: Vec<String> = fs::read_to_string(client_path.join("stderr"))
+            .context("Error reading client stderr")?
             .split('\n')
             .map(String::from)
             .collect();
@@ -493,13 +575,13 @@ impl TestClientResult {
         L.l("=========================================");
         L.l("");
 
-        TestClientResult {
+        Ok(TestClientResult {
             client_number,
             client_path,
-            status,
+            status: exit_status,
             stdout,
             stderr,
-        }
+        })
     }
 
     pub fn expect_success(&self) -> Result<()> {
@@ -584,22 +666,19 @@ impl TestClientResult {
 #[derive(Debug)]
 pub struct TestServerConfigurator<'a> {
     binary: Binary,
-    test_path: &'a Path,
-    server_path: &'a Path,
+    test_context: &'a TestContext,
     server_number: &'a TestBinaryNumber,
 }
 
 impl<'a> TestServerConfigurator<'a> {
     fn new(
         binary: Binary,
-        test_path: &'a Path,
-        server_path: &'a Path,
+        test_context: &'a TestContext,
         server_number: &'a TestBinaryNumber,
     ) -> Self {
         TestServerConfigurator {
             binary,
-            test_path,
-            server_path,
+            test_context,
             server_number,
         }
     }
@@ -612,36 +691,32 @@ impl<'a> TestServerConfigurator<'a> {
     where
         F: FnOnce(&mut tera::Context) -> Result<()>,
     {
-        L.l(format!(
-            "Preparing configuration file {:?} for {}",
-            config_file_name,
-            self.server_number.name(),
-        ));
         let config_file_name =
             config_file_name.unwrap_or_else(|| self.binary.config_file_name().unwrap());
+        let output_path = self
+            .test_context
+            .runner_path(&self.server_number)
+            .join(config_file_name);
 
-        let mut template_context = tera::Context::new();
+        self.test_context
+            .generate_config_file(&output_path, config_file_name, |cfg| {
+                cfg.insert(
+                    "bind",
+                    &format!("127.0.0.1:{}", self.server_number.server_port().unwrap()),
+                );
+                // TODO: Insert more defaults
 
-        // TODO: Insert defaults
-        template_context.insert("keys_path", &self.test_path.join("keys"));
-        template_context.insert(
-            "bind",
-            &format!("127.0.0.1:{}", self.server_number.server_port().unwrap()),
-        );
-
-        context_configurator(&mut template_context)
-            .context("Error running context configurator")?;
-
-        let config = TEMPLATES
-            .render(&format!("{}.j2", config_file_name), &template_context)
-            .context("Error rendering configuration template")?;
-        std::fs::write(self.server_path.join(config_file_name), config)
-            .context("Error writing configuration file")
+                context_configurator(cfg)
+            })
     }
 
     pub fn create_empty_storage_folder(&self, name: &str) -> Result<()> {
-        create_dir(self.server_path.join(&name))
-            .with_context(|| format!("Error creating empty storage folder: {}", name))
+        create_dir(
+            self.test_context
+                .runner_path(&self.server_number)
+                .join(&name),
+        )
+        .with_context(|| format!("Error creating empty storage folder: {}", name))
     }
 }
 
@@ -662,7 +737,7 @@ impl TestServer {
     }
 
     async fn wait_until_ready(&mut self) -> Result<()> {
-        let mut attempts = 0;
+        let start = Instant::now();
         let client = reqwest::Client::new();
         loop {
             let res = client
@@ -673,11 +748,11 @@ impl TestServer {
                 .send()
                 .await;
             if res.is_ok() {
+                L.l("Server is ready");
                 return Ok(());
             }
             L.l(format!("Server was not yet ready: {:?}", res));
-            attempts += 1;
-            if attempts > 10 {
+            if start.elapsed() > MAX_WAIT_FOR_READY {
                 bail!("Server failed to start");
             }
             if self
@@ -688,8 +763,11 @@ impl TestServer {
             {
                 bail!("Server child failed to start");
             }
-            L.l("Server is not yet ready, waiting 1 second");
-            std::thread::sleep(std::time::Duration::from_secs(1));
+            L.l(format!(
+                "Server is not yet ready, waiting {:?}",
+                WAIT_BETWEEN_READY_TESTS
+            ));
+            std::thread::sleep(WAIT_BETWEEN_READY_TESTS);
         }
     }
 }

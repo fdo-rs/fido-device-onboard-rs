@@ -12,6 +12,7 @@ use openssl::{
     x509::X509,
 };
 use serde::Deserialize;
+use tokio::signal::unix::{signal, SignalKind};
 use warp::Filter;
 
 use fdo_data_formats::{
@@ -191,6 +192,7 @@ async fn main() -> Result<()> {
 
     // Initialize handlers
     let hello = warp::get().map(|| "Hello from the owner onboarding service");
+    let handler_ping = fdo_http_wrapper::server::ping_handler();
 
     // TO2
     let handler_to2_hello_device = fdo_http_wrapper::server::fdo_request_filter(
@@ -227,6 +229,7 @@ async fn main() -> Result<()> {
     let routes = warp::post()
         .and(
             hello
+                .or(handler_ping)
                 // TO2
                 .or(handler_to2_hello_device)
                 .or(handler_to2_get_ov_next_entry)
@@ -244,8 +247,20 @@ async fn main() -> Result<()> {
     let maintenance_runner =
         tokio::spawn(async move { perform_maintenance(user_data.clone()).await });
 
-    let server = server.run(bind_addr);
-    let _ = tokio::join!(server, maintenance_runner);
+    let server = server
+        .bind_with_graceful_shutdown(bind_addr, async {
+            signal(SignalKind::terminate()).unwrap().recv().await;
+            log::info!("Terminating");
+        })
+        .1;
+    let server = tokio::spawn(server);
+    let _ = tokio::select!(
+    _ = server => {
+        log::info!("Server terminated");
+    },
+    _ = maintenance_runner => {
+        log::info!("Maintenance runner terminated");
+    });
 
     Ok(())
 }

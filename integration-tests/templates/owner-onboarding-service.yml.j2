@@ -2,9 +2,9 @@
 session_store_driver: InMemory
 ownership_voucher_store_driver: Directory
 ownership_voucher_store_config: ownership_vouchers/
-trusted_device_keys_path: keys/device_ca_cert.pem
-owner_private_key_path: keys/owner_key.der
-bind: 0.0.0.0:8080
+trusted_device_keys_path: {{ keys_path }}/device_ca_cert.pem
+owner_private_key_path: {{ keys_path }}/owner_key.der
+bind: {{ bind }}
 service_info:
   rhsm_organization_id: 6454383
   rhsm_activation_key: SDOkey

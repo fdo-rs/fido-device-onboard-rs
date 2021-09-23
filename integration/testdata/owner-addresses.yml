@@ -1,9 +1,0 @@
----
-- transport: HTTP
-  port: 8079
-  addresses:
-    - dns_name: localhost
-- transport: HTTP
-  port: 8080
-  addresses:
-    - dns_name: localhost
