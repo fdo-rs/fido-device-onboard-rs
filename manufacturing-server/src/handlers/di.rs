@@ -9,7 +9,7 @@ use fdo_data_formats::{
     constants::{ErrorCode, HashType},
     messages::{self, ClientMessage, Message},
     ownershipvoucher::{OwnershipVoucher, OwnershipVoucherHeader},
-    publickey::{PublicKey, X5Chain},
+    publickey::X5Chain,
     types::Guid,
     PROTOCOL_VERSION,
 };
@@ -19,7 +19,7 @@ use openssl::{
     asn1::{Asn1Integer, Asn1Time},
     bn::BigNum,
     hash::MessageDigest,
-    pkey::{PKeyRef, Private, Public},
+    pkey::{PKey, PKeyRef, Private, Public},
     x509::{X509Builder, X509NameBuilder, X509},
 };
 
@@ -68,7 +68,7 @@ pub(crate) async fn app_start(
         }
     };
 
-    let public_key: Option<PublicKey> = match session.get(DEVICE_KEY_FROM_DIUN_SES_KEY) {
+    let public_key: Option<Vec<u8>> = match session.get(DEVICE_KEY_FROM_DIUN_SES_KEY) {
         Some(key) => Some(key),
         None => match &user_data.public_key_store {
             None => None,
@@ -87,7 +87,9 @@ pub(crate) async fn app_start(
             )
             .into());
         }
-        Some(v) => v,
+        Some(v) => {
+            PKey::public_key_from_der(&v).map_err(Error::from_error::<messages::di::AppStart, _>)?
+        }
     };
 
     // Create new device certificate chain
@@ -99,7 +101,7 @@ pub(crate) async fn app_start(
             .unwrap(),
         &user_data.device_cert_key,
         mfg_info,
-        public_key.pkey(),
+        &public_key,
     )
     .map_err(Error::from_error::<messages::di::AppStart, _>)?;
     let device_certificate_chain =
@@ -116,7 +118,7 @@ pub(crate) async fn app_start(
         mfg_info.clone(),
         user_data
             .manufacturer_cert
-            .as_ref()
+            .clone()
             .try_into()
             .map_err(Error::from_error::<messages::di::AppStart, _>)?,
         Some(device_certificate_chain_hash),
@@ -140,7 +142,7 @@ pub(crate) async fn app_start(
 fn create_device_cert_chain(chain: &X5Chain, device_certificate: X509) -> X5Chain {
     let mut chain: Vec<X509> = chain.chain().to_vec();
     chain.insert(0, device_certificate);
-    X5Chain::new(chain)
+    X5Chain::new(chain).unwrap()
 }
 
 fn create_device_certificate(

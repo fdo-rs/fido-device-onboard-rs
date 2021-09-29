@@ -6,10 +6,13 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use openssl::{
+    asn1::{Asn1Integer, Asn1Time},
+    bn::BigNum,
     ec::{EcGroup, EcKey},
+    hash::MessageDigest,
     nid::Nid,
     pkey::{PKey, Private},
-    x509::X509,
+    x509::{X509Builder, X509NameBuilder, X509},
 };
 use serde::Deserialize;
 use tokio::signal::unix::{signal, SignalKind};
@@ -106,8 +109,28 @@ fn generate_owner2_keys() -> Result<(PKey<Private>, PublicKey)> {
     let owner2_key =
         PKey::from_ec_key(owner2_key).context("ERror converting owner2 key to PKey")?;
 
+    // Create an ephemeral certificate
+    let mut subject = X509NameBuilder::new()?;
+    subject.append_entry_by_text("CN", "Ephemeral Owner2 Key")?;
+    let subject = subject.build();
+
+    let serial = BigNum::from_u32(42)?;
+    let serial = Asn1Integer::from_bn(&serial)?;
+
+    let mut builder = X509Builder::new()?;
+    builder.set_version(2)?;
+    builder.set_not_after(Asn1Time::days_from_now(365)?.as_ref())?;
+    builder.set_not_before(Asn1Time::days_from_now(0)?.as_ref())?;
+    builder.set_issuer_name(&subject)?;
+    builder.set_subject_name(&subject)?;
+    builder.set_pubkey(&owner2_key)?;
+    builder.set_serial_number(&serial)?;
+    builder.sign(&owner2_key, MessageDigest::sha384())?;
+
+    let owner2_cert = builder.build();
+
     let pubkey =
-        PublicKey::try_from(&owner2_key).context("Error converting ephemeral owner2 key to PK")?;
+        PublicKey::try_from(owner2_cert).context("Error converting ephemeral owner2 key to PK")?;
 
     Ok((owner2_key, pubkey))
 }

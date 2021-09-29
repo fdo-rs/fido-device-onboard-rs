@@ -33,14 +33,14 @@ struct DiunConfiguration {
     allowed_key_storage_types: Vec<KeyStorageType>,
 
     key: PKey<Private>,
-    public_keys: X5Chain,
+    public_keys: PublicKey,
 }
 
 struct ManufacturingServiceUD {
     // Stores
     session_store: Arc<fdo_http_wrapper::server::SessionStore>,
     ownership_voucher_store: Box<dyn Store<fdo_store::WriteOnlyOpen, Guid, OwnershipVoucher>>,
-    public_key_store: Option<Box<dyn Store<fdo_store::ReadOnlyOpen, String, PublicKey>>>,
+    public_key_store: Option<Box<dyn Store<fdo_store::ReadOnlyOpen, String, Vec<u8>>>>,
 
     // Certificates
     manufacturer_cert: X509,
@@ -126,7 +126,10 @@ impl TryFrom<DiunSettings> for DiunConfiguration {
                 &fs::read(value.cert_path).context("Error reading DIUN certificate")?,
             )
             .context("Error parsing DIUN certificate")?,
-        );
+        )
+        .context("Error generating X5Chain")?
+        .try_into()
+        .context("Error generating PublicKey")?;
 
         Ok(DiunConfiguration {
             mfg_string_type: value.mfg_string_type.into(),
@@ -257,7 +260,8 @@ async fn main() -> Result<()> {
                 .context("Error reading device CA chain")?,
         )
         .context("Error parsing device CA chain")?,
-    );
+    )
+    .context("Error creating device cert chain")?;
     let manufacturer_cert = X509::from_pem(
         &fs::read(settings.manufacturing.manufacturer_cert_path)
             .context("Error reading manufacturer certificate")?,
@@ -278,11 +282,8 @@ async fn main() -> Result<()> {
         Some(path) => Some(
             X509::from_pem(&fs::read(path).context("Error reading owner certificate")?)
                 .context("Error parsing owner certificate")?
-                .public_key()
-                .context("Error getting owner certificate public key")?
-                .as_ref()
                 .try_into()
-                .context("Error parsing owner certificate")?,
+                .context("Error converting owner certificate to PublicKey")?,
         ),
     };
 

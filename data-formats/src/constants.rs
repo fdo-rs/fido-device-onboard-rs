@@ -61,27 +61,30 @@ impl TryFrom<MessageDigest> for HashType {
     }
 }
 
+const RS256: i16 = -257;
+const RS384: i16 = -258;
+
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, Eq, PartialEq)]
-#[repr(i8)]
+#[repr(i16)]
 #[non_exhaustive]
 pub enum DeviceSigType {
-    StSECP256R1 = (aws_nitro_enclaves_cose::sign::SignatureAlgorithm::ES256 as i8),
-    StSECP384R1 = (aws_nitro_enclaves_cose::sign::SignatureAlgorithm::ES384 as i8),
-    // StRSA2048 = RS256,
-    // StRSA3072 = RS384,
+    StSECP256R1 = (aws_nitro_enclaves_cose::sign::SignatureAlgorithm::ES256 as i16),
+    StSECP384R1 = (aws_nitro_enclaves_cose::sign::SignatureAlgorithm::ES384 as i16),
+    StRSA2048 = RS256,
+    StRSA3072 = RS384,
     StEPID10 = 90,
     StEPID11 = 91,
     StEPID20 = 92,
 }
 
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr)]
-#[repr(i8)]
+#[repr(i16)]
 #[non_exhaustive]
 pub enum PublicKeyType {
-    // Rsa2048RESTR = RS256,
-    // Rsa = RS384,
-    SECP256R1 = (aws_nitro_enclaves_cose::sign::SignatureAlgorithm::ES256 as i8),
-    SECP384R1 = (aws_nitro_enclaves_cose::sign::SignatureAlgorithm::ES384 as i8),
+    Rsa2048RESTR = RS256,
+    Rsa = RS384,
+    SECP256R1 = (aws_nitro_enclaves_cose::sign::SignatureAlgorithm::ES256 as i16),
+    SECP384R1 = (aws_nitro_enclaves_cose::sign::SignatureAlgorithm::ES384 as i16),
 }
 
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr)]
