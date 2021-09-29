@@ -268,7 +268,7 @@ async fn get_mfg_info(mfg_string_type: MfgStringType) -> Result<CborSimpleType> 
 enum KeyReference {
     FileSystem {
         sign_key: PKey<Private>,
-        hmac_key: PKey<Private>,
+        hmac_key: Vec<u8>,
     },
 }
 
@@ -277,7 +277,6 @@ impl KeyReference {
         let mut hmac_key_buf = [0; 32];
         openssl::rand::rand_bytes(&mut hmac_key_buf).context("Error creating random HMAC key")?;
         let hmac_key_buf = hmac_key_buf;
-        let hmac_key = PKey::hmac(&hmac_key_buf).context("Error building HMAC key")?;
 
         match keytype {
             PublicKeyType::SECP256R1 | PublicKeyType::SECP384R1 => {
@@ -291,7 +290,10 @@ impl KeyReference {
                 let sign_key =
                     PKey::from_ec_key(EcKey::generate(&group).context("Error generating EC key")?)
                         .context("Error creating EC key")?;
-                Ok(KeyReference::FileSystem { sign_key, hmac_key })
+                Ok(KeyReference::FileSystem {
+                    sign_key,
+                    hmac_key: hmac_key_buf.to_vec(),
+                })
             }
             _ => bail!("Key type not supported"),
         }
@@ -333,7 +335,6 @@ impl KeyReference {
             .with_context(|| format!("Error reading HMAC key from {}", &hmac_key_path))?;
 
         let sign_key = PKey::private_key_from_der(&sign_key).context("Error loading sign key")?;
-        let hmac_key = PKey::hmac(&hmac_key).context("Error loading HMAC key")?;
 
         Ok(KeyReference::FileSystem { sign_key, hmac_key })
     }
@@ -376,9 +377,6 @@ impl KeyReference {
                 let private_key = sign_key
                     .private_key_to_der()
                     .context("Error serializing private sign key")?;
-                let hmac_secret = hmac_key
-                    .raw_private_key()
-                    .context("Error serializing HMac key")?;
                 let manufacturer_pubkey_hash = Hash::new(
                     None,
                     &serde_cbor::to_vec(&manufacturer_public_key)
@@ -389,7 +387,7 @@ impl KeyReference {
                 let cred = FileDeviceCredential {
                     active: true,
                     protver: PROTOCOL_VERSION,
-                    hmac_secret,
+                    hmac_secret: hmac_key,
                     device_info,
                     guid,
                     rvinfo,
@@ -413,7 +411,9 @@ impl KeyReference {
     fn perform_hmac(&self, data: &[u8]) -> Result<HMac> {
         match self {
             KeyReference::FileSystem { hmac_key, .. } => {
-                let mut hmac_signer = Signer::new(MessageDigest::sha384(), hmac_key)
+                let hmac_key =
+                    PKey::hmac(hmac_key.as_slice()).context("Error creating HMAC key")?;
+                let mut hmac_signer = Signer::new(MessageDigest::sha384(), &hmac_key)
                     .context("Error creating hmac signer")?;
                 hmac_signer
                     .update(data)
