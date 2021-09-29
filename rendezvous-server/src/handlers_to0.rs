@@ -177,6 +177,7 @@ pub(super) async fn ownersign(
             .into());
         }
         Ok(v) => v
+            .clone()
             .try_into()
             .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?,
     };

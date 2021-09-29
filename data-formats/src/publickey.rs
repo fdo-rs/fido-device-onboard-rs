@@ -6,7 +6,7 @@ use std::fmt::Display;
 use openssl::{
     nid::Nid,
     pkey::{self, PKey, PKeyRef, Public},
-    x509::{X509Ref, X509VerifyResult, X509},
+    x509::{X509VerifyResult, X509},
 };
 use serde::{
     de::Error as _,
@@ -30,6 +30,9 @@ pub struct PublicKey {
 
     #[serde(skip)]
     pkey: PKey<Public>,
+
+    #[serde(skip)]
+    certs: Option<X5Chain>,
 }
 
 impl<'de> Deserialize<'de> for PublicKey {
@@ -69,12 +72,14 @@ impl<'de> Deserialize<'de> for PublicKey {
 }
 
 impl PublicKey {
-    pub fn new(
-        key_type: PublicKeyType,
-        encoding: PublicKeyEncoding,
-        data: Vec<u8>,
-    ) -> Result<Self> {
-        let pkey = PublicKey::parse_pkey(key_type, encoding, &data)?;
+    fn new(key_type: PublicKeyType, encoding: PublicKeyEncoding, data: Vec<u8>) -> Result<Self> {
+        log::trace!(
+            "Parsing public key, type: {:?}, encoding: {:?}, data: {:?}",
+            key_type,
+            encoding,
+            data
+        );
+        let (certs, pkey) = PublicKey::parse_data(key_type, encoding, &data)?;
 
         Ok(PublicKey {
             key_type,
@@ -82,25 +87,59 @@ impl PublicKey {
             data,
 
             pkey,
+            certs,
         })
+    }
+
+    pub fn chain(&self) -> Option<&X5Chain> {
+        self.certs.as_ref()
     }
 
     pub fn keytype(&self) -> PublicKeyType {
         self.key_type
     }
 
-    fn parse_pkey(
-        key_type: PublicKeyType,
+    fn parse_data(
+        _key_type: PublicKeyType,
         encoding: PublicKeyEncoding,
         data: &[u8],
-    ) -> Result<PKey<Public>> {
+    ) -> Result<(Option<X5Chain>, PKey<Public>)> {
         match encoding {
-            PublicKeyEncoding::X509 => match key_type {
-                PublicKeyType::SECP256R1 | PublicKeyType::SECP384R1 => {
-                    Ok(PKey::public_key_from_der(data)?)
+            PublicKeyEncoding::X509 => {
+                let cert = X509::from_der(data)?;
+                let pkey = cert.public_key()?;
+                Ok((Some(X5Chain::new(vec![cert])?), pkey))
+            }
+            PublicKeyEncoding::COSEX509 => {
+                let chain = X5Chain::from_slice(data)?;
+
+                if chain.chain.is_empty() {
+                    return Err(Error::InconsistentValue("Empty x5chain provided"));
                 }
+                let leaf_cert = chain.leaf_certificate().unwrap();
+                let pkey = leaf_cert.public_key()?;
+
+                Ok((Some(chain), pkey))
+            }
+            PublicKeyEncoding::Crypto | PublicKeyEncoding::Cosekey => {
+                Err(Error::UnsupportedAlgorithm)
+            }
+        }
+    }
+
+    fn key_type_from_pkey(pkey: &PKeyRef<Public>) -> Result<PublicKeyType> {
+        match pkey.id() {
+            pkey::Id::EC => match pkey.ec_key()?.group().curve_name() {
+                Some(Nid::X9_62_PRIME256V1) => Ok(PublicKeyType::SECP256R1),
+                Some(Nid::SECP384R1) => Ok(PublicKeyType::SECP384R1),
+                _ => Err(Error::UnsupportedAlgorithm),
             },
-            _ => todo!(),
+            pkey::Id::RSA => match pkey.bits() {
+                2048 => Ok(PublicKeyType::Rsa2048RESTR),
+                3072 => Ok(PublicKeyType::Rsa),
+                _ => Err(Error::UnsupportedAlgorithm),
+            },
+            _ => Err(Error::UnsupportedAlgorithm),
         }
     }
 
@@ -113,56 +152,55 @@ impl PublicKey {
     }
 }
 
-impl<P> TryFrom<&PKeyRef<P>> for PublicKey
-where
-    P: openssl::pkey::HasPublic,
-{
+impl TryFrom<X5Chain> for PublicKey {
     type Error = Error;
 
-    fn try_from(pkey: &PKeyRef<P>) -> Result<Self> {
-        let key = pkey.public_key_to_der()?;
-        let key_type = match pkey.id() {
-            pkey::Id::EC => match pkey.ec_key()?.group().curve_name() {
-                Some(Nid::X9_62_PRIME256V1) => PublicKeyType::SECP256R1,
-                Some(Nid::SECP384R1) => PublicKeyType::SECP384R1,
-                _ => return Err(Error::UnsupportedAlgorithm),
-            },
-            _ => return Err(Error::UnsupportedAlgorithm),
-        };
-        PublicKey::new(key_type, PublicKeyEncoding::X509, key)
+    fn try_from(chain: X5Chain) -> Result<Self> {
+        let leaf_cert = chain
+            .leaf_certificate()
+            .ok_or(Error::InconsistentValue("x5chain without leaf certificate"))?;
+        let pkey = leaf_cert.public_key()?;
+        let key_type = PublicKey::key_type_from_pkey(&pkey)?;
+        let encoded = chain.to_vec()?;
+
+        Ok(PublicKey {
+            key_type,
+            encoding: PublicKeyEncoding::COSEX509,
+            data: encoded,
+
+            pkey,
+            certs: Some(chain),
+        })
     }
 }
 
-impl<P> TryFrom<&PKey<P>> for PublicKey
-where
-    P: openssl::pkey::HasPublic,
-{
+impl TryFrom<X509> for PublicKey {
     type Error = Error;
 
-    fn try_from(pkey: &PKey<P>) -> Result<Self> {
-        PublicKey::try_from(pkey.as_ref())
-    }
-}
+    fn try_from(x509: X509) -> Result<Self> {
+        let pkey = x509.public_key()?;
+        let key_type = PublicKey::key_type_from_pkey(&pkey)?;
+        let encoded = x509.to_der()?;
+        let chain = X5Chain::new(vec![x509])?;
 
-impl TryFrom<&X509> for PublicKey {
-    type Error = Error;
+        Ok(PublicKey {
+            key_type,
+            encoding: PublicKeyEncoding::X509,
+            data: encoded,
 
-    fn try_from(x509: &X509) -> Result<Self> {
-        PublicKey::try_from(x509.as_ref())
-    }
-}
-
-impl TryFrom<&X509Ref> for PublicKey {
-    type Error = Error;
-
-    fn try_from(x509: &X509Ref) -> Result<Self> {
-        PublicKey::try_from(x509.public_key()?.as_ref())
+            pkey,
+            certs: Some(chain),
+        })
     }
 }
 
 impl Display for PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Public key ({:?}): {:?}", self.key_type, self.data)
+        write!(
+            f,
+            "Public key ({:?}): {:?} (chain: {:?})",
+            self.key_type, self.data, self.certs
+        )
     }
 }
 
@@ -193,6 +231,7 @@ impl<'de> Deserialize<'de> for X5Chain {
                 let mut chain = Vec::new();
 
                 while let Some(x509) = seq.next_element::<Vec<u8>>()? {
+                    log::trace!("Deserializing certificate: {:?}", x509);
                     let x509 = X509::from_der(&x509).map_err(A::Error::custom)?;
                     chain.push(x509);
                 }
@@ -212,6 +251,7 @@ impl Serialize for X5Chain {
         let mut seq = serializer.serialize_seq(Some(self.chain.len()))?;
         for cert in &self.chain {
             let cert = cert.to_der().map_err(S::Error::custom)?;
+            log::trace!("Serializing certificate: {:?}", cert);
             seq.serialize_element(&cert)?;
         }
         seq.end()
@@ -219,8 +259,12 @@ impl Serialize for X5Chain {
 }
 
 impl X5Chain {
-    pub fn new(chain: Vec<X509>) -> Self {
-        X5Chain { chain }
+    pub fn new(chain: Vec<X509>) -> Result<Self> {
+        if chain.is_empty() {
+            Err(Error::InconsistentValue("Empty x5chain"))
+        } else {
+            Ok(X5Chain { chain })
+        }
     }
 
     pub fn verify_from_x5bag(&self, bag: &X5Bag) -> Result<&X509> {
@@ -304,6 +348,10 @@ impl X5Chain {
 
     pub fn from_slice(data: &[u8]) -> Result<Self> {
         serde_cbor::from_slice(data).map_err(Error::from)
+    }
+
+    fn to_vec(&self) -> Result<Vec<u8>> {
+        serde_cbor::to_vec(self).map_err(Error::from)
     }
 
     pub fn chain(&self) -> &[X509] {

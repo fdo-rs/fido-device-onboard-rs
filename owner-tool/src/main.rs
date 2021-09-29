@@ -351,7 +351,7 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
             manufacturer_cert_path
         )
     })?;
-    let manufacturer_pubkey = PublicKey::try_from(&manufacturer_cert)
+    let manufacturer_pubkey = PublicKey::try_from(manufacturer_cert)
         .context("Error creating manufacturer public key representation")?;
     let manufacturer_pubkey_hash = Hash::new(
         None,
@@ -413,7 +413,7 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
     // Construct device certificate chain
     let mut device_cert_chain = device_cert_ca_chain;
     device_cert_chain.insert(0, device_cert);
-    let device_cert_chain = X5Chain::new(device_cert_chain);
+    let device_cert_chain = X5Chain::new(device_cert_chain).context("Error creating X5Chain")?;
     let device_cert_chain_hash = device_cert_chain
         .hash(HashType::Sha384)
         .context("Error computing digest over device certificate chain")?;
@@ -616,7 +616,7 @@ fn extend_voucher(matches: &ArgMatches) -> Result<(), Error> {
         )
     })?;
     let new_owner_pubkey =
-        PublicKey::try_from(&new_owner_cert).context("Error serializing owner public key")?;
+        PublicKey::try_from(new_owner_cert).context("Error serializing owner public key")?;
 
     ov.extend(&current_owner_private_key, None, &new_owner_pubkey)
         .context("Error extending ownership voucher")?;

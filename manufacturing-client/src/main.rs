@@ -1,4 +1,4 @@
-use std::{convert::TryInto, fs};
+use std::fs;
 use std::{env, str::FromStr};
 
 use anyhow::{bail, Context, Result};
@@ -7,7 +7,7 @@ use fdo_data_formats::{
     constants::{HashType, HeaderKeys, KeyStorageType, MfgStringType, PublicKeyType},
     devicecredential::FileDeviceCredential,
     messages,
-    publickey::{PublicKey, X5Chain},
+    publickey::PublicKey,
     types::{
         CborSimpleType, CipherSuite, Guid, HMac, Hash, KexSuite, KeyDeriveSide, KeyExchange, Nonce,
         RendezvousInfo,
@@ -56,10 +56,13 @@ async fn perform_diun(
     let accept = accept.context("Error sending Connect")?.into_token();
     log::debug!("DIUN Accept token: {:?}", accept);
     let diun_pubchain = accept
-        .get_unprotected_value::<X5Chain>(HeaderKeys::CUPHOwnerPubKey)
+        .get_unprotected_value::<PublicKey>(HeaderKeys::CUPHOwnerPubKey)
         .context("Error getting diun_pubkey")?
         .context("No DIUN public key provided")?;
     log::debug!("Validating DIUN public chain: {:?}", diun_pubchain);
+    let diun_pubchain = diun_pubchain
+        .chain()
+        .context("Error getting diun_pubkey: no chain")?;
 
     let diun_pubkey = match pub_key_verification {
         DiunPublicKeyVerificationMode::Hash(hash) => diun_pubchain.verify_from_digest(&hash),
@@ -347,11 +350,11 @@ impl KeyReference {
         }
     }
 
-    fn get_public_key(&self) -> Result<PublicKey> {
+    fn get_public_key(&self) -> Result<Vec<u8>> {
         match self {
-            KeyReference::FileSystem { sign_key, .. } => {
-                sign_key.try_into().context("Error serializing public key")
-            }
+            KeyReference::FileSystem { sign_key, .. } => sign_key
+                .public_key_to_der()
+                .context("Error serializing public key"),
         }
     }
 
