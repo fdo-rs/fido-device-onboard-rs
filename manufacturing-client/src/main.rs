@@ -26,7 +26,7 @@ use openssl::{
     sign::Signer,
 };
 
-const DEVICE_CREDENTIAL_FILESYSTEM_PATH: &str = "/etc/device-credentials";
+const DEVICE_CREDENTIAL_FILESYSTEM_PATH: &str = "/etc/fdo/device-credentials";
 
 async fn perform_diun(
     client: &mut ServiceClient,

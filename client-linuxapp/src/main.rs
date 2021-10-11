@@ -22,7 +22,7 @@ mod serviceinfo;
 use device_credential_locations::UsableDeviceCredentialLocation;
 use rand::Rng;
 
-const DEVICE_ONBOARDING_EXECUTED_MARKER_FILE: &str = "/etc/device_onboarding_performed";
+const DEVICE_ONBOARDING_EXECUTED_MARKER_FILE: &str = "/etc/fdo/device_onboarding_performed";
 
 fn marker_file_location() -> PathBuf {
     if let Ok(path) = env::var("DEVICE_ONBOARDING_EXECUTED_MARKER_FILE_PATH") {
