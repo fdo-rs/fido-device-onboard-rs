@@ -1,0 +1,9 @@
+#!/bin/bash
+
+set -e
+
+/usr/bin/fdo-manufacturing-client
+mkdir -p /bootmount
+TYPE=$(lsblk --output FSTYPE /dev/disk/by-label/boot | tail -n1)
+mount -t ${TYPE} /dev/disk/by-label/boot /bootmount
+cp -a /etc/device-credentials /bootmount/device-credentials
