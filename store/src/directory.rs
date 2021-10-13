@@ -29,7 +29,17 @@ where
     }
     .map_err(|_| StoreError::Configuration("Storage directory invalid type".to_string()))?;
 
-    let dirpath = Path::new(&directory).canonicalize().map_err(|e| {
+    let dirpath = Path::new(&directory);
+    if !dirpath.exists() {
+        fs::create_dir_all(dirpath).map_err(|e| {
+            StoreError::Configuration(format!(
+                "Storage directory '{}' could not be created: {}",
+                directory, e
+            ))
+        })?;
+    }
+
+    let canonicalized_directory = dirpath.canonicalize().map_err(|e| {
         StoreError::Configuration(format!(
             "Storage directory '{}' could not be canonicalized: {}",
             directory, e
@@ -40,7 +50,7 @@ where
         phantom_k: PhantomData,
         phantom_v: PhantomData,
 
-        directory: dirpath,
+        directory: canonicalized_directory,
     }))
 }
 
