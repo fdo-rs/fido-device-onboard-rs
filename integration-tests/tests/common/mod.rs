@@ -63,8 +63,8 @@ impl Binary {
         match self {
             Binary::ClientLinuxapp => "fdo-client-linuxapp",
             Binary::ManufacturingClient => "fdo-manufacturing-client",
-            Binary::ManufacturingServer => "fdo-manufacturing-service",
-            Binary::OwnerOnboardingServer => "fdo-owner-onboarding-service",
+            Binary::ManufacturingServer => "fdo-manufacturing-server",
+            Binary::OwnerOnboardingServer => "fdo-owner-onboarding-server",
             Binary::OwnerTool => "fdo-owner-tool",
             Binary::RendezvousServer => "fdo-rendezvous-server",
         }
@@ -72,9 +72,9 @@ impl Binary {
 
     fn config_file_name(&self) -> Option<&str> {
         match self {
-            Binary::ManufacturingServer => Some("manufacturing-service.yml"),
-            Binary::OwnerOnboardingServer => Some("owner-onboarding-service.yml"),
-            Binary::RendezvousServer => Some("rendezvous-service.yml"),
+            Binary::ManufacturingServer => Some("manufacturing-server.yml"),
+            Binary::OwnerOnboardingServer => Some("owner-onboarding-server.yml"),
+            Binary::RendezvousServer => Some("rendezvous-server.yml"),
             _ => None,
         }
     }
@@ -88,7 +88,7 @@ impl Binary {
 
     fn url_environment_variable(&self) -> Option<&str> {
         match self {
-            Binary::ManufacturingClient => Some("MANUFACTURING_SERVICE_URL"),
+            Binary::ManufacturingClient => Some("MANUFACTURING_SERVER_URL"),
             _ => None,
         }
     }

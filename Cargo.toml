@@ -5,7 +5,7 @@ members = [
     "store",
 
     "client-linuxapp",
-    "owner-onboarding-service",
+    "owner-onboarding-server",
     "owner-tool",
     "rendezvous-server",
     "manufacturing-server",

@@ -141,9 +141,9 @@ async fn main() -> Result<()> {
 
     let mut settings = config::Config::default();
     settings
-        .merge(config::File::with_name("owner-onboarding-service").required(false))
+        .merge(config::File::with_name("owner-onboarding-server").required(false))
         .context("Loading configuration files")?
-        .merge(config::Environment::with_prefix("owner_onboarding_service"))
+        .merge(config::Environment::with_prefix("owner_onboarding_server"))
         .context("Loading configuration from environment variables")?;
     let settings: Settings = settings.try_into().context("Error parsing configuration")?;
 

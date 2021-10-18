@@ -219,7 +219,7 @@ async fn main() -> Result<()> {
 
     let mut settings = config::Config::default();
     settings
-        .merge(config::File::with_name("manufacturing-service"))
+        .merge(config::File::with_name("manufacturing-server"))
         .context("Loading configuration files")?
         .merge(config::Environment::with_prefix("manufacturing-server"))
         .context("Loading configuration from environment variables")?;
