@@ -20,3 +20,4 @@ log = "0.4"
 fdo-data-formats = { path = "../data-formats" }
 fdo-http-wrapper = { path = "../http-wrapper", features = ["server"] }
 fdo-store = { path = "../store", features = ["directory"] }
+fdo-util = { path = "../util"}

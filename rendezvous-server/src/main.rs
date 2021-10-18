@@ -14,6 +14,7 @@ use fdo_data_formats::{
     types::{COSESign, Guid},
 };
 use fdo_store::{Store, StoreDriver};
+use fdo_util::servers::settings_for;
 
 mod handlers_to0;
 mod handlers_to1;
@@ -80,13 +81,10 @@ const DEFAULT_MAX_WAIT_SECONDS: u32 = 2592000;
 async fn main() -> Result<()> {
     fdo_http_wrapper::init_logging();
 
-    let mut settings = config::Config::default();
-    settings
-        .merge(config::File::with_name("rendezvous-server").required(false))
-        .context("Loading configuration files")?
-        .merge(config::Environment::with_prefix("rendezvous"))
-        .context("Loading configuration from environment variables")?;
-    let settings: Settings = settings.try_into().context("Error parsing configuration")?;
+    let settings: Settings = settings_for("rendezvous-server")?
+        .try_into()
+        .context("Error parsing configuration")?;
+
     let max_wait_seconds = settings
         .max_wait_seconds
         .unwrap_or(DEFAULT_MAX_WAIT_SECONDS);
