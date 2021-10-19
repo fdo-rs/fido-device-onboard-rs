@@ -45,6 +45,10 @@ impl OwnershipVoucher {
         }
     }
 
+    pub fn from_slice(data: &[u8]) -> Result<Self> {
+        serde_cbor::from_slice(data).map_err(Error::from)
+    }
+
     pub fn header_hmac(&self) -> &HMac {
         &self.header_hmac
     }
