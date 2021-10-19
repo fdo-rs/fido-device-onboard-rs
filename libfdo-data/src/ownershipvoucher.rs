@@ -63,6 +63,9 @@ pub extern "C" fn fdo_ownershipvoucher_header_get_protocol_version(
 /// Return value:
 /// NULL on error
 /// Pointer to a string containing the GUID on success
+///
+/// Note: The returned string ownership is transferred to the caller, and should
+/// be freed with `fdo_free_string`
 pub extern "C" fn fdo_ownershipvoucher_header_get_guid(
     v: *const OwnershipVoucher,
 ) -> *const c_char {
@@ -74,11 +77,36 @@ pub extern "C" fn fdo_ownershipvoucher_header_get_guid(
         Err(_) => return null(),
         Ok(hdr) => hdr.guid.to_string(),
     };
-    let guid = match CString::new(guid) {
+    match CString::new(guid) {
+        Err(_) => null(),
+        Ok(cstr) => cstr.into_raw(),
+    }
+}
+
+#[no_mangle]
+/// Returns the device info of the ownership voucher if it is a string
+///
+/// Return value:
+/// NULL on error or if Device Info is not a string
+/// Pointer to a string containing the Device Info on success
+///
+/// Note: The returned string ownership is transferred to the caller, and should
+/// be freed with `fdo_free_string`
+pub extern "C" fn fdo_ownershipvoucher_header_get_device_info_string(
+    v: *const OwnershipVoucher,
+) -> *const c_char {
+    if v.is_null() {
+        return null();
+    }
+    let voucher = unsafe { &*v };
+    let device_info = match voucher.get_header() {
         Err(_) => return null(),
-        Ok(cstr) => cstr,
+        Ok(hdr) => hdr.device_info,
     };
-    guid.into_raw()
+    match CString::new(device_info) {
+        Err(_) => null(),
+        Ok(cstr) => cstr.into_raw(),
+    }
 }
 
 #[cfg(test)]
@@ -95,7 +123,8 @@ mod tests {
         assert!(result.status.success());
         result.stdout_equals(
             "Protocol version: 100
-Device GUID: a2ce9bee-712d-df49-7b48-19e7616d2346",
+Device GUID: a2ce9bee-712d-df49-7b48-19e7616d2346
+Device Info: testdevice",
         );
         result.stderr_equals("");
     }

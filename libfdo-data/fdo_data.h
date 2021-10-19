@@ -48,7 +48,22 @@ int32_t fdo_ownershipvoucher_header_get_protocol_version(const struct FdoOwnersh
  * Return value:
  * NULL on error
  * Pointer to a string containing the GUID on success
+ *
+ * Note: The returned string ownership is transferred to the caller, and should
+ * be freed with `fdo_free_string`
  */
 const char *fdo_ownershipvoucher_header_get_guid(const struct FdoOwnershipVoucher *v);
+
+/**
+ * Returns the device info of the ownership voucher if it is a string
+ *
+ * Return value:
+ * NULL on error or if Device Info is not a string
+ * Pointer to a string containing the Device Info on success
+ *
+ * Note: The returned string ownership is transferred to the caller, and should
+ * be freed with `fdo_free_string`
+ */
+const char *fdo_ownershipvoucher_header_get_device_info_string(const struct FdoOwnershipVoucher *v);
 
 #endif /* FDO_DATA_H */
