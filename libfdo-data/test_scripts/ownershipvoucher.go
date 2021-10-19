@@ -33,4 +33,9 @@ func main() {
 	defer C.fdo_free_string(guidS)
 	guid := C.GoString(guidS)
 	fmt.Println("Device GUID:", guid)
+
+	devinfoS := C.fdo_ownershipvoucher_header_get_device_info_string(voucher)
+	defer C.fdo_free_string(devinfoS)
+	devinfo := C.GoString(devinfoS)
+	fmt.Println("Device Info:", devinfo)
 }
