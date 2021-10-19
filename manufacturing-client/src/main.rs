@@ -194,8 +194,8 @@ impl DiunPublicKeyVerificationMode {
 async fn main() -> Result<()> {
     fdo_http_wrapper::init_logging();
 
-    let url = env::var("MANUFACTURING_SERVICE_URL")
-        .context("Please provide MANUFACTURING_SERVICE_URL")?;
+    let url =
+        env::var("MANUFACTURING_SERVER_URL").context("Please provide MANUFACTURING_SERVER_URL")?;
     let use_plain_di: bool = match env::var("USE_PLAIN_DI") {
         Ok(val) => val == "true",
         Err(_) => false,
