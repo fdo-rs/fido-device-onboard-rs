@@ -4,6 +4,7 @@ members = [
     "data-formats",
     "http-wrapper",
     "store",
+    "util",
 
     "client-linuxapp",
     "owner-onboarding-server",
