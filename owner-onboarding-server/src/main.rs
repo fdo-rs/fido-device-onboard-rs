@@ -108,7 +108,7 @@ fn generate_owner2_keys() -> Result<(PKey<Private>, PublicKey)> {
         EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).context("Error getting nist 256 group")?;
     let owner2_key = EcKey::generate(&owner2_key_group).context("Error generating owned2 key")?;
     let owner2_key =
-        PKey::from_ec_key(owner2_key).context("ERror converting owner2 key to PKey")?;
+        PKey::from_ec_key(owner2_key).context("Error converting owner2 key to PKey")?;
 
     // Create an ephemeral certificate
     let mut subject = X509NameBuilder::new()?;
