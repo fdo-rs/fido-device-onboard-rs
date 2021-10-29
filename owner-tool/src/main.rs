@@ -29,10 +29,10 @@ use fdo_data_formats::{
     ownershipvoucher::{OwnershipVoucher, OwnershipVoucherHeader},
     publickey::{PublicKey, X5Chain},
     types::{
-        COSESign, Guid, HMac, Hash, RendezvousDirective, RendezvousInfo, TO0Data, TO1DataPayload,
-        TO2AddressEntry,
+        COSESign, CborSimpleType, Guid, HMac, Hash, RendezvousDirective, RendezvousInfo, TO0Data,
+        TO1DataPayload, TO2AddressEntry,
     },
-    PROTOCOL_VERSION,
+    Serializable, PROTOCOL_VERSION,
 };
 use fdo_http_wrapper::client::RequestResult;
 

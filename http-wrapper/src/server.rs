@@ -198,8 +198,8 @@ where
         }
     };
     let req = IM::deserialize_data(&inbound).map_err(|e| {
-            log::info!("Error parsing request: {:?}", e);
-            warp::reject::custom(ParseError)
+        log::info!("Error parsing request: {:?}", e);
+        warp::reject::custom(ParseError)
     })?;
 
     Ok((req, ses_with_store))
@@ -367,7 +367,9 @@ where
         .and_then(
             |(req, hdr, ses_store): (warp::hyper::body::Bytes, Option<String>, SessionStoreT)| async move {
                 let ses = match hdr {
-                    Some(val) => match ses_store.load_session(val).await {
+                    Some(val) =>  {
+                        let val = val.split(' ').nth(1).unwrap();
+                    match ses_store.load_session(val.to_string()).await {
                         Ok(Some(ses)) => ses,
                         Ok(None) => Session::new(),
                         Err(_) => {
@@ -377,7 +379,7 @@ where
                                 "Error retrieving session",
                             )))
                         }
-                    },
+                    }},
                     None => Session::new(),
                 };
                 Ok((

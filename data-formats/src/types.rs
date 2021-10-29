@@ -439,9 +439,9 @@ impl Serializable for TO0Data {
 
 impl TO0Data {
     pub fn new(
-    ownership_voucher: OwnershipVoucher,
-    wait_seconds: u32,
-    nonce: Nonce,
+        ownership_voucher: OwnershipVoucher,
+        wait_seconds: u32,
+        nonce: Nonce,
     ) -> Result<Self, Error> {
         let mut contents = unsafe { ParsedArray::new() };
         contents.set(0, &ownership_voucher)?;
@@ -1336,7 +1336,7 @@ where
                 HeaderKeys::EatFDO,
                 &serde_bytes::ByteBuf::from(payload.clone()),
             )
-                .expect("Error adding to res");
+            .expect("Error adding to res");
         }
         res.insert(HeaderKeys::EatNonce, &self.nonce)
             .expect("Error adding to res");
@@ -1344,7 +1344,7 @@ where
             HeaderKeys::EatUeid,
             &serde_bytes::ByteBuf::from(self.device_guid.clone()),
         )
-            .expect("Error adding to res");
+        .expect("Error adding to res");
 
         res
     }
