@@ -186,6 +186,7 @@ where
         }
     }
 
+    log::trace!("Raw request: {:?}", hex::encode(&inbound));
     let inbound = match keys.decrypt(&inbound) {
         Ok(v) => v,
         Err(_) => {
@@ -321,6 +322,7 @@ where
             .into())
         }
     };
+    log::trace!("Raw response: {:?}", hex::encode(&val));
 
     Ok(to_response::<OM>(val, token))
 }
