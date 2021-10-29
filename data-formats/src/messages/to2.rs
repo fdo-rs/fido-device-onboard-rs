@@ -1,7 +1,11 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_tuple::Serialize_tuple;
 
 use super::{ClientMessage, EncryptionRequirement, Message, ServerMessage};
+use crate::{
+    cborparser::ParsedArray, ownershipvoucher::OwnershipVoucherEntry, simple_message_serializable,
+    Serializable,
+};
 
 use crate::{
     constants::MessageType,
@@ -71,8 +75,10 @@ impl Message for HelloDevice {
 
 impl ClientMessage for HelloDevice {}
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct ProveOVHdr(COSESign);
+
+simple_message_serializable!(ProveOVHdr, COSESign);
 
 impl ProveOVHdr {
     pub fn new(token: COSESign) -> Self {
@@ -134,14 +140,34 @@ impl Message for GetOVNextEntry {
 
 impl ClientMessage for GetOVNextEntry {}
 
-#[derive(Debug, Serialize_tuple, Deserialize)]
+#[derive(Debug)]
 pub struct OVNextEntry {
     entry_num: u16,
-    entry: COSESign,
+    entry: OwnershipVoucherEntry,
+}
+
+impl Serializable for OVNextEntry {
+    fn deserialize_data(data: &[u8]) -> Result<Self, crate::Error> {
+        let contents: ParsedArray<crate::cborparser::ParsedArraySize2> =
+            ParsedArray::deserialize_data(data)?;
+        let entry_num = contents.get(0)?;
+        let entry = contents.get(1)?;
+
+        Ok(OVNextEntry { entry_num, entry })
+    }
+
+    fn serialize_data(&self) -> Result<Vec<u8>, crate::Error> {
+        let mut contents: ParsedArray<crate::cborparser::ParsedArraySize2> =
+            unsafe { ParsedArray::new() };
+        contents.set(0, &self.entry_num)?;
+        contents.set(1, &self.entry)?;
+
+        contents.serialize_data()
+    }
 }
 
 impl OVNextEntry {
-    pub fn new(entry_num: u16, entry: COSESign) -> Self {
+    pub fn new(entry_num: u16, entry: OwnershipVoucherEntry) -> Self {
         OVNextEntry { entry_num, entry }
     }
 
@@ -149,8 +175,8 @@ impl OVNextEntry {
         self.entry_num
     }
 
-    pub fn entry(&self) -> &COSESign {
-        &self.entry
+    pub fn into_entry(self) -> OwnershipVoucherEntry {
+        self.entry
     }
 }
 
@@ -170,8 +196,10 @@ impl Message for OVNextEntry {
 
 impl ServerMessage for OVNextEntry {}
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct ProveDevice(COSESign);
+
+simple_message_serializable!(ProveDevice, COSESign);
 
 impl ProveDevice {
     pub fn new(token: COSESign) -> Self {
@@ -199,8 +227,10 @@ impl Message for ProveDevice {
 
 impl ClientMessage for ProveDevice {}
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct SetupDevice(COSESign);
+
+simple_message_serializable!(SetupDevice, COSESign);
 
 impl SetupDevice {
     pub fn new(token: COSESign) -> Self {

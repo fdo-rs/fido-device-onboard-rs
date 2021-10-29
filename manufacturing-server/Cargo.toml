@@ -1,5 +1,5 @@
 [package]
-name = "fdo-manufacturing-service"
+name = "fdo-manufacturing-server"
 version = "0.1.0"
 authors = ["Patrick Uiterwijk <patrick@puiterwijk.org>"]
 edition = "2018"
@@ -14,9 +14,10 @@ thiserror= "1"
 serde = "1"
 openssl = "0.10"
 warp = "0.3"
-serde_cbor = "0.11"
 log = "0.4"
+hex = "0.4"
 
 fdo-data-formats = { path = "../data-formats" }
 fdo-http-wrapper = { path = "../http-wrapper", features = ["server"] }
 fdo-store = { path = "../store", features = ["directory"] }
+fdo-util = { path = "../util" }

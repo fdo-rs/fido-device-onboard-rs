@@ -2,8 +2,10 @@ use core::future::Future;
 use core::pin::Pin;
 use core::time::Duration;
 
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::Deserialize;
 use thiserror::Error;
+
+use fdo_data_formats::Serializable;
 
 #[derive(Debug, Error)]
 pub enum StoreError {
@@ -100,7 +102,7 @@ impl StoreDriver {
         OT: StoreOpenMode + 'static,
         // K and V are supersets of the possible requirements for the different implementations
         K: Eq + std::hash::Hash + Send + Sync + std::string::ToString + std::str::FromStr + 'static,
-        V: Send + Sync + Clone + Serialize + DeserializeOwned + 'static,
+        V: Send + Sync + Clone + Serializable + 'static,
     {
         match self {
             StoreDriver::InMemory => in_memory::initialize(cfg),

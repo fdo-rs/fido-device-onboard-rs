@@ -5,10 +5,12 @@ use aws_nitro_enclaves_cose::CoseSign1 as COSESignInner;
 use serde_tuple::Serialize_tuple;
 
 use crate::{
+    cborparser::ParsedArray,
     constants::{DeviceSigType, HashType, HeaderKeys, RendezvousVariable, TransportProtocol},
     errors::Error,
     ownershipvoucher::{OwnershipVoucher, OwnershipVoucherHeader},
     publickey::PublicKey,
+    Serializable,
 };
 
 use openssl::{
@@ -22,30 +24,61 @@ use openssl::{
     symm::Cipher,
 };
 use openssl_kdf::{Kdf, KdfKbMode, KdfMacType, KdfType};
-use serde::{de::SeqAccess, ser::SerializeSeq, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize_tuple, Deserialize, Clone)]
+#[derive(Serialize_tuple, Deserialize, Clone)]
 pub struct Hash {
     hash_type: HashType,
+
+    #[serde(with = "serde_bytes")]
     value: Vec<u8>,
 }
 
-impl Hash {
-    pub fn new(alg: Option<HashType>, data: &[u8]) -> Result<Self, Error> {
-        let alg = alg.unwrap_or(HashType::Sha384);
+impl std::fmt::Debug for Hash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Hash")
+            .field("hash_type", &self.hash_type)
+            .field("value", &hex::encode(&self.value))
+            .finish()
+    }
+}
 
+impl FromStr for Hash {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let splitloc = match s.find(':') {
+            Some(loc) => loc,
+            None => {
+                return Err(Error::InconsistentValue(
+                    "Hash string is missing ':' separator",
+                ))
+            }
+        };
+        let (alg, val) = s.split_at(splitloc);
+        let val = &val[1..];
+        let alg = HashType::from_str(alg)?;
+        let val = hex::decode(val)?;
+        if val.len() != alg.digest_size() {
+            return Err(Error::InconsistentValue("Digest string is invalid length"));
+        }
+        Ok(Hash {
+            hash_type: alg,
+            value: val,
+        })
+    }
+}
+
+impl Hash {
+    pub fn from_data(alg: HashType, data: &[u8]) -> Result<Self, Error> {
         Ok(Hash {
             hash_type: alg,
             value: hash(alg.try_into()?, data)?.to_vec(),
         })
     }
 
-    pub fn new_from_data(hash_type: HashType, value: Vec<u8>) -> Self {
+    pub fn from_digest(hash_type: HashType, value: Vec<u8>) -> Self {
         Hash { hash_type, value }
-    }
-
-    pub fn guess_new_from_data(value: Vec<u8>) -> Option<Self> {
-        HashType::guess_from_length(value.len()).map(|hash_type| Hash { hash_type, value })
     }
 
     pub fn get_type(&self) -> HashType {
@@ -61,6 +94,14 @@ impl Hash {
 
         // Compare
         if openssl::memcmp::eq(&self.value, &other_digest) {
+            Ok(())
+        } else {
+            Err(Error::IncorrectHash)
+        }
+    }
+
+    pub fn compare(&self, other: &Hash) -> Result<(), Error> {
+        if self == other {
             Ok(())
         } else {
             Err(Error::IncorrectHash)
@@ -86,12 +127,58 @@ impl std::fmt::Display for Hash {
     }
 }
 
+#[cfg(test)]
+mod test_hash {
+    use std::str::FromStr;
+
+    use crate::Error;
+
+    use super::Hash;
+
+    #[test]
+    fn test_hash_fromstr_no_splitloc() {
+        let data = "8a2235cbccf8f70f55d5f610053685eefc153983eb9867f556976115fb9a1692";
+        let result = Hash::from_str(data).unwrap_err();
+        assert!(matches!(
+            result,
+            Error::InconsistentValue("Hash string is missing ':' separator"),
+        ));
+    }
+
+    #[test]
+    fn test_hash_fromstr_invalid_type_name() {
+        let data = "foo:8a2235cbccf8f70f55d5f610053685eefc153983eb9867f556976115fb9a1692";
+        let result = Hash::from_str(data).unwrap_err();
+        assert!(matches!(
+            result,
+            Error::InconsistentValue("Invalid digest name"),
+        ));
+    }
+
+    #[test]
+    fn test_hash_fromstr_invalid_value_length() {
+        let data = "sha384:8a2235cbccf8f70f55d5f610053685eefc153983eb9867f556976115fb9a1692";
+        let result = Hash::from_str(data).unwrap_err();
+        assert!(matches!(
+            result,
+            Error::InconsistentValue("Digest string is invalid length"),
+        ));
+    }
+
+    #[test]
+    fn test_hash_fromstr_valid() {
+        let data = "sha256:8a2235cbccf8f70f55d5f610053685eefc153983eb9867f556976115fb9a1692";
+        Hash::from_str(data).unwrap();
+    }
+}
+
 pub type HMac = Hash;
 
-#[derive(Debug, Serialize_tuple, Deserialize)]
+#[derive(Clone, Debug, Serialize_tuple, Deserialize)]
 pub struct SigInfo {
     sig_type: DeviceSigType, // sgType
-    info: Vec<u8>,           // Info
+    #[serde(with = "serde_bytes")]
+    info: Vec<u8>, // Info
 }
 
 impl SigInfo {
@@ -120,11 +207,11 @@ fn new_nonce_or_guid_val() -> Result<[u8; 16], Error> {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Nonce([u8; 16]);
+pub struct Nonce(#[serde(with = "serde_bytes")] Vec<u8>);
 
 impl Nonce {
     pub fn new() -> Result<Nonce, Error> {
-        Ok(Nonce(new_nonce_or_guid_val()?))
+        Ok(Nonce(new_nonce_or_guid_val()?.to_vec()))
     }
 
     pub fn from_value(val: &[u8]) -> Result<Self, Error> {
@@ -155,7 +242,7 @@ impl FromStr for Nonce {
         let decoded = hex::decode(s).unwrap();
         let boxed_slice = decoded.into_boxed_slice();
         let boxed_array: Box<[u8; 16]> = boxed_slice.try_into().unwrap();
-        Ok(Nonce(*boxed_array))
+        Ok(Nonce(boxed_array.to_vec()))
     }
 }
 
@@ -169,20 +256,21 @@ impl Deref for Nonce {
 
 const EAT_RAND: u8 = 0x01;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Hash, Eq)]
-pub struct Guid([u8; 16]);
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Hash, Eq, Default)]
+pub struct Guid(#[serde(with = "serde_bytes")] Vec<u8>);
 
 impl Guid {
     pub fn new() -> Result<Guid, Error> {
-        Ok(Guid(new_nonce_or_guid_val()?))
+        Ok(Guid(new_nonce_or_guid_val()?.to_vec()))
     }
 
     fn as_uuid(&self) -> uuid::Uuid {
-        uuid::Uuid::from_bytes(self.0)
+        let data: [u8; 16] = self.0.clone().try_into().unwrap();
+        uuid::Uuid::from_bytes(data)
     }
 
     fn as_ueid(&self) -> Vec<u8> {
-        let mut new: Vec<u8> = self.0.try_into().unwrap();
+        let mut new: Vec<u8> = self.0.clone();
 
         new.insert(0, EAT_RAND);
 
@@ -202,7 +290,7 @@ impl FromStr for Guid {
     type Err = uuid::Error;
 
     fn from_str(s: &str) -> Result<Guid, uuid::Error> {
-        Ok(Guid(uuid::Uuid::from_str(s)?.as_bytes().to_owned()))
+        Ok(Guid(uuid::Uuid::from_str(s)?.as_bytes().to_vec()))
     }
 }
 
@@ -246,22 +334,12 @@ impl Serialize for IPAddress {
     where
         S: serde::Serializer,
     {
-        match &self.0 {
-            std::net::IpAddr::V4(addr) => {
-                let mut seq = serializer.serialize_seq(Some(4))?;
-                for o in &addr.octets() {
-                    seq.serialize_element(o)?;
-                }
-                seq.end()
-            }
-            std::net::IpAddr::V6(addr) => {
-                let mut seq = serializer.serialize_seq(Some(16))?;
-                for o in &addr.octets() {
-                    seq.serialize_element(o)?;
-                }
-                seq.end()
-            }
-        }
+        let octets = match &self.0 {
+            std::net::IpAddr::V4(addr) => addr.octets().to_vec(),
+            std::net::IpAddr::V6(addr) => addr.octets().to_vec(),
+        };
+
+        serializer.serialize_bytes(&octets)
     }
 }
 
@@ -279,35 +357,23 @@ impl<'de> Deserialize<'de> for IPAddress {
                 formatter.write_str("an ip address byte string")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
             where
-                A: SeqAccess<'de>,
+                E: serde::de::Error,
             {
-                let mut ip_octets: Vec<u8> = match seq.size_hint() {
-                    Some(size) => Vec::with_capacity(size),
-                    None => Vec::new(),
-                };
-                while let Some(octet) = seq.next_element()? {
-                    ip_octets.push(octet);
-                }
-
-                match ip_octets.len() {
+                let addr = match v.len() {
                     4 => {
-                        let ip_octets: [u8; 4] = ip_octets.try_into().unwrap();
-                        Ok(IPAddress(std::net::IpAddr::V4(std::net::Ipv4Addr::from(
-                            ip_octets,
-                        ))))
+                        let v: [u8; 4] = v.try_into().unwrap();
+                        std::net::IpAddr::V4(std::net::Ipv4Addr::from(v))
                     }
                     16 => {
-                        let ip_octets: [u8; 16] = ip_octets.try_into().unwrap();
-                        Ok(IPAddress(std::net::IpAddr::V6(std::net::Ipv6Addr::from(
-                            ip_octets,
-                        ))))
+                        let v: [u8; 16] = v.try_into().unwrap();
+                        std::net::IpAddr::V6(std::net::Ipv6Addr::from(v))
                     }
-                    _ => Err(serde::de::Error::custom(
-                        "Invalid IP address: not 4 or 16 octets",
-                    )),
-                }
+                    _ => return Err(E::invalid_length(v.len(), &self)),
+                };
+
+                Ok(IPAddress(addr))
             }
         }
 
@@ -318,7 +384,7 @@ impl<'de> Deserialize<'de> for IPAddress {
 pub type DNSAddress = String;
 pub type Port = u16;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct RendezvousInfo(Vec<RendezvousDirective>);
 
 impl RendezvousInfo {
@@ -336,6 +402,51 @@ pub type RendezvousInstruction = (RendezvousVariable, CborSimpleType);
 
 // TODO: This sends serde_cbor outwards. Possibly re-do this
 pub type CborSimpleType = serde_cbor::Value;
+
+pub trait CborSimpleTypeExt {
+    fn as_bool(&self) -> Option<bool>;
+    fn as_i64(&self) -> Option<i64>;
+    fn as_u64(&self) -> Option<u64>;
+    fn as_f64(&self) -> Option<f64>;
+    fn as_str(&self) -> Option<&str>;
+}
+
+impl CborSimpleTypeExt for CborSimpleType {
+    fn as_bool(&self) -> Option<bool> {
+        match self {
+            serde_cbor::Value::Bool(b) => Some(*b),
+            _ => None,
+        }
+    }
+
+    fn as_u64(&self) -> Option<u64> {
+        match self {
+            serde_cbor::Value::Integer(u) => Some(*u as u64),
+            _ => None,
+        }
+    }
+
+    fn as_i64(&self) -> Option<i64> {
+        match self {
+            serde_cbor::Value::Integer(i) => Some(*i as i64),
+            _ => None,
+        }
+    }
+
+    fn as_f64(&self) -> Option<f64> {
+        match self {
+            serde_cbor::Value::Float(f) => Some(*f as f64),
+            _ => None,
+        }
+    }
+
+    fn as_str(&self) -> Option<&str> {
+        match self {
+            serde_cbor::Value::Text(s) => Some(s),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Debug, Serialize_tuple, Deserialize, Clone)]
 pub struct TO2AddressEntry {
@@ -377,32 +488,67 @@ impl TO2AddressEntry {
     }
 }
 
-#[derive(Debug, Serialize_tuple, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct TO0Data {
-    ownership_voucher: OwnershipVoucher,
-    wait_seconds: u32,
-    nonce: Nonce,
+    contents: ParsedArray<crate::cborparser::ParsedArraySize3>,
+
+    cached_ownership_voucher: OwnershipVoucher,
+    cached_wait_seconds: u32,
+    cached_nonce: Nonce,
+}
+
+impl Serializable for TO0Data {
+    fn deserialize_data(data: &[u8]) -> Result<Self, Error> {
+        let contents = ParsedArray::deserialize_data(data)?;
+
+        let ownership_voucher = contents.get(0)?;
+        let wait_seconds = contents.get(1)?;
+        let nonce = contents.get(2)?;
+
+        Ok(TO0Data {
+            contents,
+
+            cached_ownership_voucher: ownership_voucher,
+            cached_wait_seconds: wait_seconds,
+            cached_nonce: nonce,
+        })
+    }
+
+    fn serialize_data(&self) -> Result<Vec<u8>, Error> {
+        self.contents.serialize_data()
+    }
 }
 
 impl TO0Data {
-    pub fn new(ownership_voucher: OwnershipVoucher, wait_seconds: u32, nonce: Nonce) -> Self {
-        TO0Data {
-            ownership_voucher,
-            wait_seconds,
-            nonce,
-        }
+    pub fn new(
+        ownership_voucher: OwnershipVoucher,
+        wait_seconds: u32,
+        nonce: Nonce,
+    ) -> Result<Self, Error> {
+        let mut contents = unsafe { ParsedArray::new() };
+        contents.set(0, &ownership_voucher)?;
+        contents.set(1, &wait_seconds)?;
+        contents.set(2, &nonce)?;
+
+        Ok(TO0Data {
+            contents,
+
+            cached_ownership_voucher: ownership_voucher,
+            cached_wait_seconds: wait_seconds,
+            cached_nonce: nonce,
+        })
     }
 
     pub fn ownership_voucher(&self) -> &OwnershipVoucher {
-        &self.ownership_voucher
+        &self.cached_ownership_voucher
     }
 
     pub fn wait_seconds(&self) -> u32 {
-        self.wait_seconds
+        self.cached_wait_seconds
     }
 
     pub fn nonce(&self) -> &Nonce {
-        &self.nonce
+        &self.cached_nonce
     }
 }
 
@@ -567,14 +713,44 @@ impl Iterator for ServiceInfoIter<'_> {
     }
 }
 
-#[derive(Debug, Serialize_tuple, Deserialize)]
+#[derive(Debug)]
 pub struct TO2ProveOVHdrPayload {
-    ov_header: OwnershipVoucherHeader,
-    num_ov_entries: u16,
-    hmac: HMac,
-    nonce5: Nonce,
-    b_signature_info: SigInfo,
-    a_key_exchange: Vec<u8>,
+    contents: ParsedArray<crate::cborparser::ParsedArraySize6>,
+
+    cached_ov_header: OwnershipVoucherHeader,
+    cached_num_ov_entries: u16,
+    cached_hmac: HMac,
+    cached_nonce5: Nonce,
+    cached_b_signature_info: SigInfo,
+    cached_a_key_exchange: Vec<u8>,
+}
+
+impl Serializable for TO2ProveOVHdrPayload {
+    fn deserialize_data(data: &[u8]) -> Result<Self, Error> {
+        let contents = ParsedArray::deserialize_data(data)?;
+
+        let cached_ov_header = contents.get(0)?;
+        let cached_num_ov_entries = contents.get(1)?;
+        let cached_hmac = contents.get(2)?;
+        let cached_nonce5 = contents.get(3)?;
+        let cached_b_signature_info = contents.get(4)?;
+        let cached_a_key_exchange = contents.get(5)?;
+
+        Ok(TO2ProveOVHdrPayload {
+            contents,
+
+            cached_ov_header,
+            cached_num_ov_entries,
+            cached_hmac,
+            cached_nonce5,
+            cached_b_signature_info,
+            cached_a_key_exchange,
+        })
+    }
+
+    fn serialize_data(&self) -> Result<Vec<u8>, Error> {
+        self.contents.serialize_data()
+    }
 }
 
 impl TO2ProveOVHdrPayload {
@@ -585,39 +761,53 @@ impl TO2ProveOVHdrPayload {
         nonce5: Nonce,
         b_signature_info: SigInfo,
         a_key_exchange: Vec<u8>,
-    ) -> Self {
-        TO2ProveOVHdrPayload {
-            ov_header,
-            num_ov_entries,
-            hmac,
-            nonce5,
-            b_signature_info,
-            a_key_exchange,
-        }
+    ) -> Result<Self, Error> {
+        let mut contents = unsafe { ParsedArray::new() };
+        contents.set(0, &ov_header)?;
+        contents.set(1, &num_ov_entries)?;
+        contents.set(2, &hmac)?;
+        contents.set(3, &nonce5)?;
+        contents.set(4, &b_signature_info)?;
+        contents.set(5, &a_key_exchange)?;
+
+        Ok(TO2ProveOVHdrPayload {
+            contents,
+
+            cached_ov_header: ov_header,
+            cached_num_ov_entries: num_ov_entries,
+            cached_hmac: hmac,
+            cached_nonce5: nonce5,
+            cached_b_signature_info: b_signature_info,
+            cached_a_key_exchange: a_key_exchange,
+        })
     }
 
     pub fn ov_header(&self) -> &OwnershipVoucherHeader {
-        &self.ov_header
+        &self.cached_ov_header
+    }
+
+    pub fn into_ov_header(self) -> OwnershipVoucherHeader {
+        self.cached_ov_header
     }
 
     pub fn num_ov_entries(&self) -> u16 {
-        self.num_ov_entries
+        self.cached_num_ov_entries
     }
 
     pub fn hmac(&self) -> &HMac {
-        &self.hmac
+        &self.cached_hmac
     }
 
     pub fn nonce5(&self) -> &Nonce {
-        &self.nonce5
+        &self.cached_nonce5
     }
 
     pub fn b_signature_info(&self) -> &SigInfo {
-        &self.b_signature_info
+        &self.cached_b_signature_info
     }
 
     pub fn a_key_exchange(&self) -> &[u8] {
-        &self.a_key_exchange
+        &self.cached_a_key_exchange
     }
 }
 
@@ -1224,13 +1414,19 @@ where
         let mut res = self.other_claims.clone();
 
         if let Some(payload) = &self.payload {
-            res.insert(HeaderKeys::EatFDO, payload)
-                .expect("Error adding to res");
+            res.insert(
+                HeaderKeys::EatFDO,
+                &serde_bytes::ByteBuf::from(payload.clone()),
+            )
+            .expect("Error adding to res");
         }
         res.insert(HeaderKeys::EatNonce, &self.nonce)
             .expect("Error adding to res");
-        res.insert(HeaderKeys::EatUeid, &self.device_guid)
-            .expect("Error adding to res");
+        res.insert(
+            HeaderKeys::EatUeid,
+            &serde_bytes::ByteBuf::from(self.device_guid.clone()),
+        )
+        .expect("Error adding to res");
 
         res
     }
@@ -1301,7 +1497,8 @@ fn eat_from_map<S>(mut claims: COSEHeaderMap) -> Result<EATokenPayload<S>, Error
 where
     S: PayloadState,
 {
-    let payload = match claims.0.remove(&(HeaderKeys::EatFDO as i64)) {
+    let payload: Option<serde_bytes::ByteBuf> = match claims.0.remove(&(HeaderKeys::EatFDO as i64))
+    {
         None => None,
         Some(val) => Some(serde_cbor::value::from_value(val)?),
     };
@@ -1309,10 +1506,10 @@ where
         None => return Err(Error::InconsistentValue("Missing nonce")),
         Some(val) => serde_cbor::value::from_value(val)?,
     };
-    let ueid = match claims.0.remove(&(HeaderKeys::EatUeid as i64)) {
+    let ueid: serde_bytes::ByteBuf = match claims.0.remove(&(HeaderKeys::EatUeid as i64)) {
         None => return Err(Error::InconsistentValue("Missing UEID")),
         Some(val) => {
-            let val: Vec<u8> = serde_cbor::value::from_value(val)?;
+            let val: serde_bytes::ByteBuf = serde_cbor::value::from_value(val)?;
             // Just verifying that it's valid
             if Guid::from_ueid(&val).is_err() {
                 return Err(Error::InconsistentValue("Invalid UEID"));
@@ -1320,6 +1517,9 @@ where
             val
         }
     };
+
+    let payload = payload.map(|val| val.into_vec());
+    let ueid = ueid.into_vec();
 
     Ok(EATokenPayload {
         _phantom_state: std::marker::PhantomData,
@@ -1395,55 +1595,100 @@ impl COSEHeaderMap {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct COSESign(COSESignInner);
+const COSESIGN_TAG: u64 = 18;
+
+#[derive(Debug, Clone)]
+pub struct COSESign {
+    contents: ParsedArray<crate::cborparser::ParsedArraySize4>,
+
+    cached_inner: COSESignInner,
+}
+
+impl Serializable for COSESign {
+    fn deserialize_data(data: &[u8]) -> Result<Self, Error> {
+        let array = ParsedArray::deserialize_data(data)?;
+
+        if array.tag() != Some(COSESIGN_TAG) {
+            if array.tag().is_none() {
+                log::warn!("COSESign encountered without tag");
+            } else {
+                return Err(Error::InconsistentValue("Invalid tag on COSESign"));
+            }
+        }
+
+        let inner = COSESignInner::from_bytes(data)?;
+
+        Ok(COSESign {
+            contents: array,
+
+            cached_inner: inner,
+        })
+    }
+
+    fn serialize_data(&self) -> Result<Vec<u8>, Error> {
+        // There is no way this data structure should be able to be constructed without either
+        // deserializing (which checks the tag) or us constructing it, where we set the tag.
+        // Just make sure it's there before serializing.
+        assert_eq!(self.contents.tag(), Some(COSESIGN_TAG));
+
+        self.contents.serialize_data()
+    }
+}
 
 impl COSESign {
+    fn new_from_inner(inner: COSESignInner) -> Result<Self, Error> {
+        let mut contents = ParsedArray::deserialize_data(&inner.serialize_data()?)?;
+        contents.set_tag(Some(COSESIGN_TAG));
+
+        Ok(COSESign {
+            contents,
+
+            cached_inner: inner,
+        })
+    }
+
     pub fn new<T>(
-        payload: T,
+        payload: &T,
         unprotected: Option<COSEHeaderMap>,
         sign_key: &dyn SigningPrivateKey,
     ) -> Result<Self, Error>
     where
-        T: Serialize,
+        T: Serializable,
     {
         let unprotected = match unprotected {
             Some(v) => v,
             None => COSEHeaderMap::new(),
         };
-        let payload = serde_cbor::to_vec(&payload)?;
-        Ok(COSESign(COSESignInner::new(
-            &payload,
-            &unprotected.into(),
-            sign_key,
-        )?))
+        let payload = payload.serialize_data()?;
+
+        let inner = COSESignInner::new(&payload, &unprotected.into(), sign_key)?;
+
+        Self::new_from_inner(inner)
     }
 
     pub fn new_with_protected<T>(
-        payload: T,
+        payload: &T,
         protected: COSEHeaderMap,
         unprotected: Option<COSEHeaderMap>,
         sign_key: &dyn SigningPrivateKey,
     ) -> Result<Self, Error>
     where
-        T: Serialize,
+        T: Serializable,
     {
         let unprotected = match unprotected {
             Some(v) => v,
             None => COSEHeaderMap::new(),
         };
-        let payload = serde_cbor::to_vec(&payload)?;
+        let payload = payload.serialize_data()?;
 
         let (sig_alg, _) = sign_key.get_parameters()?;
         let mut protected: aws_nitro_enclaves_cose::header_map::HeaderMap = protected.into();
         protected.insert(1.into(), (sig_alg as i8).into());
 
-        Ok(COSESign(COSESignInner::new_with_protected(
-            &payload,
-            &protected,
-            &unprotected.into(),
-            sign_key,
-        )?))
+        let inner =
+            COSESignInner::new_with_protected(&payload, &protected, &unprotected.into(), sign_key)?;
+
+        Self::new_from_inner(inner)
     }
 
     pub fn from_eat<ES>(
@@ -1455,31 +1700,23 @@ impl COSESign {
         ES: PayloadState,
     {
         let claims = eat.to_map();
-        Self::new(claims.0, unprotected, sign_key)
-    }
-
-    pub fn as_bytes(&self) -> Result<Vec<u8>, Error> {
-        Ok(self.0.as_bytes(true)?)
-    }
-
-    pub fn from_bytes(data: &[u8]) -> Result<Self, Error> {
-        Ok(COSESign(COSESignInner::from_bytes(data)?))
+        Self::new(&claims.0, unprotected, sign_key)
     }
 
     pub fn get_payload_unverified<T>(&self) -> Result<UnverifiedValue<T>, Error>
     where
-        T: serde::de::DeserializeOwned,
+        T: Serializable,
     {
-        let payload = self.0.get_payload(None)?;
-        Ok(UnverifiedValue(serde_cbor::from_slice(&payload)?))
+        let payload = self.cached_inner.get_payload(None)?;
+        Ok(UnverifiedValue(T::deserialize_data(&payload)?))
     }
 
     pub fn get_payload<T>(&self, key: &dyn SigningPublicKey) -> Result<T, Error>
     where
-        T: serde::de::DeserializeOwned,
+        T: Serializable,
     {
-        let payload = self.0.get_payload(Some(key))?;
-        Ok(serde_cbor::from_slice(&payload)?)
+        let payload = self.cached_inner.get_payload(Some(key))?;
+        T::deserialize_data(&payload)
     }
 
     pub fn get_eat_unverified(&self) -> Result<EATokenPayload<PayloadUnverified>, Error> {
@@ -1506,7 +1743,7 @@ impl COSESign {
     where
         T: serde::de::DeserializeOwned,
     {
-        let (protected, _) = self.0.get_protected_and_payload(None)?;
+        let (protected, _) = self.cached_inner.get_protected_and_payload(None)?;
         match protected.get(&header_key.cbor_value()) {
             None => Ok(None),
             Some(val) => Ok(Some(UnverifiedValue(serde_cbor::value::from_value(
@@ -1523,7 +1760,7 @@ impl COSESign {
     where
         T: serde::de::DeserializeOwned,
     {
-        let (protected, _) = self.0.get_protected_and_payload(Some(key))?;
+        let (protected, _) = self.cached_inner.get_protected_and_payload(Some(key))?;
         match protected.get(&header_key.cbor_value()) {
             None => Ok(None),
             Some(val) => Ok(Some(serde_cbor::value::from_value(val.clone())?)),
@@ -1534,7 +1771,7 @@ impl COSESign {
     where
         T: serde::de::DeserializeOwned,
     {
-        match self.0.get_unprotected().get(&key.cbor_value()) {
+        match self.cached_inner.get_unprotected().get(&key.cbor_value()) {
             None => Ok(None),
             Some(val) => Ok(Some(serde_cbor::value::from_value(val.clone())?)),
         }

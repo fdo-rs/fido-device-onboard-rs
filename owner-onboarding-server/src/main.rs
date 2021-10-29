@@ -22,6 +22,7 @@ use fdo_data_formats::{
     enhanced_types::X5Bag, ownershipvoucher::OwnershipVoucher, publickey::PublicKey, types::Guid,
 };
 use fdo_store::{Store, StoreDriver};
+use fdo_util::servers::settings_for;
 
 mod handlers;
 mod serviceinfo;
@@ -107,7 +108,7 @@ fn generate_owner2_keys() -> Result<(PKey<Private>, PublicKey)> {
         EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).context("Error getting nist 256 group")?;
     let owner2_key = EcKey::generate(&owner2_key_group).context("Error generating owned2 key")?;
     let owner2_key =
-        PKey::from_ec_key(owner2_key).context("ERror converting owner2 key to PKey")?;
+        PKey::from_ec_key(owner2_key).context("Error converting owner2 key to PKey")?;
 
     // Create an ephemeral certificate
     let mut subject = X509NameBuilder::new()?;
@@ -139,13 +140,9 @@ fn generate_owner2_keys() -> Result<(PKey<Private>, PublicKey)> {
 async fn main() -> Result<()> {
     fdo_http_wrapper::init_logging();
 
-    let mut settings = config::Config::default();
-    settings
-        .merge(config::File::with_name("owner-onboarding-service").required(false))
-        .context("Loading configuration files")?
-        .merge(config::Environment::with_prefix("owner_onboarding_service"))
-        .context("Loading configuration from environment variables")?;
-    let settings: Settings = settings.try_into().context("Error parsing configuration")?;
+    let settings: Settings = settings_for("owner-onboarding-server")?
+        .try_into()
+        .context("Error parsing configuration")?;
 
     // Bind information
     let bind_addr = SocketAddr::from_str(&settings.bind)

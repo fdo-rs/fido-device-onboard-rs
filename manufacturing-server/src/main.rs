@@ -20,6 +20,7 @@ use fdo_data_formats::{
     types::{Guid, RendezvousInfo},
 };
 use fdo_store::{Store, StoreDriver};
+use fdo_util::servers::settings_for;
 
 const PERFORMED_DIUN_SES_KEY: &str = "mfg_global_diun_performed";
 const DEVICE_KEY_FROM_DIUN_SES_KEY: &str = "mfg_global_device_key_from_diun";
@@ -217,13 +218,9 @@ async fn perform_maintenance(
 async fn main() -> Result<()> {
     fdo_http_wrapper::init_logging();
 
-    let mut settings = config::Config::default();
-    settings
-        .merge(config::File::with_name("manufacturing-service"))
-        .context("Loading configuration files")?
-        .merge(config::Environment::with_prefix("manufacturing-server"))
-        .context("Loading configuration from environment variables")?;
-    let settings: Settings = settings.try_into().context("Error parsing configuration")?;
+    let settings: Settings = settings_for("manufacturing-server")?
+        .try_into()
+        .context("Error parsing configuration")?;
 
     // Bind information
     let bind_addr = SocketAddr::from_str(&settings.bind)

@@ -59,7 +59,7 @@ jobs:
 
       - name: Install deps
         run: |
-          dnf install -y make gcc openssl openssl-devel findutils
+          dnf install -y make gcc openssl openssl-devel findutils golang
 
       - name: Build
         uses: actions-rs/cargo@v1

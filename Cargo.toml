@@ -1,11 +1,13 @@
 [workspace]
 members = [
+    "libfdo-data",
     "data-formats",
     "http-wrapper",
     "store",
+    "util",
 
     "client-linuxapp",
-    "owner-onboarding-service",
+    "owner-onboarding-server",
     "owner-tool",
     "rendezvous-server",
     "manufacturing-server",
