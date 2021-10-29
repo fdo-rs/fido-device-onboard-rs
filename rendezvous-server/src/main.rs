@@ -9,9 +9,11 @@ use tokio::signal::unix::{signal, SignalKind};
 use warp::Filter;
 
 use fdo_data_formats::{
+    cborparser::ParsedArray,
     enhanced_types::X5Bag,
     publickey::PublicKey,
     types::{COSESign, Guid},
+    Serializable,
 };
 use fdo_store::{Store, StoreDriver};
 use fdo_util::servers::settings_for;
@@ -19,11 +21,37 @@ use fdo_util::servers::settings_for;
 mod handlers_to0;
 mod handlers_to1;
 
+#[derive(Clone, Debug)]
+struct StoredItem {
+    public_key: PublicKey,
+    to1d: COSESign,
+}
+
+impl Serializable for StoredItem {
+    fn deserialize_data(data: &[u8]) -> Result<Self, fdo_data_formats::Error> {
+        let contents: ParsedArray<fdo_data_formats::cborparser::ParsedArraySize2> =
+            ParsedArray::deserialize_data(data)?;
+
+        let public_key = contents.get(0)?;
+        let to1d = contents.get(1)?;
+
+        Ok(StoredItem { public_key, to1d })
+    }
+
+    fn serialize_data(&self) -> Result<Vec<u8>, fdo_data_formats::Error> {
+        let mut contents: ParsedArray<fdo_data_formats::cborparser::ParsedArraySize2> =
+            unsafe { ParsedArray::new() };
+        contents.set(0, &self.public_key)?;
+        contents.set(1, &self.to1d)?;
+
+        contents.serialize_data()
+    }
+}
+
 struct RendezvousUD {
     max_wait_seconds: u32,
-    trusted_manufacturer_keys: X5Bag,
-    trusted_device_keys: X5Bag,
-    store: Box<dyn Store<fdo_store::ReadWriteOpen, Guid, (PublicKey, COSESign)>>,
+    trusted_manufacturer_keys: Option<X5Bag>,
+    store: Box<dyn Store<fdo_store::ReadWriteOpen, Guid, StoredItem>>,
 
     session_store: Arc<fdo_http_wrapper::server::SessionStore>,
 }
@@ -41,8 +69,7 @@ struct Settings {
     session_store_config: Option<config::Value>,
 
     // Trusted keys
-    trusted_manufacturer_keys_path: String,
-    trusted_device_keys_path: String,
+    trusted_manufacturer_keys_path: Option<String>,
 
     // Other info
     max_wait_seconds: Option<u32>,
@@ -105,37 +132,27 @@ async fn main() -> Result<()> {
     let session_store = fdo_http_wrapper::server::SessionStore::new(session_store);
 
     // Load X509 certs
-    let trusted_manufacturer_keys = {
-        let trusted_keys_path = settings.trusted_manufacturer_keys_path;
-        let contents = std::fs::read(&trusted_keys_path).with_context(|| {
-            format!(
-                "Error reading trusted manufacturer keys at {}",
-                &trusted_keys_path
-            )
-        })?;
-        X509::stack_from_pem(&contents).context("Error parsing trusted manufacturer keys")?
-    };
-    let trusted_manufacturer_keys = X5Bag::with_certs(trusted_manufacturer_keys)
-        .context("Error building trusted manufacturer keys X5Bag")?;
-    let trusted_device_keys = {
-        let trusted_keys_path = settings.trusted_device_keys_path;
-        let contents = std::fs::read(&trusted_keys_path).with_context(|| {
-            format!(
-                "Error reading trusted device keys at {}",
-                &trusted_keys_path
-            )
-        })?;
-        X509::stack_from_pem(&contents).context("Error parsing trusted device keys")?
-    };
-    let trusted_device_keys = X5Bag::with_certs(trusted_device_keys)
-        .context("Error building trusted device keys X5Bag")?;
+    let trusted_manufacturer_keys = settings
+        .trusted_manufacturer_keys_path
+        .map(|path| -> Result<X5Bag, anyhow::Error> {
+            let trusted_manufacturer_keys = {
+                let contents = std::fs::read(&path).with_context(|| {
+                    format!("Error reading trusted manufacturer keys at {}", &path)
+                })?;
+                X509::stack_from_pem(&contents)
+                    .context("Error parsing trusted manufacturer keys")?
+            };
+            X5Bag::with_certs(trusted_manufacturer_keys)
+                .context("Error building trusted manufacturer keys X5Bag")
+        })
+        .transpose()
+        .context("Error loading trusted manufacturer keys")?;
 
     // Initialize handler stores
     let user_data = Arc::new(RendezvousUD {
         max_wait_seconds,
         store,
         trusted_manufacturer_keys,
-        trusted_device_keys,
 
         session_store: session_store.clone(),
     });

@@ -1,9 +1,10 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_tuple::Serialize_tuple;
 
 use super::{ClientMessage, EncryptionRequirement, Message, ServerMessage};
 use crate::{
     constants::{KeyStorageType, MessageType, MfgStringType, PublicKeyType},
+    simple_message_serializable,
     types::{COSESign, CipherSuite, KexSuite, Nonce},
 };
 
@@ -63,8 +64,10 @@ impl Message for Connect {
 
 impl ClientMessage for Connect {}
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct Accept(COSESign);
+
+simple_message_serializable!(Accept, COSESign);
 
 impl Accept {
     pub fn new(token: COSESign) -> Self {

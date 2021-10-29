@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use serde_tuple::Serialize_tuple;
 
 use super::{ClientMessage, EncryptionRequirement, Message, ServerMessage};
+use crate::simple_message_serializable;
 use crate::{
     constants::MessageType,
     ownershipvoucher::OwnershipVoucherHeader,
@@ -39,22 +40,22 @@ impl Message for AppStart {
 
 impl ClientMessage for AppStart {}
 
-#[derive(Debug, Serialize_tuple, Deserialize)]
-pub struct SetCredentials {
-    ov_header: OwnershipVoucherHeader,
-}
+#[derive(Debug)]
+pub struct SetCredentials(OwnershipVoucherHeader);
+
+simple_message_serializable!(SetCredentials, OwnershipVoucherHeader);
 
 impl SetCredentials {
     pub fn new(ov_header: OwnershipVoucherHeader) -> Self {
-        SetCredentials { ov_header }
+        SetCredentials(ov_header)
     }
 
     pub fn ov_header(&self) -> &OwnershipVoucherHeader {
-        &self.ov_header
+        &self.0
     }
 
     pub fn into_ov_header(self) -> OwnershipVoucherHeader {
-        self.ov_header
+        self.0
     }
 }
 

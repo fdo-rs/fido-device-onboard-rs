@@ -186,6 +186,7 @@ where
         }
     }
 
+    log::trace!("Raw request: {:?}", hex::encode(&inbound));
     let inbound = match keys.decrypt(&inbound) {
         Ok(v) => v,
         Err(_) => {
@@ -197,14 +198,12 @@ where
             .into())
         }
     };
+    let req = IM::deserialize_data(&inbound).map_err(|e| {
+        log::info!("Error parsing request: {:?}", e);
+        warp::reject::custom(ParseError)
+    })?;
 
-    Ok((
-        serde_cbor::from_slice(&inbound).map_err(|e| {
-            log::info!("Error parsing request: {:?}", e);
-            warp::reject::custom(ParseError)
-        })?,
-        ses_with_store,
-    ))
+    Ok((req, ses_with_store))
 }
 
 pub fn set_encryption_keys<IM>(
@@ -274,6 +273,8 @@ where
         .status(MT::status_code())
         .header("Message-Type", (MT::message_type() as u8).to_string());
 
+    let token = token.map(|t| format!("Bearer {}", t));
+
     if let Some(token) = token {
         if !token.is_empty() {
             builder = builder.header("Authorization", token);
@@ -321,6 +322,7 @@ where
             .into())
         }
     };
+    log::trace!("Raw response: {:?}", hex::encode(&val));
 
     Ok(to_response::<OM>(val, token))
 }
@@ -369,15 +371,22 @@ where
         .and_then(
             |(req, hdr, ses_store): (warp::hyper::body::Bytes, Option<String>, SessionStoreT)| async move {
                 let ses = match hdr {
-                    Some(val) => match ses_store.load_session(val).await {
-                        Ok(Some(ses)) => ses,
-                        Ok(None) => Session::new(),
-                        Err(_) => {
-                            return Err(Rejection::from(Error::new(
-                                ErrorCode::InternalServerError,
-                                IM::message_type(),
-                                "Error retrieving session",
-                            )))
+                    Some(val) =>  {
+                        let val = if val.contains(' ') {
+                            val.split(' ').nth(1).unwrap().to_string()
+                        } else {
+                            val
+                        };
+                        match ses_store.load_session(val.to_string()).await {
+                            Ok(Some(ses)) => ses,
+                            Ok(None) => Session::new(),
+                            Err(_) => {
+                                return Err(Rejection::from(Error::new(
+                                    ErrorCode::InternalServerError,
+                                    IM::message_type(),
+                                    "Error retrieving session",
+                                )))
+                            }
                         }
                     },
                     None => Session::new(),
