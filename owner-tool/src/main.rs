@@ -19,7 +19,6 @@ use openssl::{
     x509::{X509Builder, X509NameBuilder, X509NameRef, X509},
 };
 use serde::Deserialize;
-use serde_cbor::Value as CborValue;
 use serde_yaml::Value;
 
 use fdo_data_formats::{
@@ -199,31 +198,31 @@ fn load_x509s(path: &str) -> Result<Vec<X509>, Error> {
     Ok(X509::stack_from_pem(&contents)?)
 }
 
-fn yaml_to_cbor(val: &Value) -> Result<CborValue, Error> {
+fn yaml_to_cbor(val: &Value) -> Result<CborSimpleType, Error> {
     Ok(match val {
-        Value::Null => CborValue::Null,
-        Value::Bool(b) => CborValue::Bool(*b),
+        Value::Null => CborSimpleType::Null,
+        Value::Bool(b) => b.to_owned().into(),
         Value::Number(nr) => {
             if let Some(nr) = nr.as_u64() {
-                CborValue::Integer(nr as i128)
+                nr.into()
             } else if let Some(nr) = nr.as_i64() {
-                CborValue::Integer(nr as i128)
+                nr.into()
             } else if let Some(nr) = nr.as_f64() {
-                CborValue::Float(nr)
+                nr.into()
             } else {
                 bail!("Invalid number encountered");
             }
         }
-        Value::String(str) => CborValue::Text(str.clone()),
-        Value::Sequence(seq) => CborValue::Array(
+        Value::String(str) => str.clone().into(),
+        Value::Sequence(seq) => CborSimpleType::from(
             seq.iter()
                 .map(yaml_to_cbor)
-                .collect::<Result<Vec<CborValue>>>()?,
+                .collect::<Result<Vec<CborSimpleType>>>()?,
         ),
-        Value::Mapping(map) => CborValue::Map(
+        Value::Mapping(map) => CborSimpleType::from(
             map.iter()
                 .map(|(key, val)| (yaml_to_cbor(key).unwrap(), yaml_to_cbor(val).unwrap()))
-                .collect(),
+                .collect::<std::collections::BTreeMap<CborSimpleType, CborSimpleType>>(),
         ),
     })
 }

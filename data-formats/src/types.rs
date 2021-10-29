@@ -321,6 +321,51 @@ pub type RendezvousInstruction = (RendezvousVariable, CborSimpleType);
 // TODO: This sends serde_cbor outwards. Possibly re-do this
 pub type CborSimpleType = serde_cbor::Value;
 
+pub trait CborSimpleTypeExt {
+    fn as_bool(&self) -> Option<bool>;
+    fn as_i64(&self) -> Option<i64>;
+    fn as_u64(&self) -> Option<u64>;
+    fn as_f64(&self) -> Option<f64>;
+    fn as_str(&self) -> Option<&str>;
+}
+
+impl CborSimpleTypeExt for CborSimpleType {
+    fn as_bool(&self) -> Option<bool> {
+        match self {
+            serde_cbor::Value::Bool(b) => Some(*b),
+            _ => None,
+        }
+    }
+
+    fn as_u64(&self) -> Option<u64> {
+        match self {
+            serde_cbor::Value::Integer(u) => Some(*u as u64),
+            _ => None,
+        }
+    }
+
+    fn as_i64(&self) -> Option<i64> {
+        match self {
+            serde_cbor::Value::Integer(i) => Some(*i as i64),
+            _ => None,
+        }
+    }
+
+    fn as_f64(&self) -> Option<f64> {
+        match self {
+            serde_cbor::Value::Float(f) => Some(*f as f64),
+            _ => None,
+        }
+    }
+
+    fn as_str(&self) -> Option<&str> {
+        match self {
+            serde_cbor::Value::Text(s) => Some(s),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Serialize_tuple, Deserialize, Clone)]
 pub struct TO2AddressEntry {
     ip: Option<IPAddress>,       // RVIP

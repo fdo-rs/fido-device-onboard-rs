@@ -56,8 +56,8 @@ pub(crate) async fn app_start(
     let mut session = ses_with_store.session;
     fail_if_no_di_and_not_from_diun::<messages::di::AppStart>(&session, &user_data)?;
 
-    let mfg_info = match msg.mfg_info() {
-        serde_cbor::Value::Text(s) => s,
+    let mfg_info = match msg.mfg_info().as_str() {
+        Some(val) => val,
         _ => {
             return Err(Error::new(
                 ErrorCode::InternalServerError,
@@ -111,14 +111,14 @@ pub(crate) async fn app_start(
         .map_err(Error::from_error::<messages::di::AppStart, _>)?;
     let device_certificate_chain_hash =
         Hash::from_data(HashType::Sha384, &device_certificate_chain_serialized)
-        .map_err(Error::from_error::<messages::di::AppStart, _>)?;
+            .map_err(Error::from_error::<messages::di::AppStart, _>)?;
 
     // Create new ownership voucher header
     let new_voucher_header = OwnershipVoucherHeader::new(
         PROTOCOL_VERSION,
         Guid::new().map_err(Error::from_error::<messages::di::AppStart, _>)?,
         user_data.rendezvous_info.clone(),
-        mfg_info.clone(),
+        mfg_info.to_string(),
         user_data
             .manufacturer_cert
             .clone()
@@ -229,12 +229,13 @@ pub(crate) async fn set_hmac(
         ov_header,
         msg.hmac().clone(),
         Some(device_certificate_chain),
+    )
     .map_err(Error::from_error::<messages::di::SetHMAC, _>)?;
 
     // If intended, extend with the owner key
     if let Some(manufacturer_key) = user_data.manufacturer_key.as_ref() {
         ov.extend(manufacturer_key, user_data.owner_cert.as_ref().unwrap())
-        .map_err(Error::from_error::<messages::di::SetHMAC, _>)?;
+            .map_err(Error::from_error::<messages::di::SetHMAC, _>)?;
     }
 
     // Write Ownership Voucher out to the store
