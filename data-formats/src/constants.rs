@@ -102,8 +102,8 @@ pub enum PublicKeyEncoding {
 #[repr(i64)]
 #[non_exhaustive]
 pub enum HeaderKeys {
-    EatNonce = 9,
-    EatUeid = 10,
+    EatNonce = 10,
+    EatUeid = 11,
 
     CUPHNonce = -17760701,       // IANA Pending
     CUPHOwnerPubKey = -17760702, // IANA Pending
