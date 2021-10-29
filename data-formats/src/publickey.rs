@@ -4,6 +4,7 @@ use std::fmt;
 use std::fmt::Display;
 
 use openssl::{
+    bn::BigNum,
     nid::Nid,
     pkey::{self, PKey, PKeyRef, Public},
     x509::{X509VerifyResult, X509},
@@ -16,7 +17,7 @@ use serde::{
 use serde_tuple::Serialize_tuple;
 
 use crate::{
-    constants::{HashType, PublicKeyEncoding, PublicKeyType},
+    constants::{PublicKeyEncoding, PublicKeyType},
     enhanced_types::X5Bag,
     errors::{ChainError, Error, Result},
     types::Hash,
@@ -26,6 +27,7 @@ use crate::{
 pub struct PublicKey {
     key_type: PublicKeyType,
     encoding: PublicKeyEncoding,
+    #[serde(with = "serde_bytes")]
     data: Vec<u8>,
 
     #[serde(skip)]
@@ -59,9 +61,10 @@ impl<'de> Deserialize<'de> for PublicKey {
                 let encoding: PublicKeyEncoding = seq
                     .next_element()?
                     .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
-                let data: Vec<u8> = seq
+                let data: serde_bytes::ByteBuf = seq
                     .next_element()?
                     .ok_or_else(|| serde::de::Error::invalid_length(2, &self))?;
+                let data = data.into_vec();
 
                 PublicKey::new(key_type, encoding, data).map_err(serde::de::Error::custom)
             }
@@ -100,17 +103,54 @@ impl PublicKey {
     }
 
     fn parse_data(
-        _key_type: PublicKeyType,
+        key_type: PublicKeyType,
         encoding: PublicKeyEncoding,
         data: &[u8],
     ) -> Result<(Option<X5Chain>, PKey<Public>)> {
         match encoding {
             PublicKeyEncoding::X509 => {
-                let cert = X509::from_der(data)?;
-                let pkey = cert.public_key()?;
-                Ok((Some(X5Chain::new(vec![cert])?), pkey))
+                let key = openssl::pkey::PKey::public_key_from_der(data)?;
+                Ok((None, key))
             }
             PublicKeyEncoding::COSEX509 => {
+                if data.is_empty() {
+                    return Err(Error::InconsistentValue("Empty public key"));
+                }
+                let (group, keylen) = match key_type {
+                    PublicKeyType::SECP256R1 => (
+                        Some(openssl::ec::EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap()),
+                        32,
+                    ),
+                    PublicKeyType::SECP384R1 => (
+                        Some(openssl::ec::EcGroup::from_curve_name(Nid::SECP384R1).unwrap()),
+                        48,
+                    ),
+                    _ => (None, 0),
+                };
+
+                if data.len() == (2 * keylen) {
+                    // pri-fidoiot release 1.0 used COSEX509 to indicate an EC key that was just the X and Y coordinates
+                    // of the public key. This is no longer supported, and was never supposed to be the case.
+                    // https://github.com/secure-device-onboard/pri-fidoiot/blob/1.0-rel/protocol/src/main/java/org/fidoalliance/fdo/protocol/Const.java#L161
+                    log::warn!("Using fallback pri-fidoiot public key parsing");
+
+                    let (key_x, key_y) = data.split_at(keylen);
+
+                    let key_x = BigNum::from_slice(key_x).unwrap();
+                    let key_y = BigNum::from_slice(key_y).unwrap();
+
+                    let key = openssl::ec::EcKey::from_public_key_affine_coordinates(
+                        &group.unwrap(),
+                        &key_x,
+                        &key_y,
+                    )
+                    .unwrap();
+                    key.check_key().unwrap();
+                    let key = PKey::from_ec_key(key).unwrap();
+
+                    return Ok((None, key));
+                }
+
                 let chain = X5Chain::from_slice(data)?;
 
                 if chain.chain.is_empty() {
@@ -180,8 +220,7 @@ impl TryFrom<X509> for PublicKey {
     fn try_from(x509: X509) -> Result<Self> {
         let pkey = x509.public_key()?;
         let key_type = PublicKey::key_type_from_pkey(&pkey)?;
-        let encoded = x509.to_der()?;
-        let chain = X5Chain::new(vec![x509])?;
+        let encoded = pkey.public_key_to_der()?;
 
         Ok(PublicKey {
             key_type,
@@ -189,7 +228,7 @@ impl TryFrom<X509> for PublicKey {
             data: encoded,
 
             pkey,
-            certs: Some(chain),
+            certs: None,
         })
     }
 }
@@ -230,7 +269,7 @@ impl<'de> Deserialize<'de> for X5Chain {
             {
                 let mut chain = Vec::new();
 
-                while let Some(x509) = seq.next_element::<Vec<u8>>()? {
+                while let Some(x509) = seq.next_element::<serde_bytes::ByteBuf>()? {
                     log::trace!("Deserializing certificate: {:?}", x509);
                     let x509 = X509::from_der(&x509).map_err(A::Error::custom)?;
                     chain.push(x509);
@@ -251,6 +290,7 @@ impl Serialize for X5Chain {
         let mut seq = serializer.serialize_seq(Some(self.chain.len()))?;
         for cert in &self.chain {
             let cert = cert.to_der().map_err(S::Error::custom)?;
+            let cert = serde_bytes::ByteBuf::from(cert);
             log::trace!("Serializing certificate: {:?}", cert);
             seq.serialize_element(&cert)?;
         }
@@ -339,11 +379,6 @@ impl X5Chain {
 
     pub fn leaf_certificate(&self) -> Option<&X509> {
         self.chain.get(0)
-    }
-
-    pub fn hash(&self, hash_type: HashType) -> Result<Hash> {
-        let serialized = serde_cbor::to_vec(&self)?;
-        Hash::new(Some(hash_type), &serialized)
     }
 
     pub fn from_slice(data: &[u8]) -> Result<Self> {

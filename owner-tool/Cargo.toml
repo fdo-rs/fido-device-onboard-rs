@@ -12,9 +12,11 @@ clap = "2"
 log = "0.4"
 openssl = "0.10"
 serde = { version = "1", features = ["derive"] }
-serde_cbor = "0.11"
 serde_yaml = "0.8"
 tokio = { version = "1", features = ["full"] }
 
 fdo-data-formats = { path = "../data-formats" }
 fdo-http-wrapper = { path = "../http-wrapper", features = ["client"] }
+
+
+hex = "0.4"

@@ -353,12 +353,6 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
     })?;
     let manufacturer_pubkey = PublicKey::try_from(manufacturer_cert)
         .context("Error creating manufacturer public key representation")?;
-    let manufacturer_pubkey_hash = Hash::new(
-        None,
-        &serde_cbor::to_vec(&manufacturer_pubkey)
-            .context("Error serializing manufacturer public key")?,
-    )
-    .context("Error hashing manufacturer public key")?;
 
     let device_cert_ca_private_key = load_private_key(device_cert_ca_private_key_path)
         .with_context(|| {
@@ -414,9 +408,11 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
     let mut device_cert_chain = device_cert_ca_chain;
     device_cert_chain.insert(0, device_cert);
     let device_cert_chain = X5Chain::new(device_cert_chain).context("Error creating X5Chain")?;
-    let device_cert_chain_hash = device_cert_chain
-        .hash(HashType::Sha384)
-        .context("Error computing digest over device certificate chain")?;
+    let device_cert_chain_serialized = device_cert_chain
+        .serialize_data()
+        .context("Error serializing device cert chain")?;
+    let device_cert_chain_hash = Hash::from_data(HashType::Sha384, &device_cert_chain_serialized)
+        .context("Error hashing device cert chain")?;
 
     // Build device HMAC key
     let mut hmac_key_buf = [0; 32];
@@ -426,52 +422,61 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
     let mut hmac_signer =
         Signer::new(MessageDigest::sha384(), &hmac_key).context("Error creating hmac signer")?;
 
-    // Build device credential
     let device_guid = Guid::new().context("Error generating guid")?;
+
+    // Construct Ownership Voucher Header
+    let ov_header = OwnershipVoucherHeader::new(
+        PROTOCOL_VERSION,
+        device_guid.clone(),
+        rendezvous_info.clone(),
+        device_id.to_string(),
+        manufacturer_pubkey,
+        Some(device_cert_chain_hash),
+    )
+    .context("Error creating new OwnershipVoucher Header")?;
+    let ov_header_ser = ov_header
+        .serialize_data()
+        .context("Error serializing Ownership Voucher header")?;
+
+    // Build device credential
     let devcred = FileDeviceCredential {
         active: true,
         protver: PROTOCOL_VERSION,
         hmac_secret: hmac_key_buf.to_vec(),
         device_info: device_id.to_string(),
         guid: device_guid.clone(),
-        rvinfo: rendezvous_info.clone(),
-        pubkey_hash: manufacturer_pubkey_hash,
+        rvinfo: rendezvous_info,
+        pubkey_hash: ov_header
+            .manufacturer_public_key_hash(HashType::Sha384)
+            .context("Error computing manufacturer public key hash")?,
         private_key: device_key
             .private_key_to_der()
             .context("Error serializing device private key")?,
     };
 
-    // Construct Ownership Voucher Header
-    let ov_header = OwnershipVoucherHeader::new(
-        PROTOCOL_VERSION,
-        device_guid.clone(),
-        rendezvous_info,
-        device_id.to_string(),
-        manufacturer_pubkey,
-        Some(device_cert_chain_hash),
-    );
-    let ov_header = serde_cbor::to_vec(&ov_header).context("Error serializing ov header")?;
-
     // Compute device hash over OV Header
     hmac_signer
-        .update(&ov_header)
+        .update(&ov_header_ser)
         .context("Error computing HMAC")?;
     let ov_hmac = hmac_signer
         .sign_to_vec()
         .context("Error computing hmac signature")?;
-    let ov_hmac = HMac::new_from_data(HashType::Sha384, ov_hmac);
+    let ov_hmac = HMac::from_digest(HashType::HmacSha384, ov_hmac);
 
     // Build the Ownership Voucher
-    let ov = OwnershipVoucher::new(ov_header, ov_hmac, Some(device_cert_chain));
+    let ov = OwnershipVoucher::new(ov_header, ov_hmac, Some(device_cert_chain))
+        .context("Error building ownership voucher")?;
 
     // Write out the ownership voucher and device credential
-    let ov_out =
-        fs::File::create(ownershipvoucher_out).context("Error creating ownership voucher")?;
-    let devcred_out =
-        fs::File::create(device_credential_out).context("Error creating device credential file")?;
+    let ov = ov
+        .serialize_data()
+        .context("Error serializing ownership voucher")?;
+    let devcred = devcred
+        .serialize_data()
+        .context("Error serializing device credential")?;
 
-    serde_cbor::to_writer(ov_out, &ov).context("Error writing ownership voucher")?;
-    serde_cbor::to_writer(devcred_out, &devcred).context("Error writing device credential")?;
+    fs::write(&ownershipvoucher_out, &ov).context("Error writing ownership voucher")?;
+    fs::write(&device_credential_out, &devcred).context("Error writing device credential")?;
 
     println!(
         "Created ownership voucher for device {}",
@@ -484,35 +489,33 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
 fn dump_voucher(matches: &ArgMatches) -> Result<(), Error> {
     let ownershipvoucher_path = matches.value_of("path").unwrap();
 
-    let ov: OwnershipVoucher = {
-        let ov_file = fs::File::open(&ownershipvoucher_path).with_context(|| {
-            format!(
-                "Error opening ownership voucher at {}",
-                ownershipvoucher_path
-            )
-        })?;
-        serde_cbor::from_reader(ov_file).context("Error loading ownership voucher")?
+    let ov = {
+        let cts = fs::read(ownershipvoucher_path).context("Error reading ownership voucher")?;
+        OwnershipVoucher::deserialize_data(&cts).context("Error deserializing ownership voucher")?
     };
 
-    let ov_header = ov.get_header().context("Error loading OV header")?;
-    if ov_header.protocol_version != PROTOCOL_VERSION {
+    let ov_header = ov.header();
+    if ov_header.protocol_version() != PROTOCOL_VERSION {
         bail!(
             "Protocol version in OV ({}) not supported ({})",
-            ov_header.protocol_version,
+            ov_header.protocol_version(),
             PROTOCOL_VERSION
         );
     }
 
     println!("Header:");
-    println!("\tProtocol Version: {}", ov_header.protocol_version);
-    println!("\tDevice GUID: {}", ov_header.guid.to_string());
+    println!("\tProtocol Version: {}", ov_header.protocol_version());
+    println!("\tDevice GUID: {}", ov_header.guid().to_string());
     println!("\tRendezvous Info:");
-    for rv_entry in ov_header.rendezvous_info.values() {
+    for rv_entry in ov_header.rendezvous_info().values() {
         println!("\t\t- {:?}", rv_entry);
     }
-    println!("\tDevice Info: {}", ov_header.device_info);
-    println!("\tManufacturer public key: {}", ov_header.public_key);
-    match ov_header.device_certificate_chain_hash {
+    println!("\tDevice Info: {:?}", ov_header.device_info());
+    println!(
+        "\tManufacturer public key: {}",
+        ov_header.manufacturer_public_key()
+    );
+    match &ov_header.device_certificate_chain_hash() {
         None => println!("\tDevice certificate chain hash: <none>"),
         Some(v) => println!("\tDevice certificate chain hash: {}", v),
     }
@@ -536,9 +539,9 @@ fn dump_voucher(matches: &ArgMatches) -> Result<(), Error> {
         let entry = entry.with_context(|| format!("Error parsing entry {}", pos))?;
 
         println!("\tEntry {}", pos);
-        println!("\t\tPrevious entry hash: {}", entry.hash_previous_entry);
-        println!("\t\tHeader info hash: {}", entry.hash_header_info);
-        println!("\t\tPublic key: {}", entry.public_key);
+        println!("\t\tPrevious entry hash: {}", entry.hash_previous_entry());
+        println!("\t\tHeader info hash: {}", entry.hash_header_info());
+        println!("\t\tPublic key: {}", entry.public_key());
     }
 
     Ok(())
@@ -547,10 +550,10 @@ fn dump_voucher(matches: &ArgMatches) -> Result<(), Error> {
 fn dump_devcred(matches: &ArgMatches) -> Result<(), Error> {
     let devcred_path = matches.value_of("path").unwrap();
 
-    let dc: FileDeviceCredential = {
-        let dc_file = fs::File::open(&devcred_path)
-            .with_context(|| format!("Error opening device credential at {}", devcred_path))?;
-        serde_cbor::from_reader(dc_file).context("Error loading device credential")?
+    let dc = {
+        let dc = fs::read(devcred_path).context("Error reading device credential")?;
+        FileDeviceCredential::deserialize_data(&dc)
+            .context("Error deserializing device credential")?
     };
 
     if dc.protver != PROTOCOL_VERSION {
@@ -583,21 +586,16 @@ fn extend_voucher(matches: &ArgMatches) -> Result<(), Error> {
     let current_owner_private_key_path = matches.value_of("current-owner-private-key").unwrap();
     let new_owner_cert_path = matches.value_of("new-owner-cert").unwrap();
 
-    let mut ov: OwnershipVoucher = {
-        let ov_file = fs::File::open(&ownershipvoucher_path).with_context(|| {
-            format!(
-                "Error opening ownership voucher at {}",
-                ownershipvoucher_path
-            )
-        })?;
-        serde_cbor::from_reader(ov_file).context("Error loading ownership voucher")?
+    let mut ov = {
+        let ov = fs::read(ownershipvoucher_path).context("Error reading ownership voucher")?;
+        OwnershipVoucher::deserialize_data(&ov).context("Error deserializing ownership voucher")?
     };
 
-    let ov_header = ov.get_header().context("Error loading OV header")?;
-    if ov_header.protocol_version != PROTOCOL_VERSION {
+    let ov_header = ov.header();
+    if ov_header.protocol_version() != PROTOCOL_VERSION {
         bail!(
             "Protocol version in OV ({}) not supported ({})",
-            ov_header.protocol_version,
+            ov_header.protocol_version(),
             PROTOCOL_VERSION
         );
     }
@@ -618,16 +616,17 @@ fn extend_voucher(matches: &ArgMatches) -> Result<(), Error> {
     let new_owner_pubkey =
         PublicKey::try_from(new_owner_cert).context("Error serializing owner public key")?;
 
-    ov.extend(&current_owner_private_key, None, &new_owner_pubkey)
+    ov.extend(&current_owner_private_key, &new_owner_pubkey)
         .context("Error extending ownership voucher")?;
 
     // Write out
     let newname = format!("{}.new", ownershipvoucher_path);
     {
         // A new scope, to ensure the file gets closed before we move it
-        let ov_out = fs::File::create(&newname)
-            .with_context(|| format!("Error opening new ownership voucher file at {}", newname))?;
-        serde_cbor::to_writer(ov_out, &ov).context("Error writing new ownership voucher")?;
+        let ov = ov
+            .serialize_data()
+            .context("Error serializing ownership voucher")?;
+        fs::write(&newname, &ov).with_context(|| format!("Error writing to {}", newname))?;
     }
 
     fs::rename(newname, ownershipvoucher_path)
@@ -751,21 +750,21 @@ async fn report_to_rendezvous(matches: &ArgMatches<'_>) -> Result<(), Error> {
         .parse::<u32>()
         .with_context(|| format!("Error parsing wait time '{}'", wait_time))?;
 
-    let ov: OwnershipVoucher = {
-        let ov_file = fs::File::open(&ownershipvoucher_path).with_context(|| {
+    let ov = {
+        let ov = fs::read(ownershipvoucher_path).with_context(|| {
             format!(
-                "Error opening ownership voucher at {}",
+                "Error reading ownership voucher from {}",
                 ownershipvoucher_path
             )
         })?;
-        serde_cbor::from_reader(ov_file).context("Error loading ownership voucher")?
+        OwnershipVoucher::deserialize_data(&ov).context("Error deserializing Ownership Voucher")?
     };
 
-    let ov_header = ov.get_header().context("Error loading OV header")?;
-    if ov_header.protocol_version != PROTOCOL_VERSION {
+    let ov_header = ov.header();
+    if ov_header.protocol_version() != PROTOCOL_VERSION {
         bail!(
             "Protocol version in OV ({}) not supported ({})",
-            ov_header.protocol_version,
+            ov_header.protocol_version(),
             PROTOCOL_VERSION
         );
     }
@@ -794,7 +793,7 @@ async fn report_to_rendezvous(matches: &ArgMatches<'_>) -> Result<(), Error> {
 
     // Determine the RV IP
     let rv_info = ov_header
-        .rendezvous_info
+        .rendezvous_info()
         .to_interpreted(RendezvousInterpreterSide::Owner)
         .context("Error parsing rendezvous directives")?;
     if rv_info.is_empty() {
@@ -830,17 +829,20 @@ async fn report_to_rendezvous(matches: &ArgMatches<'_>) -> Result<(), Error> {
             };
 
             // Build to0d and to1d
-            let to0d = TO0Data::new(ov.clone(), wait_time, hello_ack.nonce3().clone());
-            let to0d_vec = serde_cbor::to_vec(&to0d).context("Error serializing to0d")?;
-            let to0d_hash = Hash::new(None, &to0d_vec).context("Error hashing to0d")?;
+            let to0d = TO0Data::new(ov.clone(), wait_time, hello_ack.nonce3().clone())
+                .context("Error creating to0d")?;
+            let to0d_vec = to0d.serialize_data().context("Error serializing TO0Data")?;
+            let to0d_hash =
+                Hash::from_data(HashType::Sha384, &to0d_vec).context("Error hashing to0d")?;
             let to1d_payload = TO1DataPayload::new(owner_addresses.clone(), to0d_hash);
             let to1d = COSESign::new(&to1d_payload, None, &owner_private_key)
                 .context("Error signing to1d")?;
 
             // Send: OwnerSign, Receive: AcceptOwner
-            let accept_owner: RequestResult<messages::to0::AcceptOwner> = rv_client
-                .send_request(messages::to0::OwnerSign::new(to0d, to1d), None)
-                .await;
+            let msg = messages::to0::OwnerSign::new(to0d, to1d)
+                .context("Error creating OwnerSign message")?;
+            let accept_owner: RequestResult<messages::to0::AcceptOwner> =
+                rv_client.send_request(msg, None).await;
             let accept_owner =
                 accept_owner.context("Error registering self to rendezvous server")?;
 

@@ -19,3 +19,8 @@ pub mod ownershipvoucher;
 pub mod publickey;
 
 pub mod messages;
+
+pub mod cborparser;
+
+mod serializable;
+pub use serializable::Serializable;

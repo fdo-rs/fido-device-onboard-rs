@@ -10,8 +10,8 @@ use fdo_data_formats::{
     messages::{self, ClientMessage, Message},
     ownershipvoucher::{OwnershipVoucher, OwnershipVoucherHeader},
     publickey::X5Chain,
-    types::Guid,
-    PROTOCOL_VERSION,
+    types::{CborSimpleTypeExt, Guid, Hash},
+    Serializable, PROTOCOL_VERSION,
 };
 
 use fdo_http_wrapper::server::{Error, Session, SessionWithStore};
@@ -73,7 +73,7 @@ pub(crate) async fn app_start(
         None => match &user_data.public_key_store {
             None => None,
             Some(store) => store
-                .load_data(mfg_info)
+                .load_data(&mfg_info.to_string())
                 .await
                 .map_err(Error::from_error::<messages::di::AppStart, _>)?,
         },
@@ -106,8 +106,11 @@ pub(crate) async fn app_start(
     .map_err(Error::from_error::<messages::di::AppStart, _>)?;
     let device_certificate_chain =
         create_device_cert_chain(&user_data.device_cert_chain, device_certificate);
-    let device_certificate_chain_hash = device_certificate_chain
-        .hash(HashType::Sha384)
+    let device_certificate_chain_serialized = device_certificate_chain
+        .serialize_data()
+        .map_err(Error::from_error::<messages::di::AppStart, _>)?;
+    let device_certificate_chain_hash =
+        Hash::from_data(HashType::Sha384, &device_certificate_chain_serialized)
         .map_err(Error::from_error::<messages::di::AppStart, _>)?;
 
     // Create new ownership voucher header
@@ -122,11 +125,16 @@ pub(crate) async fn app_start(
             .try_into()
             .map_err(Error::from_error::<messages::di::AppStart, _>)?,
         Some(device_certificate_chain_hash),
-    );
+    )
+    .map_err(Error::from_error::<messages::di::AppStart, _>)?;
 
     // Store the OV Header and device cert chain
+    let new_voucher_header_serialized = new_voucher_header
+        .serialize_data()
+        .map_err(Error::from_error::<messages::di::AppStart, _>)?;
+    let new_voucher_header_serialized = hex::encode(&new_voucher_header_serialized);
     session
-        .insert(OV_HEADER_SES_KEY, new_voucher_header.clone())
+        .insert(OV_HEADER_SES_KEY, new_voucher_header_serialized)
         .map_err(Error::from_error::<messages::di::AppStart, _>)?;
     session
         .insert(DEVICE_CERTIFICATE_SES_KEY, device_certificate_chain)
@@ -187,8 +195,13 @@ pub(crate) async fn set_hmac(
     let session = ses_with_store.session;
     fail_if_no_di_and_not_from_diun::<messages::di::SetHMAC>(&session, &user_data)?;
 
-    let ov_header: OwnershipVoucherHeader = match session.get(OV_HEADER_SES_KEY) {
-        Some(header) => header,
+    let ov_header = match session.get::<String>(OV_HEADER_SES_KEY) {
+        Some(header) => {
+            let header =
+                hex::decode(header).map_err(Error::from_error::<messages::di::SetHMAC, _>)?;
+            OwnershipVoucherHeader::deserialize_data(&header)
+                .map_err(Error::from_error::<messages::di::SetHMAC, _>)?
+        }
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
@@ -199,8 +212,6 @@ pub(crate) async fn set_hmac(
         }
     };
     let device_guid = ov_header.guid().clone();
-    let ov_header =
-        serde_cbor::to_vec(&ov_header).map_err(Error::from_error::<messages::di::SetHMAC, _>)?;
     let device_certificate_chain: X5Chain = match session.get(DEVICE_CERTIFICATE_SES_KEY) {
         Some(val) => val,
         None => {
@@ -218,15 +229,11 @@ pub(crate) async fn set_hmac(
         ov_header,
         msg.hmac().clone(),
         Some(device_certificate_chain),
-    );
+    .map_err(Error::from_error::<messages::di::SetHMAC, _>)?;
 
     // If intended, extend with the owner key
     if let Some(manufacturer_key) = user_data.manufacturer_key.as_ref() {
-        ov.extend(
-            manufacturer_key,
-            None,
-            user_data.owner_cert.as_ref().unwrap(),
-        )
+        ov.extend(manufacturer_key, user_data.owner_cert.as_ref().unwrap())
         .map_err(Error::from_error::<messages::di::SetHMAC, _>)?;
     }
 

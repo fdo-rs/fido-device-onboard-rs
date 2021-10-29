@@ -11,6 +11,8 @@ use fdo_data_formats::{
 use fdo_http_wrapper::server::Error;
 use fdo_http_wrapper::server::SessionWithStore;
 
+use super::StoredItem;
+
 pub(super) async fn hello(
     _user_data: super::RendezvousUDT,
     mut ses_with_store: SessionWithStore,
@@ -70,29 +72,22 @@ pub(super) async fn ownersign(
     let manufacturer_pubkey = msg
         .to0d()
         .ownership_voucher()
-        .get_header()
-        .map_err(|_| {
-            Error::new(
-                ErrorCode::InvalidMessageError,
-                messages::to0::OwnerSign::message_type(),
-                "Invalid OV",
-            )
-        })?
-        .public_key;
+        .header()
+        .manufacturer_public_key()
+        .clone();
     log::trace!(
         "Checking whether manufacturer key {:?} is trusted",
         manufacturer_pubkey
     );
-    if !user_data
-        .trusted_manufacturer_keys
-        .contains_publickey(&manufacturer_pubkey)
-    {
-        return Err(Error::new(
-            ErrorCode::InvalidOwnershipVoucher,
-            messages::to0::OwnerSign::message_type(),
-            "Ownership voucher manufacturer not trusted",
-        )
-        .into());
+    if let Some(trusted_manufacturer_keys) = &user_data.trusted_manufacturer_keys {
+        if !trusted_manufacturer_keys.contains_publickey(&manufacturer_pubkey) {
+            return Err(Error::new(
+                ErrorCode::InvalidOwnershipVoucher,
+                messages::to0::OwnerSign::message_type(),
+                "Ownership voucher manufacturer not trusted",
+            )
+            .into());
+        }
     }
 
     // Now, get the final owner key
@@ -126,9 +121,9 @@ pub(super) async fn ownersign(
     // Verify the signature on to1d
     log::trace!(
         "Checking whether to1d payload is signed by owner public key {:?}",
-        owner.public_key,
+        owner.public_key(),
     );
-    let to1d_payload: TO1DataPayload = match msg.to1d().get_payload(owner.public_key.pkey()) {
+    let to1d_payload: TO1DataPayload = match msg.to1d().get_payload(owner.public_key().pkey()) {
         Err(e) => {
             log::error!("Error verifying to1d: {:?}", e);
             return Err(Error::new(
@@ -142,15 +137,12 @@ pub(super) async fn ownersign(
     };
 
     // Verify the to1d -> to0d hash
-    let to0d_ser = serde_cbor::to_vec(&msg.to0d())
+    let to1d_to_to0d_hash = to1d_payload.to1d_to_to0d_hash();
+    let to0d_hash = msg
+        .to0d_hash(to1d_to_to0d_hash.get_type())
         .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
-    log::trace!(
-        "Checking whether to1d->to1d hash {:?} matches data",
-        to1d_payload.to1d_to_to0d_hash(),
-    );
-    to1d_payload
-        .to1d_to_to0d_hash()
-        .compare_data(&to0d_ser)
+    to1d_to_to0d_hash
+        .compare(&to0d_hash)
         .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
 
     // Okay, wew! We can now trust the to1d payload, and the other data!
@@ -166,7 +158,8 @@ pub(super) async fn ownersign(
         }
         Some(v) => v,
     };
-    let device_pubkey = match device_cert_chain.verify_from_x5bag(&user_data.trusted_device_keys) {
+    //let device_pubkey = match device_cert_chain.verify_from_x5bag(&user_data.trusted_device_keys) {
+    let device_pubkey = match device_cert_chain.insecure_verify_without_root_verification() {
         Err(cert_chain_err) => {
             log::debug!("Error verifying device certificate: {:?}", cert_chain_err);
             return Err(Error::new(
@@ -188,7 +181,7 @@ pub(super) async fn ownersign(
         wait_seconds = user_data.max_wait_seconds;
     }
     let wait_seconds = wait_seconds;
-    let device_guid = msg.to0d().ownership_voucher().get_header().unwrap().guid;
+    let device_guid = msg.to0d().ownership_voucher().header().guid().clone();
 
     // Actually store the data here
     let ttl = Duration::from_secs(wait_seconds as u64);
@@ -199,7 +192,14 @@ pub(super) async fn ownersign(
     );
     user_data
         .store
-        .store_data(device_guid, Some(ttl), (device_pubkey, msg.to1d().clone()))
+        .store_data(
+            device_guid,
+            Some(ttl),
+            StoredItem {
+                public_key: device_pubkey,
+                to1d: msg.to1d().clone(),
+            },
+        )
         .await
         .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
 

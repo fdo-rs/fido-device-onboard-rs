@@ -197,14 +197,12 @@ where
             .into())
         }
     };
-
-    Ok((
-        serde_cbor::from_slice(&inbound).map_err(|e| {
+    let req = IM::deserialize_data(&inbound).map_err(|e| {
             log::info!("Error parsing request: {:?}", e);
             warp::reject::custom(ParseError)
-        })?,
-        ses_with_store,
-    ))
+    })?;
+
+    Ok((req, ses_with_store))
 }
 
 pub fn set_encryption_keys<IM>(
