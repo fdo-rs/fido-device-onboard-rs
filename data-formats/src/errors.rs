@@ -46,4 +46,11 @@ pub enum Error {
     #[error("Array parse error: {0}")]
     ArrayParseError(#[from] crate::cborparser::ArrayParseError),
     #[error("PEM parse error")]
+    PemError(#[from] pem::PemError),
+    #[error("Invalid PEM tag: {0}")]
+    InvalidPemTag(String),
+    #[error("I/O error")]
+    IoError(#[from] std::io::Error),
+    #[error("Error parsing hex value: {0}")]
+    HexError(#[from] hex::FromHexError),
 }
