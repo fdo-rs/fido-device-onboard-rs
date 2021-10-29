@@ -18,6 +18,18 @@ pub enum HashType {
     HmacSha384 = 6,
 }
 
+impl FromStr for HashType {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "sha256" => Ok(HashType::Sha256),
+            "sha384" => Ok(HashType::Sha384),
+            _ => Err(Error::InconsistentValue("Invalid digest name")),
+        }
+    }
+}
+
 impl TryFrom<HashType> for MessageDigest {
     type Error = Error;
 
@@ -40,11 +52,21 @@ impl HashType {
         }
     }
 
-    pub fn guess_from_length(len: usize) -> Option<Self> {
-        match len {
-            32 => Some(HashType::Sha256),
-            48 => Some(HashType::Sha384),
-            _ => None,
+    pub fn digest_size(&self) -> usize {
+        match self {
+            HashType::Sha256 => 32,
+            HashType::Sha384 => 48,
+            HashType::HmacSha256 => 32,
+            HashType::HmacSha384 => 48,
+        }
+    }
+
+    pub fn inner_hash(&self) -> HashType {
+        match self {
+            HashType::Sha256 => HashType::Sha256,
+            HashType::Sha384 => HashType::Sha384,
+            HashType::HmacSha256 => HashType::Sha256,
+            HashType::HmacSha384 => HashType::Sha384,
         }
     }
 }

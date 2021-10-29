@@ -34,22 +34,51 @@ pub struct Hash {
     value: Vec<u8>,
 }
 
-impl Hash {
-    pub fn new(alg: Option<HashType>, data: &[u8]) -> Result<Self, Error> {
-        let alg = alg.unwrap_or(HashType::Sha384);
+impl std::fmt::Debug for Hash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Hash")
+            .field("hash_type", &self.hash_type)
+            .field("value", &hex::encode(&self.value))
+            .finish()
+    }
+}
 
+impl FromStr for Hash {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let splitloc = match s.find(':') {
+            Some(loc) => loc,
+            None => {
+                return Err(Error::InconsistentValue(
+                    "Hash string is missing ':' separator",
+                ))
+            }
+        };
+        let (alg, val) = s.split_at(splitloc);
+        let val = &val[1..];
+        let alg = HashType::from_str(alg)?;
+        let val = hex::decode(val)?;
+        if val.len() != alg.digest_size() {
+            return Err(Error::InconsistentValue("Digest string is invalid length"));
+        }
+        Ok(Hash {
+            hash_type: alg,
+            value: val,
+        })
+    }
+}
+
+impl Hash {
+    pub fn from_data(alg: HashType, data: &[u8]) -> Result<Self, Error> {
         Ok(Hash {
             hash_type: alg,
             value: hash(alg.try_into()?, data)?.to_vec(),
         })
     }
 
-    pub fn new_from_data(hash_type: HashType, value: Vec<u8>) -> Self {
+    pub fn from_digest(hash_type: HashType, value: Vec<u8>) -> Self {
         Hash { hash_type, value }
-    }
-
-    pub fn guess_new_from_data(value: Vec<u8>) -> Option<Self> {
-        HashType::guess_from_length(value.len()).map(|hash_type| Hash { hash_type, value })
     }
 
     pub fn get_type(&self) -> HashType {
@@ -65,6 +94,14 @@ impl Hash {
 
         // Compare
         if openssl::memcmp::eq(&self.value, &other_digest) {
+            Ok(())
+        } else {
+            Err(Error::IncorrectHash)
+        }
+    }
+
+    pub fn compare(&self, other: &Hash) -> Result<(), Error> {
+        if self == other {
             Ok(())
         } else {
             Err(Error::IncorrectHash)
@@ -87,6 +124,51 @@ impl PartialEq<openssl::hash::DigestBytes> for Hash {
 impl std::fmt::Display for Hash {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} ({:?})", hex::encode(&self.value), self.hash_type)
+    }
+}
+
+#[cfg(test)]
+mod test_hash {
+    use std::str::FromStr;
+
+    use crate::Error;
+
+    use super::Hash;
+
+    #[test]
+    fn test_hash_fromstr_no_splitloc() {
+        let data = "8a2235cbccf8f70f55d5f610053685eefc153983eb9867f556976115fb9a1692";
+        let result = Hash::from_str(data).unwrap_err();
+        assert!(matches!(
+            result,
+            Error::InconsistentValue("Hash string is missing ':' separator"),
+        ));
+    }
+
+    #[test]
+    fn test_hash_fromstr_invalid_type_name() {
+        let data = "foo:8a2235cbccf8f70f55d5f610053685eefc153983eb9867f556976115fb9a1692";
+        let result = Hash::from_str(data).unwrap_err();
+        assert!(matches!(
+            result,
+            Error::InconsistentValue("Invalid digest name"),
+        ));
+    }
+
+    #[test]
+    fn test_hash_fromstr_invalid_value_length() {
+        let data = "sha384:8a2235cbccf8f70f55d5f610053685eefc153983eb9867f556976115fb9a1692";
+        let result = Hash::from_str(data).unwrap_err();
+        assert!(matches!(
+            result,
+            Error::InconsistentValue("Digest string is invalid length"),
+        ));
+    }
+
+    #[test]
+    fn test_hash_fromstr_valid() {
+        let data = "sha256:8a2235cbccf8f70f55d5f610053685eefc153983eb9867f556976115fb9a1692";
+        Hash::from_str(data).unwrap();
     }
 }
 
