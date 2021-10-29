@@ -6,6 +6,7 @@ use aws_nitro_enclaves_cose::error::CoseError;
 use fdo_data_formats::{
     constants::MessageType,
     messages::{ClientMessage, EncryptionRequirement, ErrorMessage, Message, ServerMessage},
+    Serializable,
 };
 
 use crate::EncryptionKeys;
@@ -14,10 +15,10 @@ use crate::EncryptionKeys;
 pub enum Error {
     #[error("Cryptographic error encrypting/decrypting")]
     Crypto(CoseError),
-    #[error("Serialization/deserialization error")]
-    Serde(#[from] serde_cbor::Error),
     #[error("Error parsing or generating request")]
     Parse(#[from] fdo_data_formats::messages::ParseError),
+    #[error("Data format error: {0}")]
+    DataFormat(#[from] fdo_data_formats::Error),
     #[error("Error performing request")]
     Request(#[from] reqwest::Error),
     #[error("Missing message type in response")]
@@ -109,8 +110,9 @@ impl ServiceClient {
             }
         }
 
-        let to_send = to_send.to_wire()?;
+        let to_send = to_send.serialize_data()?;
         let to_send = self.encryption_keys.encrypt(&to_send)?;
+        log::trace!("Sending message: {:?}", hex::encode(&to_send));
 
         let url = format!(
             "{}/fdo/100/msg/{}",
@@ -163,12 +165,13 @@ impl ServiceClient {
         };
 
         let resp = resp.bytes().await?;
+        log::trace!("Received: {:?}", hex::encode(&resp));
 
         if is_success {
             let resp = self.encryption_keys.decrypt(&resp)?;
-            Ok(serde_cbor::from_slice(&resp)?)
+            Ok(SM::deserialize_data(&resp)?)
         } else {
-            Err(Error::Error(serde_cbor::from_slice(&resp)?))
+            Err(Error::Error(ErrorMessage::deserialize_data(&resp)?))
         }
     }
 }

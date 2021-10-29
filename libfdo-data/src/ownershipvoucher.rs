@@ -6,6 +6,7 @@ use std::{
 };
 
 pub use fdo_data_formats::ownershipvoucher::OwnershipVoucher;
+use fdo_data_formats::Serializable;
 
 #[no_mangle]
 /// Creates a new OwnershipVoucher from raw data
@@ -21,7 +22,7 @@ pub extern "C" fn fdo_ownershipvoucher_from_data(
         return null_mut();
     }
     let data = unsafe { slice::from_raw_parts(data as *const u8, len) };
-    match OwnershipVoucher::from_slice(data) {
+    match OwnershipVoucher::deserialize_data(data) {
         Ok(voucher) => Box::into_raw(Box::new(voucher)),
         Err(_) => null_mut(),
     }
@@ -51,10 +52,7 @@ pub extern "C" fn fdo_ownershipvoucher_header_get_protocol_version(
         return -1;
     }
     let voucher = unsafe { &*v };
-    match voucher.get_header() {
-        Err(_) => -1,
-        Ok(hdr) => hdr.protocol_version as i32,
-    }
+    voucher.header().protocol_version() as i32
 }
 
 #[no_mangle]
@@ -73,10 +71,7 @@ pub extern "C" fn fdo_ownershipvoucher_header_get_guid(
         return null();
     }
     let voucher = unsafe { &*v };
-    let guid = match voucher.get_header() {
-        Err(_) => return null(),
-        Ok(hdr) => hdr.guid.to_string(),
-    };
+    let guid = voucher.header().guid().to_string();
     match CString::new(guid) {
         Err(_) => null(),
         Ok(cstr) => cstr.into_raw(),
@@ -99,11 +94,7 @@ pub extern "C" fn fdo_ownershipvoucher_header_get_device_info_string(
         return null();
     }
     let voucher = unsafe { &*v };
-    let device_info = match voucher.get_header() {
-        Err(_) => return null(),
-        Ok(hdr) => hdr.device_info,
-    };
-    match CString::new(device_info) {
+    match CString::new(voucher.header().device_info()) {
         Err(_) => null(),
         Ok(cstr) => cstr.into_raw(),
     }
@@ -123,8 +114,8 @@ mod tests {
         assert!(result.status.success());
         result.stdout_equals(
             "Protocol version: 100
-Device GUID: a2ce9bee-712d-df49-7b48-19e7616d2346
-Device Info: testdevice",
+Device GUID: 214d64be-3227-92da-0333-b1e1fe832f24
+Device Info: testdevice1",
         );
         result.stderr_equals("");
     }

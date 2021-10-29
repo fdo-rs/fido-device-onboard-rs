@@ -22,6 +22,8 @@ use openssl::{
 
 use fdo_util::servers::format_conf_env;
 
+const PORT_BASE: u16 = 5080;
+
 const TARGET_TMPDIR: &str = env!("CARGO_TARGET_TMPDIR");
 const KEY_NAMES: &[&str] = &[
     "manufacturer",
@@ -139,7 +141,7 @@ impl TestBinaryNumber {
 
     pub fn server_port(&self) -> Option<u16> {
         if self.binary.is_server() {
-            Some(8080 + self.number)
+            Some(PORT_BASE + self.number)
         } else {
             None
         }

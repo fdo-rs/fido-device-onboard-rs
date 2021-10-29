@@ -110,7 +110,7 @@ pub(super) async fn prove_to_rv(
     let device_guid = &device_guid.parse().unwrap();
 
     let (dev_pkey, to1d) = match user_data.store.load_data(device_guid).await {
-        Ok(Some(dev)) => dev,
+        Ok(Some(dev)) => (dev.public_key, dev.to1d),
         Err(e) => {
             log::trace!("Error getting device entry: {:?}", e);
             return Err(Error::new(
