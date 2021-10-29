@@ -29,9 +29,10 @@ impl fdo_store::MetadataLocalKey for OwnershipVoucherStoreMetadataKey {
 pub fn settings_for(component: &str) -> Result<config::Config> {
     Ok(config::Config::default()
         .merge(
-            config::File::from(Path::new(&format!("/usr/fdo/{}.yml", component))).required(false),
+            config::File::from(Path::new(&format!("/usr/share/fdo/{}.yml", component)))
+                .required(false),
         )
-        .context("Loading configuration file from /usr/fdo")?
+        .context("Loading configuration file from /usr/share/fdo")?
         .merge(
             config::File::from(Path::new(
                 &conf_dir_from_env(&format_conf_env(component))

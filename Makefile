@@ -41,7 +41,7 @@ VENDOR_TARBALL=rpmbuild/SOURCES/fido-device-onboard-rs-$(COMMIT)-vendor.tar.gz
 
 $(RPM_SPECFILE):
 	mkdir -p $(CURDIR)/rpmbuild/SPECS
-	(echo "%global gitversion $(COMMIT)"; git show HEAD:fido-device-onboard.spec) > $(RPM_SPECFILE)
+	(echo "%global commit $(COMMIT)"; git show HEAD:fido-device-onboard.spec) > $(RPM_SPECFILE)
 
 $(RPM_TARBALL):
 	mkdir -p $(CURDIR)/rpmbuild/SOURCES
