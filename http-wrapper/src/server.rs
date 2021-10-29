@@ -272,6 +272,8 @@ where
         .status(MT::status_code())
         .header("Message-Type", (MT::message_type() as u8).to_string());
 
+    let token = token.map(|t| format!("Bearer {}", t));
+
     if let Some(token) = token {
         if !token.is_empty() {
             builder = builder.header("Authorization", token);
@@ -368,18 +370,23 @@ where
             |(req, hdr, ses_store): (warp::hyper::body::Bytes, Option<String>, SessionStoreT)| async move {
                 let ses = match hdr {
                     Some(val) =>  {
-                        let val = val.split(' ').nth(1).unwrap();
-                    match ses_store.load_session(val.to_string()).await {
-                        Ok(Some(ses)) => ses,
-                        Ok(None) => Session::new(),
-                        Err(_) => {
-                            return Err(Rejection::from(Error::new(
-                                ErrorCode::InternalServerError,
-                                IM::message_type(),
-                                "Error retrieving session",
-                            )))
+                        let val = if val.contains(' ') {
+                            val.split(' ').nth(1).unwrap().to_string()
+                        } else {
+                            val
+                        };
+                        match ses_store.load_session(val.to_string()).await {
+                            Ok(Some(ses)) => ses,
+                            Ok(None) => Session::new(),
+                            Err(_) => {
+                                return Err(Rejection::from(Error::new(
+                                    ErrorCode::InternalServerError,
+                                    IM::message_type(),
+                                    "Error retrieving session",
+                                )))
+                            }
                         }
-                    }},
+                    },
                     None => Session::new(),
                 };
                 Ok((
