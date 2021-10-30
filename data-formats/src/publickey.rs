@@ -4,9 +4,10 @@ use std::fmt;
 use std::fmt::Display;
 
 use openssl::{
+    bn::BigNum,
     nid::Nid,
     pkey::{self, PKey, PKeyRef, Public},
-    x509::{X509Ref, X509VerifyResult, X509},
+    x509::{X509VerifyResult, X509},
 };
 use serde::{
     de::Error as _,
@@ -16,7 +17,7 @@ use serde::{
 use serde_tuple::Serialize_tuple;
 
 use crate::{
-    constants::{HashType, PublicKeyEncoding, PublicKeyType},
+    constants::{PublicKeyEncoding, PublicKeyType},
     enhanced_types::X5Bag,
     errors::{ChainError, Error, Result},
     types::Hash,
@@ -26,10 +27,14 @@ use crate::{
 pub struct PublicKey {
     key_type: PublicKeyType,
     encoding: PublicKeyEncoding,
+    #[serde(with = "serde_bytes")]
     data: Vec<u8>,
 
     #[serde(skip)]
     pkey: PKey<Public>,
+
+    #[serde(skip)]
+    certs: Option<X5Chain>,
 }
 
 impl<'de> Deserialize<'de> for PublicKey {
@@ -56,9 +61,10 @@ impl<'de> Deserialize<'de> for PublicKey {
                 let encoding: PublicKeyEncoding = seq
                     .next_element()?
                     .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
-                let data: Vec<u8> = seq
+                let data: serde_bytes::ByteBuf = seq
                     .next_element()?
                     .ok_or_else(|| serde::de::Error::invalid_length(2, &self))?;
+                let data = data.into_vec();
 
                 PublicKey::new(key_type, encoding, data).map_err(serde::de::Error::custom)
             }
@@ -69,12 +75,14 @@ impl<'de> Deserialize<'de> for PublicKey {
 }
 
 impl PublicKey {
-    pub fn new(
-        key_type: PublicKeyType,
-        encoding: PublicKeyEncoding,
-        data: Vec<u8>,
-    ) -> Result<Self> {
-        let pkey = PublicKey::parse_pkey(key_type, encoding, &data)?;
+    fn new(key_type: PublicKeyType, encoding: PublicKeyEncoding, data: Vec<u8>) -> Result<Self> {
+        log::trace!(
+            "Parsing public key, type: {:?}, encoding: {:?}, data: {:?}",
+            key_type,
+            encoding,
+            data
+        );
+        let (certs, pkey) = PublicKey::parse_data(key_type, encoding, &data)?;
 
         Ok(PublicKey {
             key_type,
@@ -82,25 +90,96 @@ impl PublicKey {
             data,
 
             pkey,
+            certs,
         })
+    }
+
+    pub fn chain(&self) -> Option<&X5Chain> {
+        self.certs.as_ref()
     }
 
     pub fn keytype(&self) -> PublicKeyType {
         self.key_type
     }
 
-    fn parse_pkey(
+    fn parse_data(
         key_type: PublicKeyType,
         encoding: PublicKeyEncoding,
         data: &[u8],
-    ) -> Result<PKey<Public>> {
+    ) -> Result<(Option<X5Chain>, PKey<Public>)> {
         match encoding {
-            PublicKeyEncoding::X509 => match key_type {
-                PublicKeyType::SECP256R1 | PublicKeyType::SECP384R1 => {
-                    Ok(PKey::public_key_from_der(data)?)
+            PublicKeyEncoding::X509 => {
+                let key = openssl::pkey::PKey::public_key_from_der(data)?;
+                Ok((None, key))
+            }
+            PublicKeyEncoding::COSEX509 => {
+                if data.is_empty() {
+                    return Err(Error::InconsistentValue("Empty public key"));
                 }
+                let (group, keylen) = match key_type {
+                    PublicKeyType::SECP256R1 => (
+                        Some(openssl::ec::EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap()),
+                        32,
+                    ),
+                    PublicKeyType::SECP384R1 => (
+                        Some(openssl::ec::EcGroup::from_curve_name(Nid::SECP384R1).unwrap()),
+                        48,
+                    ),
+                    _ => (None, 0),
+                };
+
+                if data.len() == (2 * keylen) {
+                    // pri-fidoiot release 1.0 used COSEX509 to indicate an EC key that was just the X and Y coordinates
+                    // of the public key. This is no longer supported, and was never supposed to be the case.
+                    // https://github.com/secure-device-onboard/pri-fidoiot/blob/1.0-rel/protocol/src/main/java/org/fidoalliance/fdo/protocol/Const.java#L161
+                    log::warn!("Using fallback pri-fidoiot public key parsing");
+
+                    let (key_x, key_y) = data.split_at(keylen);
+
+                    let key_x = BigNum::from_slice(key_x).unwrap();
+                    let key_y = BigNum::from_slice(key_y).unwrap();
+
+                    let key = openssl::ec::EcKey::from_public_key_affine_coordinates(
+                        &group.unwrap(),
+                        &key_x,
+                        &key_y,
+                    )
+                    .unwrap();
+                    key.check_key().unwrap();
+                    let key = PKey::from_ec_key(key).unwrap();
+
+                    return Ok((None, key));
+                }
+
+                let chain = X5Chain::from_slice(data)?;
+
+                if chain.chain.is_empty() {
+                    return Err(Error::InconsistentValue("Empty x5chain provided"));
+                }
+                let leaf_cert = chain.leaf_certificate().unwrap();
+                let pkey = leaf_cert.public_key()?;
+
+                Ok((Some(chain), pkey))
+            }
+            PublicKeyEncoding::Crypto | PublicKeyEncoding::Cosekey => {
+                Err(Error::UnsupportedAlgorithm)
+            }
+        }
+    }
+
+    fn key_type_from_pkey(pkey: &PKeyRef<Public>) -> Result<PublicKeyType> {
+        match pkey.id() {
+            pkey::Id::EC => match pkey.ec_key()?.group().curve_name() {
+                Some(Nid::X9_62_PRIME256V1) => Ok(PublicKeyType::SECP256R1),
+                Some(Nid::SECP384R1) => Ok(PublicKeyType::SECP384R1),
+                _ => Err(Error::UnsupportedAlgorithm),
             },
-            _ => todo!(),
+            pkey::Id::RSA => match pkey.bits() {
+                2048 => Ok(PublicKeyType::Rsa2048RESTR),
+                3072 => Ok(PublicKeyType::Rsa),
+                _ => Err(Error::UnsupportedAlgorithm),
+            },
+            _ => Err(Error::UnsupportedAlgorithm),
         }
     }
 
@@ -113,56 +192,54 @@ impl PublicKey {
     }
 }
 
-impl<P> TryFrom<&PKeyRef<P>> for PublicKey
-where
-    P: openssl::pkey::HasPublic,
-{
+impl TryFrom<X5Chain> for PublicKey {
     type Error = Error;
 
-    fn try_from(pkey: &PKeyRef<P>) -> Result<Self> {
-        let key = pkey.public_key_to_der()?;
-        let key_type = match pkey.id() {
-            pkey::Id::EC => match pkey.ec_key()?.group().curve_name() {
-                Some(Nid::X9_62_PRIME256V1) => PublicKeyType::SECP256R1,
-                Some(Nid::SECP384R1) => PublicKeyType::SECP384R1,
-                _ => return Err(Error::UnsupportedAlgorithm),
-            },
-            _ => return Err(Error::UnsupportedAlgorithm),
-        };
-        PublicKey::new(key_type, PublicKeyEncoding::X509, key)
+    fn try_from(chain: X5Chain) -> Result<Self> {
+        let leaf_cert = chain
+            .leaf_certificate()
+            .ok_or(Error::InconsistentValue("x5chain without leaf certificate"))?;
+        let pkey = leaf_cert.public_key()?;
+        let key_type = PublicKey::key_type_from_pkey(&pkey)?;
+        let encoded = chain.to_vec()?;
+
+        Ok(PublicKey {
+            key_type,
+            encoding: PublicKeyEncoding::COSEX509,
+            data: encoded,
+
+            pkey,
+            certs: Some(chain),
+        })
     }
 }
 
-impl<P> TryFrom<&PKey<P>> for PublicKey
-where
-    P: openssl::pkey::HasPublic,
-{
+impl TryFrom<X509> for PublicKey {
     type Error = Error;
 
-    fn try_from(pkey: &PKey<P>) -> Result<Self> {
-        PublicKey::try_from(pkey.as_ref())
-    }
-}
+    fn try_from(x509: X509) -> Result<Self> {
+        let pkey = x509.public_key()?;
+        let key_type = PublicKey::key_type_from_pkey(&pkey)?;
+        let encoded = pkey.public_key_to_der()?;
 
-impl TryFrom<&X509> for PublicKey {
-    type Error = Error;
+        Ok(PublicKey {
+            key_type,
+            encoding: PublicKeyEncoding::X509,
+            data: encoded,
 
-    fn try_from(x509: &X509) -> Result<Self> {
-        PublicKey::try_from(x509.as_ref())
-    }
-}
-
-impl TryFrom<&X509Ref> for PublicKey {
-    type Error = Error;
-
-    fn try_from(x509: &X509Ref) -> Result<Self> {
-        PublicKey::try_from(x509.public_key()?.as_ref())
+            pkey,
+            certs: None,
+        })
     }
 }
 
 impl Display for PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Public key ({:?}): {:?}", self.key_type, self.data)
+        write!(
+            f,
+            "Public key ({:?}): {:?} (chain: {:?})",
+            self.key_type, self.data, self.certs
+        )
     }
 }
 
@@ -192,7 +269,8 @@ impl<'de> Deserialize<'de> for X5Chain {
             {
                 let mut chain = Vec::new();
 
-                while let Some(x509) = seq.next_element::<Vec<u8>>()? {
+                while let Some(x509) = seq.next_element::<serde_bytes::ByteBuf>()? {
+                    log::trace!("Deserializing certificate: {:?}", x509);
                     let x509 = X509::from_der(&x509).map_err(A::Error::custom)?;
                     chain.push(x509);
                 }
@@ -212,6 +290,8 @@ impl Serialize for X5Chain {
         let mut seq = serializer.serialize_seq(Some(self.chain.len()))?;
         for cert in &self.chain {
             let cert = cert.to_der().map_err(S::Error::custom)?;
+            let cert = serde_bytes::ByteBuf::from(cert);
+            log::trace!("Serializing certificate: {:?}", cert);
             seq.serialize_element(&cert)?;
         }
         seq.end()
@@ -219,8 +299,12 @@ impl Serialize for X5Chain {
 }
 
 impl X5Chain {
-    pub fn new(chain: Vec<X509>) -> Self {
-        X5Chain { chain }
+    pub fn new(chain: Vec<X509>) -> Result<Self> {
+        if chain.is_empty() {
+            Err(Error::InconsistentValue("Empty x5chain"))
+        } else {
+            Ok(X5Chain { chain })
+        }
     }
 
     pub fn verify_from_x5bag(&self, bag: &X5Bag) -> Result<&X509> {
@@ -297,13 +381,12 @@ impl X5Chain {
         self.chain.get(0)
     }
 
-    pub fn hash(&self, hash_type: HashType) -> Result<Hash> {
-        let serialized = serde_cbor::to_vec(&self)?;
-        Hash::new(Some(hash_type), &serialized)
-    }
-
     pub fn from_slice(data: &[u8]) -> Result<Self> {
         serde_cbor::from_slice(data).map_err(Error::from)
+    }
+
+    fn to_vec(&self) -> Result<Vec<u8>> {
+        serde_cbor::to_vec(self).map_err(Error::from)
     }
 
     pub fn chain(&self) -> &[X509] {

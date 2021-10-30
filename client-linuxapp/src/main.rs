@@ -3,6 +3,7 @@ use std::{borrow::Borrow, env, fs, path::PathBuf, thread, time};
 use anyhow::{anyhow, bail, Context, Result};
 
 use fdo_data_formats::{
+    cborparser::ParsedArray,
     constants::{DeviceSigType, HeaderKeys, TransportProtocol},
     enhanced_types::{RendezvousInterpretedDirective, RendezvousInterpreterSide},
     messages,
@@ -12,7 +13,7 @@ use fdo_data_formats::{
         KeyExchange, Nonce, PayloadCreating, SigInfo, TO1DataPayload, TO2AddressEntry,
         TO2ProveDevicePayload, TO2ProveOVHdrPayload, UnverifiedValue,
     },
-    DeviceCredential,
+    DeviceCredential, Serializable,
 };
 use fdo_http_wrapper::client::{RequestResult, ServiceClient};
 
@@ -182,8 +183,11 @@ async fn get_to1d(
     bail!("Couldn't get TO1 from any Rendezvous server!")
 }
 
-async fn get_ov_entries(client: &mut ServiceClient, num_entries: u16) -> Result<Vec<Vec<u8>>> {
-    let mut entries = Vec::new();
+async fn get_ov_entries(
+    client: &mut ServiceClient,
+    num_entries: u16,
+) -> Result<ParsedArray<fdo_data_formats::cborparser::ParsedArraySizeDynamic>> {
+    let mut entries = ParsedArray::new_empty();
 
     for entry_num in 0..num_entries {
         let entry_result: RequestResult<messages::to2::OVNextEntry> = client
@@ -200,9 +204,10 @@ async fn get_ov_entries(client: &mut ServiceClient, num_entries: u16) -> Result<
             );
         }
 
-        entries.push(entry_result.entry().as_bytes().with_context(|| {
-            format!("Error serializing entry {} of ownership voucher", entry_num)
-        })?);
+        let entry = entry_result.into_entry();
+        entries
+            .push(&entry)
+            .context("Error adding Ownership Voucher entry")?;
     }
 
     Ok(entries)
@@ -266,9 +271,11 @@ async fn perform_to2(
 
     // Verify the HMAC, we do this in an extra scope to not leak anything untrusted out
     let header_hmac = {
-        let ov_hdr_vec =
-            serde_cbor::to_vec(&prove_ov_hdr_payload.get_unverified_value().ov_header())
-                .context("Error parsing Ownership Voucher header")?;
+        let ov_hdr_vec = prove_ov_hdr_payload
+            .get_unverified_value()
+            .ov_header()
+            .serialize_data()
+            .context("Error serializing Ownership Voucher header")?;
         let ov_hdr_hmac = prove_ov_hdr_payload.get_unverified_value().hmac();
         devcred
             .verify_hmac(&ov_hdr_vec, ov_hdr_hmac)
@@ -281,14 +288,13 @@ async fn perform_to2(
     // Validate the PubKeyHash
     {
         let header = prove_ov_hdr_payload.get_unverified_value().ov_header();
+        let pubkey_hash = header
+            .manufacturer_public_key_hash(devcred.manufacturer_pubkey_hash().get_type())
+            .context("Error computing manufacturer public key hash")?;
         devcred
             .manufacturer_pubkey_hash()
-            .compare_data(
-                &header
-                    .get_raw_public_key()
-                    .context("Error serializing public key")?,
-            )
-            .context("Error validating manufacturer public key")?;
+            .compare(&pubkey_hash)
+            .context("Error comparing manufacturer public key hash")?;
     }
 
     // Get nonce6
@@ -309,10 +315,13 @@ async fn perform_to2(
 
     // At this moment, we have validated all we can, we'll check the signature later (After we get the final bits of the OV)
     let ownership_voucher = {
-        let header = serde_cbor::to_vec(&prove_ov_hdr_payload.get_unverified_value().ov_header())
-            .context("Error serializing the OV header")?;
+        let header = prove_ov_hdr_payload
+            .get_unverified_value()
+            .ov_header()
+            .clone();
         OwnershipVoucher::from_parts(header, header_hmac, ov_entries)
-    };
+    }
+    .context("Error reconstructing Ownership Voucher")?;
     log::trace!(
         "Reconstructed full ownership voucher: {:?}",
         ownership_voucher
@@ -329,11 +338,11 @@ async fn perform_to2(
 
     // Now, we can finally verify the OV Header signature we got at the top!
     let prove_ov_hdr_payload: TO2ProveOVHdrPayload = prove_ov_hdr
-        .get_payload(ov_owner_entry.public_key.pkey())
+        .get_payload(ov_owner_entry.public_key().pkey())
         .context("Error validating ProveOVHdr signature")?;
     log::trace!(
         "ProveOVHdr validated with public key: {:?}",
-        ov_owner_entry.public_key
+        ov_owner_entry.public_key()
     );
 
     // Perform the key derivation

@@ -1,4 +1,4 @@
-use std::{convert::TryInto, fs};
+use std::fs;
 use std::{env, str::FromStr};
 
 use anyhow::{bail, Context, Result};
@@ -7,12 +7,12 @@ use fdo_data_formats::{
     constants::{HashType, HeaderKeys, KeyStorageType, MfgStringType, PublicKeyType},
     devicecredential::FileDeviceCredential,
     messages,
-    publickey::{PublicKey, X5Chain},
+    publickey::PublicKey,
     types::{
         CborSimpleType, CipherSuite, Guid, HMac, Hash, KexSuite, KeyDeriveSide, KeyExchange, Nonce,
         RendezvousInfo,
     },
-    PROTOCOL_VERSION,
+    Serializable, PROTOCOL_VERSION,
 };
 use fdo_http_wrapper::{
     client::{RequestResult, ServiceClient},
@@ -56,10 +56,13 @@ async fn perform_diun(
     let accept = accept.context("Error sending Connect")?.into_token();
     log::debug!("DIUN Accept token: {:?}", accept);
     let diun_pubchain = accept
-        .get_unprotected_value::<X5Chain>(HeaderKeys::CUPHOwnerPubKey)
+        .get_unprotected_value::<PublicKey>(HeaderKeys::CUPHOwnerPubKey)
         .context("Error getting diun_pubkey")?
         .context("No DIUN public key provided")?;
     log::debug!("Validating DIUN public chain: {:?}", diun_pubchain);
+    let diun_pubchain = diun_pubchain
+        .chain()
+        .context("Error getting diun_pubkey: no chain")?;
 
     let diun_pubkey = match pub_key_verification {
         DiunPublicKeyVerificationMode::Hash(hash) => diun_pubchain.verify_from_digest(&hash),
@@ -139,18 +142,22 @@ async fn perform_di(
         .await;
     let set_credentials = set_credentials.context("Error sending AppStart")?;
     let ov_header = set_credentials.into_ov_header();
-    let ov_header_buf =
-        serde_cbor::to_vec(&ov_header).context("Error serializing Ownership Voucher header")?;
+    let ov_header_buf = ov_header
+        .serialize_data()
+        .context("Error serializing Ownership Voucher header")?;
     let ov_header_hmac = key_reference
         .perform_hmac(&ov_header_buf)
         .context("Error computing HMac over Ownership Voucher Header")?;
+    let manufacturer_public_key_hash = ov_header
+        .manufacturer_public_key_hash(HashType::Sha384)
+        .context("Error getting manufacturer public key hash")?;
 
     key_reference
         .save_to_credential(
-            ov_header.device_info,
-            ov_header.guid,
-            ov_header.rendezvous_info,
-            ov_header.public_key,
+            ov_header.device_info().to_string(),
+            ov_header.guid().clone(),
+            ov_header.rendezvous_info().clone(),
+            manufacturer_public_key_hash,
         )
         .context("Error saving key reference to credential")?;
 
@@ -174,10 +181,7 @@ impl DiunPublicKeyVerificationMode {
             todo!()
         } else if let Ok(hash) = env::var("DIUN_PUB_KEY_HASH") {
             Ok(DiunPublicKeyVerificationMode::Hash(
-                Hash::guess_new_from_data(
-                    hex::decode(hash).context("DIUN_PUB_KEY_HASH is not valid hex")?,
-                )
-                .context("Error parsing DIUN_PUB_KEY_HASH as hash")?,
+                Hash::from_str(&hash).context("Error parsing DIUN_PUB_KEY_HASH as hash")?,
             ))
         } else if env::var("DIUN_PUB_KEY_INSECURE").is_ok() {
             Ok(DiunPublicKeyVerificationMode::Insecure)
@@ -191,8 +195,8 @@ impl DiunPublicKeyVerificationMode {
 async fn main() -> Result<()> {
     fdo_http_wrapper::init_logging();
 
-    let url = env::var("MANUFACTURING_SERVICE_URL")
-        .context("Please provide MANUFACTURING_SERVICE_URL")?;
+    let url =
+        env::var("MANUFACTURING_SERVER_URL").context("Please provide MANUFACTURING_SERVER_URL")?;
     let use_plain_di: bool = match env::var("USE_PLAIN_DI") {
         Ok(val) => val == "true",
         Err(_) => false,
@@ -265,7 +269,7 @@ async fn get_mfg_info(mfg_string_type: MfgStringType) -> Result<CborSimpleType> 
 enum KeyReference {
     FileSystem {
         sign_key: PKey<Private>,
-        hmac_key: PKey<Private>,
+        hmac_key: Vec<u8>,
     },
 }
 
@@ -274,7 +278,6 @@ impl KeyReference {
         let mut hmac_key_buf = [0; 32];
         openssl::rand::rand_bytes(&mut hmac_key_buf).context("Error creating random HMAC key")?;
         let hmac_key_buf = hmac_key_buf;
-        let hmac_key = PKey::hmac(&hmac_key_buf).context("Error building HMAC key")?;
 
         match keytype {
             PublicKeyType::SECP256R1 | PublicKeyType::SECP384R1 => {
@@ -288,7 +291,10 @@ impl KeyReference {
                 let sign_key =
                     PKey::from_ec_key(EcKey::generate(&group).context("Error generating EC key")?)
                         .context("Error creating EC key")?;
-                Ok(KeyReference::FileSystem { sign_key, hmac_key })
+                Ok(KeyReference::FileSystem {
+                    sign_key,
+                    hmac_key: hmac_key_buf.to_vec(),
+                })
             }
             _ => bail!("Key type not supported"),
         }
@@ -330,7 +336,6 @@ impl KeyReference {
             .with_context(|| format!("Error reading HMAC key from {}", &hmac_key_path))?;
 
         let sign_key = PKey::private_key_from_der(&sign_key).context("Error loading sign key")?;
-        let hmac_key = PKey::hmac(&hmac_key).context("Error loading HMAC key")?;
 
         Ok(KeyReference::FileSystem { sign_key, hmac_key })
     }
@@ -347,11 +352,11 @@ impl KeyReference {
         }
     }
 
-    fn get_public_key(&self) -> Result<PublicKey> {
+    fn get_public_key(&self) -> Result<Vec<u8>> {
         match self {
-            KeyReference::FileSystem { sign_key, .. } => {
-                sign_key.try_into().context("Error serializing public key")
-            }
+            KeyReference::FileSystem { sign_key, .. } => sign_key
+                .public_key_to_der()
+                .context("Error serializing public key"),
         }
     }
 
@@ -366,36 +371,28 @@ impl KeyReference {
         device_info: String,
         guid: Guid,
         rvinfo: RendezvousInfo,
-        manufacturer_public_key: PublicKey,
+        manufacturer_public_key_hash: Hash,
     ) -> Result<()> {
         match self {
             KeyReference::FileSystem { sign_key, hmac_key } => {
                 let private_key = sign_key
                     .private_key_to_der()
                     .context("Error serializing private sign key")?;
-                let hmac_secret = hmac_key
-                    .raw_private_key()
-                    .context("Error serializing HMac key")?;
-                let manufacturer_pubkey_hash = Hash::new(
-                    None,
-                    &serde_cbor::to_vec(&manufacturer_public_key)
-                        .context("Error serializing manufacturer public key")?,
-                )
-                .context("Error hashing manufacturer public key")?;
 
                 let cred = FileDeviceCredential {
                     active: true,
                     protver: PROTOCOL_VERSION,
-                    hmac_secret,
+                    hmac_secret: hmac_key,
                     device_info,
                     guid,
                     rvinfo,
-                    pubkey_hash: manufacturer_pubkey_hash,
+                    pubkey_hash: manufacturer_public_key_hash,
                     private_key,
                 };
 
-                let cred =
-                    serde_cbor::to_vec(&cred).context("Error serializing device credential")?;
+                let cred = cred
+                    .serialize_data()
+                    .context("Error serializing device credential")?;
 
                 let filename = match env::var_os("DEVICE_CREDENTIAL_FILENAME") {
                     Some(filename) => filename.into_string().unwrap(),
@@ -410,7 +407,9 @@ impl KeyReference {
     fn perform_hmac(&self, data: &[u8]) -> Result<HMac> {
         match self {
             KeyReference::FileSystem { hmac_key, .. } => {
-                let mut hmac_signer = Signer::new(MessageDigest::sha384(), hmac_key)
+                let hmac_key =
+                    PKey::hmac(hmac_key.as_slice()).context("Error creating HMAC key")?;
+                let mut hmac_signer = Signer::new(MessageDigest::sha384(), &hmac_key)
                     .context("Error creating hmac signer")?;
                 hmac_signer
                     .update(data)
@@ -418,7 +417,7 @@ impl KeyReference {
                 let hmac = hmac_signer
                     .sign_to_vec()
                     .context("Error finalizing hmac computation")?;
-                Ok(HMac::new_from_data(HashType::Sha384, hmac))
+                Ok(HMac::from_digest(HashType::HmacSha384, hmac))
             }
         }
     }

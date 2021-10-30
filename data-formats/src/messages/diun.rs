@@ -1,10 +1,10 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_tuple::Serialize_tuple;
 
 use super::{ClientMessage, EncryptionRequirement, Message, ServerMessage};
 use crate::{
     constants::{KeyStorageType, MessageType, MfgStringType, PublicKeyType},
-    publickey::PublicKey,
+    simple_message_serializable,
     types::{COSESign, CipherSuite, KexSuite, Nonce},
 };
 
@@ -64,8 +64,10 @@ impl Message for Connect {
 
 impl ClientMessage for Connect {}
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct Accept(COSESign);
+
+simple_message_serializable!(Accept, COSESign);
 
 impl Accept {
     pub fn new(token: COSESign) -> Self {
@@ -184,19 +186,19 @@ impl ServerMessage for ProvideKeyParameters {}
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct ProvideKey {
-    public_key: PublicKey,
+    public_key: Vec<u8>, // Key in DER-encoded SubjectPublicKeyInfo format
     public_key_storage: KeyStorageType,
 }
 
 impl ProvideKey {
-    pub fn new(public_key: PublicKey, public_key_storage: KeyStorageType) -> Self {
+    pub fn new(public_key: Vec<u8>, public_key_storage: KeyStorageType) -> Self {
         ProvideKey {
             public_key,
             public_key_storage,
         }
     }
 
-    pub fn public_key(&self) -> &PublicKey {
+    pub fn public_key(&self) -> &[u8] {
         &self.public_key
     }
 

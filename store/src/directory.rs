@@ -5,8 +5,9 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Serialize};
 use xattr::FileExt;
+
+use fdo_data_formats::Serializable;
 
 use super::Store;
 use super::StoreError;
@@ -17,7 +18,7 @@ pub(super) fn initialize<OT, K, V>(
 where
     OT: crate::StoreOpenMode,
     K: std::str::FromStr + std::string::ToString + Send + Sync + 'static,
-    V: Serialize + DeserializeOwned + Send + Sync + Clone + 'static,
+    V: Serializable + Send + Sync + Clone + 'static,
 {
     let directory: String = match cfg {
         None => {
@@ -29,7 +30,15 @@ where
     }
     .map_err(|_| StoreError::Configuration("Storage directory invalid type".to_string()))?;
 
-    let dirpath = Path::new(&directory).canonicalize().map_err(|e| {
+    let dirpath = Path::new(&directory);
+    fs::create_dir_all(dirpath).map_err(|e| {
+        StoreError::Configuration(format!(
+            "Storage directory '{}' could not be created: {}",
+            directory, e
+        ))
+    })?;
+
+    let canonicalized_directory = dirpath.canonicalize().map_err(|e| {
         StoreError::Configuration(format!(
             "Storage directory '{}' could not be canonicalized: {}",
             directory, e
@@ -40,7 +49,7 @@ where
         phantom_k: PhantomData,
         phantom_v: PhantomData,
 
-        directory: dirpath,
+        directory: canonicalized_directory,
     }))
 }
 
@@ -57,7 +66,7 @@ where
     K: std::string::ToString,
 {
     fn get_path(&self, key: &K) -> PathBuf {
-        self.directory.join(key.to_string())
+        self.directory.join(key.to_string().replace("/", "_slash_"))
     }
 }
 
@@ -88,7 +97,7 @@ impl<OT, K, V> Store<OT, K, V> for DirectoryStore<K, V>
 where
     OT: crate::StoreOpenMode,
     K: std::str::FromStr + std::string::ToString + Send + Sync + 'static,
-    V: Serialize + DeserializeOwned + Send + Sync + Clone + 'static,
+    V: Serializable + Send + Sync + Clone + 'static,
 {
     async fn load_data(&self, key: &K) -> Result<Option<V>, StoreError> {
         let path = self.get_path(key);
@@ -124,7 +133,7 @@ where
             }
         }
 
-        Ok(Some(serde_cbor::from_reader(&file).map_err(|e| {
+        Ok(Some(V::deserialize_from_reader(&file).map_err(|e| {
             StoreError::Unspecified(format!("Error deserializing value: {:?}", e))
         })?))
     }
@@ -159,7 +168,7 @@ where
                 ))
             })?;
         }
-        serde_cbor::to_writer(&file, &value).map_err(|e| {
+        value.serialize_to_writer(&file).map_err(|e| {
             StoreError::Unspecified(format!("Error writing file {}: {:?}", path.display(), e))
         })?;
 

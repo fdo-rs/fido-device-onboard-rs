@@ -20,6 +20,10 @@ use openssl::{
     x509::{X509Builder, X509NameBuilder},
 };
 
+use fdo_util::servers::format_conf_env;
+
+const PORT_BASE: u16 = 5080;
+
 const TARGET_TMPDIR: &str = env!("CARGO_TARGET_TMPDIR");
 const KEY_NAMES: &[&str] = &[
     "manufacturer",
@@ -63,8 +67,8 @@ impl Binary {
         match self {
             Binary::ClientLinuxapp => "fdo-client-linuxapp",
             Binary::ManufacturingClient => "fdo-manufacturing-client",
-            Binary::ManufacturingServer => "fdo-manufacturing-service",
-            Binary::OwnerOnboardingServer => "fdo-owner-onboarding-service",
+            Binary::ManufacturingServer => "fdo-manufacturing-server",
+            Binary::OwnerOnboardingServer => "fdo-owner-onboarding-server",
             Binary::OwnerTool => "fdo-owner-tool",
             Binary::RendezvousServer => "fdo-rendezvous-server",
         }
@@ -72,9 +76,9 @@ impl Binary {
 
     fn config_file_name(&self) -> Option<&str> {
         match self {
-            Binary::ManufacturingServer => Some("manufacturing-service.yml"),
-            Binary::OwnerOnboardingServer => Some("owner-onboarding-service.yml"),
-            Binary::RendezvousServer => Some("rendezvous-service.yml"),
+            Binary::ManufacturingServer => Some("manufacturing-server.yml"),
+            Binary::OwnerOnboardingServer => Some("owner-onboarding-server.yml"),
+            Binary::RendezvousServer => Some("rendezvous-server.yml"),
             _ => None,
         }
     }
@@ -88,7 +92,7 @@ impl Binary {
 
     fn url_environment_variable(&self) -> Option<&str> {
         match self {
-            Binary::ManufacturingClient => Some("MANUFACTURING_SERVICE_URL"),
+            Binary::ManufacturingClient => Some("MANUFACTURING_SERVER_URL"),
             _ => None,
         }
     }
@@ -137,7 +141,7 @@ impl TestBinaryNumber {
 
     pub fn server_port(&self) -> Option<u16> {
         if self.binary.is_server() {
-            Some(8080 + self.number)
+            Some(PORT_BASE + self.number)
         } else {
             None
         }
@@ -324,7 +328,7 @@ impl TestContext {
         cmd_configurator: F2,
     ) -> Result<TestBinaryNumber>
     where
-        F1: FnOnce(&mut TestServerConfigurator) -> Result<()>,
+        F1: FnOnce(&mut TestServerConfigurator) -> Result<PathBuf>,
         F2: FnOnce(&mut Command) -> Result<()>,
     {
         self.test_servers_ready = false;
@@ -335,7 +339,7 @@ impl TestContext {
         create_dir(&server_path).context("Error creating directory")?;
 
         // Create the config file
-        config_configurator(&mut TestServerConfigurator::new(
+        let config_path = config_configurator(&mut TestServerConfigurator::new(
             binary,
             &self,
             &test_server_number,
@@ -349,6 +353,10 @@ impl TestContext {
         // Do initial configuration: everything can be overridden by the configurator
         cmd.current_dir(&server_path)
             .env("LOG_LEVEL", "trace")
+            .env(
+                format_conf_env(&String::from(binary.target_name()).replace("fdo-", "")),
+                config_path,
+            )
             .stdout(File::create(server_path.join("stdout")).context("Error creating stdout")?)
             .stderr(File::create(server_path.join("stderr")).context("Error creating stdout")?);
 
@@ -687,7 +695,7 @@ impl<'a> TestServerConfigurator<'a> {
         &self,
         config_file_name: Option<&str>,
         context_configurator: F,
-    ) -> Result<()>
+    ) -> Result<PathBuf>
     where
         F: FnOnce(&mut tera::Context) -> Result<()>,
     {
@@ -707,16 +715,9 @@ impl<'a> TestServerConfigurator<'a> {
                 // TODO: Insert more defaults
 
                 context_configurator(cfg)
-            })
-    }
+            })?;
 
-    pub fn create_empty_storage_folder(&self, name: &str) -> Result<()> {
-        create_dir(
-            self.test_context
-                .runner_path(&self.server_number)
-                .join(&name),
-        )
-        .with_context(|| format!("Error creating empty storage folder: {}", name))
+        Ok(output_path)
     }
 }
 

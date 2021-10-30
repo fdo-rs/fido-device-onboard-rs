@@ -4,5 +4,7 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+    commit-message:
+      prefix: "chore: "
     reviewers:
     - "fedora-iot/fdo-rs-maintainers"

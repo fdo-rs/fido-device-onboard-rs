@@ -18,6 +18,18 @@ pub enum HashType {
     HmacSha384 = 6,
 }
 
+impl FromStr for HashType {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "sha256" => Ok(HashType::Sha256),
+            "sha384" => Ok(HashType::Sha384),
+            _ => Err(Error::InconsistentValue("Invalid digest name")),
+        }
+    }
+}
+
 impl TryFrom<HashType> for MessageDigest {
     type Error = Error;
 
@@ -40,11 +52,21 @@ impl HashType {
         }
     }
 
-    pub fn guess_from_length(len: usize) -> Option<Self> {
-        match len {
-            32 => Some(HashType::Sha256),
-            48 => Some(HashType::Sha384),
-            _ => None,
+    pub fn digest_size(&self) -> usize {
+        match self {
+            HashType::Sha256 => 32,
+            HashType::Sha384 => 48,
+            HashType::HmacSha256 => 32,
+            HashType::HmacSha384 => 48,
+        }
+    }
+
+    pub fn inner_hash(&self) -> HashType {
+        match self {
+            HashType::Sha256 => HashType::Sha256,
+            HashType::Sha384 => HashType::Sha384,
+            HashType::HmacSha256 => HashType::Sha256,
+            HashType::HmacSha384 => HashType::Sha384,
         }
     }
 }
@@ -61,27 +83,30 @@ impl TryFrom<MessageDigest> for HashType {
     }
 }
 
+const RS256: i16 = -257;
+const RS384: i16 = -258;
+
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, Eq, PartialEq)]
-#[repr(i8)]
+#[repr(i16)]
 #[non_exhaustive]
 pub enum DeviceSigType {
-    StSECP256R1 = (aws_nitro_enclaves_cose::sign::SignatureAlgorithm::ES256 as i8),
-    StSECP384R1 = (aws_nitro_enclaves_cose::sign::SignatureAlgorithm::ES384 as i8),
-    // StRSA2048 = RS256,
-    // StRSA3072 = RS384,
+    StSECP256R1 = (aws_nitro_enclaves_cose::sign::SignatureAlgorithm::ES256 as i16),
+    StSECP384R1 = (aws_nitro_enclaves_cose::sign::SignatureAlgorithm::ES384 as i16),
+    StRSA2048 = RS256,
+    StRSA3072 = RS384,
     StEPID10 = 90,
     StEPID11 = 91,
     StEPID20 = 92,
 }
 
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr)]
-#[repr(i8)]
+#[repr(i16)]
 #[non_exhaustive]
 pub enum PublicKeyType {
-    // Rsa2048RESTR = RS256,
-    // Rsa = RS384,
-    SECP256R1 = (aws_nitro_enclaves_cose::sign::SignatureAlgorithm::ES256 as i8),
-    SECP384R1 = (aws_nitro_enclaves_cose::sign::SignatureAlgorithm::ES384 as i8),
+    Rsa2048RESTR = RS256,
+    Rsa = RS384,
+    SECP256R1 = (aws_nitro_enclaves_cose::sign::SignatureAlgorithm::ES256 as i16),
+    SECP384R1 = (aws_nitro_enclaves_cose::sign::SignatureAlgorithm::ES384 as i16),
 }
 
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr)]
@@ -99,8 +124,8 @@ pub enum PublicKeyEncoding {
 #[repr(i64)]
 #[non_exhaustive]
 pub enum HeaderKeys {
-    EatNonce = 9,
-    EatUeid = 10,
+    EatNonce = 10,
+    EatUeid = 11,
 
     CUPHNonce = -17760701,       // IANA Pending
     CUPHOwnerPubKey = -17760702, // IANA Pending

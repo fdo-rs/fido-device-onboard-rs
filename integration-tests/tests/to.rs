@@ -15,22 +15,14 @@ async fn test_to() -> Result<()> {
     let rendezvous_server = ctx
         .start_test_server(
             Binary::RendezvousServer,
-            |cfg| {
-                cfg.prepare_config_file(None, |_| Ok(()))?;
-                cfg.create_empty_storage_folder("rendezvous_registered")?;
-                Ok(())
-            },
+            |cfg| Ok(cfg.prepare_config_file(None, |_| Ok(()))?),
             |_| Ok(()),
         )
         .context("Error creating rendezvous server")?;
     let owner_onboarding_server = ctx
         .start_test_server(
             Binary::OwnerOnboardingServer,
-            |cfg| {
-                cfg.prepare_config_file(None, |_| Ok(()))?;
-                cfg.create_empty_storage_folder("ownership_vouchers")?;
-                Ok(())
-            },
+            |cfg| Ok(cfg.prepare_config_file(None, |_| Ok(()))?),
             |_| Ok(()),
         )
         .context("Error creating rendezvous server")?;

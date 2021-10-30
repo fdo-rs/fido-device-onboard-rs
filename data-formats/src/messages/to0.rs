@@ -4,8 +4,10 @@ use serde_tuple::Serialize_tuple;
 use super::{ClientMessage, EncryptionRequirement, Message, ServerMessage};
 
 use crate::{
-    constants::MessageType,
-    types::{COSESign, Nonce, TO0Data},
+    cborparser::ParsedArray,
+    constants::{HashType, MessageType},
+    types::{COSESign, Hash, Nonce, TO0Data},
+    Error, Serializable,
 };
 
 #[derive(Debug, Deserialize)]
@@ -76,23 +78,58 @@ impl Message for HelloAck {
 
 impl ServerMessage for HelloAck {}
 
-#[derive(Debug, Serialize_tuple, Deserialize)]
+#[derive(Debug)]
 pub struct OwnerSign {
-    to0d: TO0Data,
-    to1d: COSESign,
+    contents: ParsedArray<crate::cborparser::ParsedArraySize2>,
+
+    cached_to0d: TO0Data,
+    cached_to1d: COSESign,
+}
+
+impl Serializable for OwnerSign {
+    fn deserialize_data(data: &[u8]) -> Result<Self, Error> {
+        let contents: ParsedArray<crate::cborparser::ParsedArraySize2> =
+            ParsedArray::deserialize_data(data)?;
+        let to0d = contents.get(0)?;
+        let to1d = contents.get(1)?;
+
+        Ok(OwnerSign {
+            contents,
+
+            cached_to0d: to0d,
+            cached_to1d: to1d,
+        })
+    }
+
+    fn serialize_data(&self) -> Result<Vec<u8>, Error> {
+        self.contents.serialize_data()
+    }
 }
 
 impl OwnerSign {
-    pub fn new(to0d: TO0Data, to1d: COSESign) -> Self {
-        OwnerSign { to0d, to1d }
+    pub fn new(to0d: TO0Data, to1d: COSESign) -> Result<Self, Error> {
+        let mut contents = unsafe { ParsedArray::new() };
+        contents.set(0, &to0d)?;
+        contents.set(1, &to1d)?;
+
+        Ok(OwnerSign {
+            contents,
+
+            cached_to0d: to0d,
+            cached_to1d: to1d,
+        })
     }
 
     pub fn to0d(&self) -> &TO0Data {
-        &self.to0d
+        &self.cached_to0d
     }
 
     pub fn to1d(&self) -> &COSESign {
-        &self.to1d
+        &self.cached_to1d
+    }
+
+    pub fn to0d_hash(&self, hash_type: HashType) -> Result<Hash, Error> {
+        self.contents.get_hash(0, hash_type)
     }
 }
 

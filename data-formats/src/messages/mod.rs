@@ -1,8 +1,9 @@
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 use thiserror::Error;
 
-use crate::constants::{ErrorCode, MessageType};
+use crate::{
+    constants::{ErrorCode, MessageType},
+    Serializable,
+};
 
 mod error;
 pub use error::ErrorMessage;
@@ -18,8 +19,8 @@ pub trait ServerMessage: Message {}
 
 #[derive(Debug, Error)]
 pub enum ParseError {
-    #[error("Serialization error")]
-    Serde(#[from] serde_cbor::Error),
+    #[error("Overall error: {0}")]
+    Error(#[from] crate::Error),
     #[error("Invalid body")]
     InvalidBody,
 }
@@ -30,23 +31,19 @@ pub enum EncryptionRequirement {
     MustNotBeEncrypted,
 }
 
-pub trait Message: Send + Serialize + DeserializeOwned + Sized {
+pub trait Message: Send + Serializable + Sized {
     fn message_type() -> MessageType;
 
     fn is_valid_previous_message(message_type: Option<MessageType>) -> bool;
 
     fn encryption_requirement() -> Option<EncryptionRequirement>;
 
-    fn to_wire(&self) -> Result<Vec<u8>, ParseError> {
-        Ok(serde_cbor::to_vec(&self)?)
-    }
-
     fn status_code() -> http::StatusCode {
         http::StatusCode::OK
     }
 
     fn to_response(&self) -> Vec<u8> {
-        match serde_cbor::to_vec(&self) {
+        match self.serialize_data() {
             Ok(v) => v,
             Err(e) => {
                 eprintln!("Error serializing response: {:?}", e);
@@ -60,4 +57,25 @@ pub trait Message: Send + Serialize + DeserializeOwned + Sized {
             }
         }
     }
+}
+
+#[macro_export]
+macro_rules! simple_message_serializable {
+    ($name:ident, $inner_type:ident) => {
+        impl crate::Serializable for $name {
+            fn serialize_data(&self) -> core::result::Result<Vec<u8>, crate::Error> {
+                let mut contents: crate::cborparser::ParsedArray<
+                    crate::cborparser::ParsedArraySize1,
+                > = unsafe { crate::cborparser::ParsedArray::new() };
+                contents.set(0, &self.0)?;
+                contents.serialize_data()
+            }
+
+            fn deserialize_data(data: &[u8]) -> core::result::Result<Self, crate::Error> {
+                let outer: crate::cborparser::ParsedArray<crate::cborparser::ParsedArraySize1> =
+                    crate::cborparser::ParsedArray::deserialize_data(data)?;
+                outer.get(0).map($name)
+            }
+        }
+    };
 }

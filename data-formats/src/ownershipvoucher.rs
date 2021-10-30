@@ -1,121 +1,202 @@
-use std::convert::TryFrom;
-
 use openssl::pkey::{PKeyRef, Private};
 use serde::Deserialize;
 use serde_tuple::Serialize_tuple;
 
 use crate::{
+    cborparser::{ParsedArray, ParsedArraySize4, ParsedArraySize6, ParsedArraySizeDynamic},
     constants::HashType,
     errors::Result,
     publickey::{PublicKey, X5Chain},
     types::{COSESign, Guid, HMac, Hash, RendezvousInfo, UnverifiedValue},
-    Error,
+    Error, Serializable,
 };
 
-#[derive(Debug, Serialize_tuple, Deserialize, Clone)]
-pub struct OwnershipVoucher {
-    // A lot of this is kept as u8 vectors, because they'll need to be cryptographically
-    //  validated (digests or signature)
-    header: Vec<u8>,
-    header_hmac: HMac,
-    device_certificate_chain: Option<X5Chain>,
-    entries: Vec<Vec<u8>>,
+#[derive(Debug)]
+enum OwnershipVoucherIndex {
+    Header = 0,
+    HeaderHmac = 1,
+    DeviceCertificateChain = 2,
+    Entries = 3,
 }
 
+#[derive(Debug, Clone)]
+pub struct OwnershipVoucher {
+    contents: ParsedArray<ParsedArraySize4>,
+
+    // Cached data
+    cached_header: OwnershipVoucherHeader,
+    cached_header_hmac: HMac,
+    cached_device_certificate_chain: Option<X5Chain>,
+    cached_entries: ParsedArray<ParsedArraySizeDynamic>,
+}
+
+impl Serializable for OwnershipVoucher {
+    fn deserialize_data(data: &[u8]) -> Result<Self> {
+        let contents = ParsedArray::deserialize_data(data)?;
+
+        let cached_header = contents.get(OwnershipVoucherIndex::Header as usize)?;
+        let cached_header_hmac = contents.get(OwnershipVoucherIndex::HeaderHmac as usize)?;
+        let cached_device_certificate_chain =
+            contents.get(OwnershipVoucherIndex::DeviceCertificateChain as usize)?;
+        let cached_entries = contents.get(OwnershipVoucherIndex::Entries as usize)?;
+
+        Ok(OwnershipVoucher {
+            contents,
+
+            cached_header,
+            cached_header_hmac,
+            cached_device_certificate_chain,
+            cached_entries,
+        })
+    }
+
+    fn serialize_data(&self) -> Result<Vec<u8>> {
+        self.contents.serialize_data()
+    }
+}
+
+const VOUCHER_PEM_TAG: &str = "OWNERSHIP VOUCHER";
+
 impl OwnershipVoucher {
+    pub fn from_parts(
+        header: OwnershipVoucherHeader,
+        header_hmac: HMac,
+        entries: ParsedArray<ParsedArraySizeDynamic>,
+    ) -> Result<Self> {
+        let mut contents = unsafe { ParsedArray::new() };
+        contents.set(OwnershipVoucherIndex::Header as usize, &header)?;
+        contents.set(OwnershipVoucherIndex::HeaderHmac as usize, &header_hmac)?;
+        contents.set::<Option<X5Chain>>(
+            OwnershipVoucherIndex::DeviceCertificateChain as usize,
+            &None,
+        )?;
+        contents.set(OwnershipVoucherIndex::Entries as usize, &entries)?;
+
+        Ok(OwnershipVoucher {
+            contents,
+
+            cached_header: header,
+            cached_header_hmac: header_hmac,
+            cached_device_certificate_chain: None,
+            cached_entries: entries,
+        })
+    }
+
     pub fn new(
-        header: Vec<u8>,
+        header: OwnershipVoucherHeader,
         header_hmac: HMac,
         device_certificate_chain: Option<X5Chain>,
-    ) -> Self {
-        OwnershipVoucher {
-            header,
-            header_hmac,
-            device_certificate_chain,
-            entries: Vec::new(),
+    ) -> Result<Self> {
+        let entries = ParsedArray::new_empty();
+
+        let mut contents: ParsedArray<ParsedArraySize4> = unsafe { ParsedArray::new() };
+        contents.set(OwnershipVoucherIndex::Header as usize, &header.contents)?;
+        contents.set(OwnershipVoucherIndex::HeaderHmac as usize, &header_hmac)?;
+        contents.set(
+            OwnershipVoucherIndex::DeviceCertificateChain as usize,
+            &device_certificate_chain,
+        )?;
+        contents.set(OwnershipVoucherIndex::Entries as usize, &entries)?;
+
+        Ok(OwnershipVoucher {
+            contents,
+
+            cached_header: header,
+            cached_header_hmac: header_hmac,
+            cached_device_certificate_chain: device_certificate_chain,
+            cached_entries: entries,
+        })
+    }
+
+    pub fn from_pem(data: &[u8]) -> Result<Self> {
+        let parsed = pem::parse(data)?;
+        if parsed.tag != VOUCHER_PEM_TAG {
+            return Err(Error::InvalidPemTag(parsed.tag));
+        }
+        Self::deserialize_data(&parsed.contents)
+    }
+
+    pub fn from_pem_or_raw(data: &[u8]) -> Result<Self> {
+        if data[0] == data[1] && data[0] == b'-' {
+            Self::from_pem(data)
+        } else {
+            Self::deserialize_data(data)
         }
     }
 
-    pub fn from_parts(header: Vec<u8>, header_hmac: HMac, entries: Vec<Vec<u8>>) -> Self {
-        OwnershipVoucher {
-            header,
-            header_hmac,
-            device_certificate_chain: None,
-            entries,
-        }
+    pub fn to_pem(&self) -> Result<String> {
+        let block = pem::Pem {
+            tag: VOUCHER_PEM_TAG.to_string(),
+            contents: self.serialize_data()?,
+        };
+        Ok(pem::encode(&block))
+    }
+
+    fn hash_type(&self) -> HashType {
+        self.cached_header_hmac.get_type().inner_hash()
     }
 
     pub fn header_hmac(&self) -> &HMac {
-        &self.header_hmac
-    }
-
-    fn hdr_hash(&self) -> Vec<u8> {
-        let mut hdr_hash = Vec::with_capacity(self.header.len() + self.header_hmac.value().len());
-        hdr_hash.extend_from_slice(&self.header);
-        hdr_hash.extend_from_slice(self.header_hmac.value());
-        hdr_hash
+        &self.cached_header_hmac
     }
 
     pub fn device_certificate_chain(&self) -> Option<&X5Chain> {
-        self.device_certificate_chain.as_ref()
+        self.cached_device_certificate_chain.as_ref()
+    }
+
+    pub fn device_certificate_chain_hash(&self, hash_type: HashType) -> Option<Result<Hash>> {
+        if self.cached_device_certificate_chain.is_none() {
+            None
+        } else {
+            Some(self.contents.get_hash(
+                OwnershipVoucherIndex::DeviceCertificateChain as usize,
+                hash_type,
+            ))
+        }
     }
 
     pub fn num_entries(&self) -> u16 {
-        self.entries.len() as u16
+        self.cached_entries.len() as u16
     }
 
-    pub fn entry(&self, entry_num: u16) -> Result<Option<COSESign>> {
-        match self.entries.get(entry_num as usize) {
-            None => Ok(None),
-            Some(v) => Ok(Some(COSESign::from_bytes(v)?)),
-        }
+    pub fn entry(&self, entry_num: usize) -> Result<OwnershipVoucherEntry> {
+        self.cached_entries.get(entry_num)
     }
 
     pub fn extend(
         &mut self,
         owner_private_key: &PKeyRef<Private>,
-        hash_type: Option<HashType>,
         next_party: &PublicKey,
     ) -> Result<()> {
-        // Check if the owner passed in the correct private key
-        let (last_hash, owner_pubkey) = if self.entries.is_empty() {
+        let hdrinfo_hash = self.header().get_hdr_info_hash(self.hash_type())?;
+        let (last_hash, current_owner_pubkey) = if self.cached_entries.is_empty() {
             (
-                Hash::new(hash_type, &self.hdr_hash())?,
-                self.get_header()?.public_key,
+                self.contents.get_hash_two_items(
+                    OwnershipVoucherIndex::Header as usize,
+                    OwnershipVoucherIndex::HeaderHmac as usize,
+                    self.hash_type(),
+                )?,
+                self.header().manufacturer_public_key().clone(),
             )
         } else {
-            let lastrawentry = &self.entries[self.entries.len() - 1];
-            let lastsignedentry = COSESign::from_bytes(lastrawentry)?;
+            let last_idx = self.cached_entries.len() - 1;
+
+            let last_hash = self.cached_entries.get_hash(last_idx, self.hash_type())?;
+            let lastentry: OwnershipVoucherEntry = self.cached_entries.get(last_idx)?;
             let lastentry: UnverifiedValue<OwnershipVoucherEntryPayload> =
-                lastsignedentry.get_payload_unverified()?;
-            // Check whether the hash_type passed is identical to the previous entry, or is not passed at all.
-            let hash_type = if let Some(hash_type) = hash_type {
-                if lastentry
-                    .get_unverified_value()
-                    .hash_previous_entry
-                    .get_type()
-                    != hash_type
-                {
-                    return Err(Error::InconsistentValue("hash-type"));
-                }
-                hash_type
-            } else {
-                lastentry
-                    .get_unverified_value()
-                    .hash_previous_entry
-                    .get_type()
-            };
+                lastentry.get_payload_unverified()?;
+
             (
-                Hash::new(Some(hash_type), lastrawentry)?,
+                last_hash,
                 lastentry.get_unverified_value().public_key.clone(),
             )
         };
-        if !owner_pubkey.matches_pkey(owner_private_key)? {
+
+        if !current_owner_pubkey.matches_pkey(owner_private_key)? {
             return Err(Error::NonOwnerKey);
         }
 
         // Create new entry
-        let hdrinfo_hash = Hash::new(hash_type, &self.get_header()?.get_info()?)?;
         let new_entry = OwnershipVoucherEntryPayload {
             hash_previous_entry: last_hash,
             hash_header_info: hdrinfo_hash,
@@ -124,30 +205,29 @@ impl OwnershipVoucher {
 
         // Sign with private key
         let signed_new_entry = COSESign::new(&new_entry, None, owner_private_key)?;
+        let signed_new_entry = OwnershipVoucherEntry::new(signed_new_entry);
 
         // Append
-        self.entries.push(signed_new_entry.as_bytes()?);
+        self.cached_entries.push(&signed_new_entry)?;
+
+        self.contents.set(3, &self.cached_entries)?;
 
         Ok(())
     }
 
-    pub fn get_header(&self) -> Result<OwnershipVoucherHeader> {
-        serde_cbor::from_slice(&self.header).map_err(|e| e.into())
+    pub fn header(&self) -> &OwnershipVoucherHeader {
+        &self.cached_header
     }
 }
 
 impl<'a> OwnershipVoucher {
     pub fn iter_entries(&'a self) -> Result<EntryIter> {
-        let hdr = self.get_header()?;
-        let hdrinfo = hdr.get_info()?;
-
         Ok(EntryIter {
             voucher: self,
-            pubkey: hdr.public_key.clone(),
-            header: hdr,
-            headerinfo: hdrinfo,
             index: 0,
             errored: false,
+
+            last_pubkey: self.header().manufacturer_public_key().clone(),
         })
     }
 }
@@ -155,11 +235,10 @@ impl<'a> OwnershipVoucher {
 #[derive(Debug)]
 pub struct EntryIter<'a> {
     voucher: &'a OwnershipVoucher,
-    pubkey: PublicKey,
-    header: OwnershipVoucherHeader,
-    headerinfo: Vec<u8>,
     index: usize,
     errored: bool,
+
+    last_pubkey: PublicKey,
 }
 
 impl<'a> Iterator for EntryIter<'a> {
@@ -170,11 +249,17 @@ impl<'a> Iterator for EntryIter<'a> {
             log::warn!("Previous entry validation failed");
             return None;
         }
-        if self.index >= self.voucher.entries.len() {
+        if self.index >= self.voucher.cached_entries.len() {
             return None;
         }
 
-        let entry = self.process_element(&self.voucher.entries[self.index]);
+        let entry = self.voucher.cached_entries.get(self.index);
+        if let Err(e) = entry {
+            log::warn!("Error getting next entry: {:?}", e);
+            self.errored = true;
+            return Some(Err(e));
+        }
+        let entry = self.process_element(entry.unwrap());
 
         if entry.is_err() {
             log::warn!("Error validating ownership voucher: {:?}", entry);
@@ -188,45 +273,77 @@ impl<'a> Iterator for EntryIter<'a> {
 }
 
 impl<'a> EntryIter<'a> {
-    pub fn next_pubkey(&self) -> &PublicKey {
-        &self.pubkey
-    }
-
-    fn process_element(&mut self, element: &'a [u8]) -> Result<OwnershipVoucherEntryPayload> {
-        let entry = COSESign::from_bytes(element)?;
-        let entry: OwnershipVoucherEntryPayload = entry.get_payload(self.pubkey.pkey())?;
+    fn process_element(
+        &mut self,
+        entry: OwnershipVoucherEntry,
+    ) -> Result<OwnershipVoucherEntryPayload> {
+        let entry = entry.0;
+        let entry: OwnershipVoucherEntryPayload = entry.get_payload(self.last_pubkey.pkey())?;
 
         // Compare the HashPreviousEntry to either (HeaderTag || HeaderHmac) or the previous entry
-        let mut hdr_hash =
-            Vec::with_capacity(self.voucher.header.len() + self.voucher.header_hmac.value().len());
-        hdr_hash.extend_from_slice(&self.voucher.header);
-        hdr_hash.extend_from_slice(self.voucher.header_hmac.value());
-        let other = if self.index == 0 {
-            &hdr_hash
+        let hash_previous_entry = if self.index == 0 {
+            self.voucher.contents.get_hash_two_items(
+                OwnershipVoucherIndex::Header as usize,
+                OwnershipVoucherIndex::HeaderHmac as usize,
+                entry.hash_previous_entry.get_type(),
+            )?
         } else {
-            &self.voucher.entries[self.index - 1]
+            self.voucher
+                .cached_entries
+                .get_hash(self.index - 1, entry.hash_previous_entry.get_type())?
         };
-        entry.hash_previous_entry.compare_data(other)?;
+        match entry.hash_previous_entry.compare(&hash_previous_entry) {
+            Ok(_) => {}
+            Err(e) => {
+                log::error!("Error verifying hash of previous entry");
+                return Err(e);
+            }
+        }
 
         // Compare the HeaderInfo hash
-        entry.hash_header_info.compare_data(&self.headerinfo)?;
+        let hdr_info_hash = self
+            .voucher
+            .header()
+            .get_hdr_info_hash(entry.hash_header_info.get_type())?;
+        match entry.hash_header_info.compare(&hdr_info_hash) {
+            Ok(_) => {}
+            Err(e) => {
+                println!("Header hash: {:?}", hdr_info_hash);
+                println!("Entry hash:  {:?}", entry.hash_header_info);
+                log::error!("Error verifying header hash");
+                return Err(e);
+            }
+        }
 
         // Set the next public key to the key in this entry
-        self.pubkey = entry.public_key.clone();
+        self.last_pubkey = entry.public_key.clone();
 
         // Return
         Ok(entry)
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize_tuple)]
+#[derive(Debug)]
+#[repr(u8)]
+enum OwnershipVoucherHeaderIndex {
+    ProtocolVersion = 0,
+    Guid = 1,
+    RendezvousInfo = 2,
+    DeviceInfo = 3,
+    ManufacturerPublicKey = 4,
+    DeviceCertificateChainHash = 5,
+}
+
+#[derive(Clone, Debug)]
 pub struct OwnershipVoucherHeader {
-    pub protocol_version: u16,
-    pub guid: Guid,
-    pub rendezvous_info: RendezvousInfo,
-    pub device_info: String,
-    pub public_key: PublicKey,
-    pub device_certificate_chain_hash: Option<Hash>,
+    contents: ParsedArray<ParsedArraySize6>,
+
+    cached_protocol_version: u16,
+    cached_guid: Guid,
+    cached_rendezvous_info: RendezvousInfo,
+    cached_device_info: String,
+    cached_manufacturer_public_key: PublicKey,
+    cached_device_certificate_chain_hash: Option<Hash>,
 }
 
 impl OwnershipVoucherHeader {
@@ -235,48 +352,183 @@ impl OwnershipVoucherHeader {
         guid: Guid,
         rendezvous_info: RendezvousInfo,
         device_info: String,
-        public_key: PublicKey,
+        manufacturer_public_key: PublicKey,
         device_certificate_chain_hash: Option<Hash>,
-    ) -> Self {
-        OwnershipVoucherHeader {
-            protocol_version,
-            guid,
-            rendezvous_info,
-            device_info,
-            public_key,
-            device_certificate_chain_hash,
-        }
+    ) -> Result<Self> {
+        let mut contents = unsafe { ParsedArray::new() };
+        contents.set(
+            OwnershipVoucherHeaderIndex::ProtocolVersion as usize,
+            &protocol_version,
+        )?;
+        contents.set(OwnershipVoucherHeaderIndex::Guid as usize, &guid)?;
+        contents.set(
+            OwnershipVoucherHeaderIndex::RendezvousInfo as usize,
+            &rendezvous_info,
+        )?;
+        contents.set(
+            OwnershipVoucherHeaderIndex::DeviceInfo as usize,
+            &device_info,
+        )?;
+        contents.set(
+            OwnershipVoucherHeaderIndex::ManufacturerPublicKey as usize,
+            &manufacturer_public_key,
+        )?;
+        contents.set(
+            OwnershipVoucherHeaderIndex::DeviceCertificateChainHash as usize,
+            &device_certificate_chain_hash,
+        )?;
+
+        Ok(OwnershipVoucherHeader {
+            contents,
+
+            cached_protocol_version: protocol_version,
+            cached_guid: guid,
+            cached_rendezvous_info: rendezvous_info,
+            cached_device_info: device_info,
+            cached_manufacturer_public_key: manufacturer_public_key,
+            cached_device_certificate_chain_hash: device_certificate_chain_hash,
+        })
+    }
+
+    pub fn protocol_version(&self) -> u16 {
+        self.cached_protocol_version
     }
 
     pub fn guid(&self) -> &Guid {
-        &self.guid
+        &self.cached_guid
     }
 
-    fn get_info(&self) -> Result<Vec<u8>> {
-        let device_info_bytes = self.device_info.as_bytes();
-        let mut hdrinfo = Vec::with_capacity(self.guid.len() + device_info_bytes.len());
-        hdrinfo.extend_from_slice(&self.guid);
-        hdrinfo.extend_from_slice(device_info_bytes);
-
-        Ok(hdrinfo)
+    pub fn rendezvous_info(&self) -> &RendezvousInfo {
+        &self.cached_rendezvous_info
     }
 
-    pub fn get_raw_public_key(&self) -> Result<Vec<u8>> {
-        serde_cbor::to_vec(&self.public_key).map_err(|e| e.into())
+    pub fn device_info(&self) -> &str {
+        &self.cached_device_info
+    }
+
+    pub fn manufacturer_public_key(&self) -> &PublicKey {
+        &self.cached_manufacturer_public_key
+    }
+
+    pub fn manufacturer_public_key_hash(&self, hash_type: HashType) -> Result<Hash> {
+        self.contents.get_hash(
+            OwnershipVoucherHeaderIndex::ManufacturerPublicKey as usize,
+            hash_type,
+        )
+    }
+
+    pub fn device_certificate_chain_hash(&self) -> Option<&Hash> {
+        self.cached_device_certificate_chain_hash.as_ref()
+    }
+
+    fn get_hdr_info_hash(&self, hash_type: HashType) -> Result<Hash> {
+        // TODO: Check with FIDO Alliance whether this is correct.
+        // For the HashPrevEntry, we compute with the actual CBOR type prefix,
+        // while for hdr_info, the Intel implementation seemed to not do that.
+        let guid: Guid = self
+            .contents
+            .get(OwnershipVoucherHeaderIndex::Guid as usize)?;
+        let device_info: String = self
+            .contents
+            .get(OwnershipVoucherHeaderIndex::DeviceInfo as usize)?;
+        let device_info = device_info.as_bytes();
+
+        let mut data = Vec::with_capacity(guid.len() + device_info.len());
+        data.extend_from_slice(&guid);
+        data.extend_from_slice(device_info);
+
+        Hash::from_data(hash_type, &data)
     }
 }
 
-impl TryFrom<&OwnershipVoucherHeader> for Vec<u8> {
-    type Error = Error;
+impl Serializable for OwnershipVoucherHeader {
+    fn deserialize_data(data: &[u8]) -> Result<Self> {
+        let contents = ParsedArray::deserialize_data(data)?;
 
-    fn try_from(ovh: &OwnershipVoucherHeader) -> Result<Vec<u8>> {
-        serde_cbor::to_vec(&ovh).map_err(|e| e.into())
+        let cached_protocol_version =
+            contents.get(OwnershipVoucherHeaderIndex::ProtocolVersion as usize)?;
+        let cached_guid = contents.get(OwnershipVoucherHeaderIndex::Guid as usize)?;
+        let cached_rendezvous_info =
+            contents.get(OwnershipVoucherHeaderIndex::RendezvousInfo as usize)?;
+        let cached_device_info = contents.get(OwnershipVoucherHeaderIndex::DeviceInfo as usize)?;
+        let cached_manufacturer_public_key =
+            contents.get(OwnershipVoucherHeaderIndex::ManufacturerPublicKey as usize)?;
+        let cached_device_certificate_chain_hash =
+            contents.get(OwnershipVoucherHeaderIndex::DeviceCertificateChainHash as usize)?;
+
+        Ok(OwnershipVoucherHeader {
+            contents,
+
+            cached_protocol_version,
+            cached_guid,
+            cached_rendezvous_info,
+            cached_device_info,
+            cached_manufacturer_public_key,
+            cached_device_certificate_chain_hash,
+        })
+    }
+
+    fn serialize_data(&self) -> Result<Vec<u8>> {
+        self.contents.serialize_data()
     }
 }
 
-#[derive(Debug, Deserialize, Serialize_tuple)]
+#[derive(Debug, Clone)]
+pub struct OwnershipVoucherEntry(COSESign);
+
+impl Serializable for OwnershipVoucherEntry {
+    fn deserialize_data(data: &[u8]) -> Result<Self> {
+        COSESign::deserialize_data(data).map(OwnershipVoucherEntry)
+    }
+
+    fn serialize_data(&self) -> Result<Vec<u8>> {
+        self.0.serialize_data()
+    }
+}
+
+impl OwnershipVoucherEntry {
+    pub fn new(sign: COSESign) -> Self {
+        OwnershipVoucherEntry(sign)
+    }
+}
+
+impl std::ops::Deref for OwnershipVoucherEntry {
+    type Target = COSESign;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize_tuple, Clone)]
 pub struct OwnershipVoucherEntryPayload {
-    pub hash_previous_entry: Hash,
-    pub hash_header_info: Hash,
-    pub public_key: PublicKey,
+    hash_previous_entry: Hash,
+    hash_header_info: Hash,
+    public_key: PublicKey,
+}
+
+impl OwnershipVoucherEntryPayload {
+    pub fn new(
+        hash_previous_entry: Hash,
+        hash_header_info: Hash,
+        public_key: PublicKey,
+    ) -> Result<Self> {
+        Ok(OwnershipVoucherEntryPayload {
+            hash_previous_entry,
+            hash_header_info,
+            public_key,
+        })
+    }
+
+    pub fn hash_previous_entry(&self) -> &Hash {
+        &self.hash_previous_entry
+    }
+
+    pub fn hash_header_info(&self) -> &Hash {
+        &self.hash_header_info
+    }
+
+    pub fn public_key(&self) -> &PublicKey {
+        &self.public_key
+    }
 }

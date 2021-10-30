@@ -6,10 +6,13 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use openssl::{
+    asn1::{Asn1Integer, Asn1Time},
+    bn::BigNum,
     ec::{EcGroup, EcKey},
+    hash::MessageDigest,
     nid::Nid,
     pkey::{PKey, Private},
-    x509::X509,
+    x509::{X509Builder, X509NameBuilder, X509},
 };
 use serde::Deserialize;
 use tokio::signal::unix::{signal, SignalKind};
@@ -19,6 +22,7 @@ use fdo_data_formats::{
     enhanced_types::X5Bag, ownershipvoucher::OwnershipVoucher, publickey::PublicKey, types::Guid,
 };
 use fdo_store::{Store, StoreDriver};
+use fdo_util::servers::settings_for;
 
 mod handlers;
 mod serviceinfo;
@@ -104,10 +108,30 @@ fn generate_owner2_keys() -> Result<(PKey<Private>, PublicKey)> {
         EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).context("Error getting nist 256 group")?;
     let owner2_key = EcKey::generate(&owner2_key_group).context("Error generating owned2 key")?;
     let owner2_key =
-        PKey::from_ec_key(owner2_key).context("ERror converting owner2 key to PKey")?;
+        PKey::from_ec_key(owner2_key).context("Error converting owner2 key to PKey")?;
+
+    // Create an ephemeral certificate
+    let mut subject = X509NameBuilder::new()?;
+    subject.append_entry_by_text("CN", "Ephemeral Owner2 Key")?;
+    let subject = subject.build();
+
+    let serial = BigNum::from_u32(42)?;
+    let serial = Asn1Integer::from_bn(&serial)?;
+
+    let mut builder = X509Builder::new()?;
+    builder.set_version(2)?;
+    builder.set_not_after(Asn1Time::days_from_now(365)?.as_ref())?;
+    builder.set_not_before(Asn1Time::days_from_now(0)?.as_ref())?;
+    builder.set_issuer_name(&subject)?;
+    builder.set_subject_name(&subject)?;
+    builder.set_pubkey(&owner2_key)?;
+    builder.set_serial_number(&serial)?;
+    builder.sign(&owner2_key, MessageDigest::sha384())?;
+
+    let owner2_cert = builder.build();
 
     let pubkey =
-        PublicKey::try_from(&owner2_key).context("Error converting ephemeral owner2 key to PK")?;
+        PublicKey::try_from(owner2_cert).context("Error converting ephemeral owner2 key to PK")?;
 
     Ok((owner2_key, pubkey))
 }
@@ -116,13 +140,9 @@ fn generate_owner2_keys() -> Result<(PKey<Private>, PublicKey)> {
 async fn main() -> Result<()> {
     fdo_http_wrapper::init_logging();
 
-    let mut settings = config::Config::default();
-    settings
-        .merge(config::File::with_name("owner-onboarding-service").required(false))
-        .context("Loading configuration files")?
-        .merge(config::Environment::with_prefix("owner_onboarding_service"))
-        .context("Loading configuration from environment variables")?;
-    let settings: Settings = settings.try_into().context("Error parsing configuration")?;
+    let settings: Settings = settings_for("owner-onboarding-server")?
+        .try_into()
+        .context("Error parsing configuration")?;
 
     // Bind information
     let bind_addr = SocketAddr::from_str(&settings.bind)

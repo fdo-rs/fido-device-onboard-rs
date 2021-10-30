@@ -59,7 +59,7 @@ jobs:
 
       - name: Install deps
         run: |
-          dnf install -y make gcc openssl openssl-devel findutils
+          dnf install -y make gcc openssl openssl-devel findutils golang
 
       - name: Build
         uses: actions-rs/cargo@v1
@@ -70,3 +70,13 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
+
+  commitlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - uses: wagoid/commitlint-github-action@v4
+        with:
+          failOnWarnings: true
