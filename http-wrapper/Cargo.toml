@@ -18,8 +18,8 @@ hex = "0.4"
 
 openssl = "0.10"
 
-fdo-data-formats = { path = "../data-formats" }
-fdo-store = { path = "../store" }
+fdo-data-formats = { path = "../data-formats", version = "0.1.0" }
+fdo-store = { path = "../store", version = "0.1.0" }
 aws-nitro-enclaves-cose = "0.4.0"
 
 # Server-side

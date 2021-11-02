@@ -17,7 +17,7 @@ warp = "0.3"
 log = "0.4"
 hex = "0.4"
 
-fdo-data-formats = { path = "../data-formats" }
-fdo-http-wrapper = { path = "../http-wrapper", features = ["server"] }
-fdo-store = { path = "../store", features = ["directory"] }
-fdo-util = { path = "../util" }
+fdo-data-formats = { path = "../data-formats", version = "0.1.0" }
+fdo-http-wrapper = { path = "../http-wrapper", version = "0.1.0", features = ["server"] }
+fdo-store = { path = "../store", version = "0.1.0", features = ["directory"] }
+fdo-util = { path = "../util", version = "0.1.0" }
