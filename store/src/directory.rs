@@ -180,7 +180,6 @@ where
         }
         let mut values = Vec::new();
         for r in results {
-            println!("{:?}", r);
             let file = match File::open(&r) {
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
                 Err(e) => {
@@ -189,11 +188,9 @@ where
                 }
                 Ok(f) => f,
             };
-            let val = V::deserialize_from_reader(&file);
-            if let Ok(v) = val {
-                values.push(v)
-            } else {
-                log::trace!("Error deserializing data {:?}", r);
+            match V::deserialize_from_reader(&file) {
+                Ok(v) => values.push(v),
+                Err(e) => log::trace!("Error deserializing data {:?}: {}", r, e),
             }
         }
         Ok(Some(ValueIter {

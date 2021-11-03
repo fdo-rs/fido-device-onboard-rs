@@ -22,10 +22,13 @@ async fn test_to() -> Result<()> {
     let owner_onboarding_server = ctx
         .start_test_server(
             Binary::OwnerOnboardingServer,
-            |cfg| Ok(cfg.prepare_config_file(None, |_| Ok(()))?),
+            |cfg| {
+                cfg.prepare_config_file(Some("owner-addresses.yml"), |_| Ok(()))?;
+                Ok(cfg.prepare_config_file(None, |_| Ok(()))?)
+            },
             |_| Ok(()),
         )
-        .context("Error creating rendezvous server")?;
+        .context("Error creating owner server")?;
     ctx.wait_until_servers_ready()
         .await
         .context("Error waiting for servers to start")?;
@@ -33,7 +36,6 @@ async fn test_to() -> Result<()> {
     let dc_path = ctx.testpath().join("testdevice.dc");
     let ov_path = ctx.testpath().join("testdevice.ov");
     let rendezvous_info_path = ctx.testpath().join("rendezvous-info.yml");
-    let owner_address_path = ctx.testpath().join("owner-addresses.yml");
     let key_path = ctx.keys_path();
 
     L.l("Generating configuration files");
@@ -42,14 +44,6 @@ async fn test_to() -> Result<()> {
         Ok(())
     })
     .context("Error generating rendezvous-info.yml")?;
-    ctx.generate_config_file(&owner_address_path, "owner-addresses.yml", |cfg| {
-        cfg.insert(
-            "owner_port",
-            &owner_onboarding_server.server_port().unwrap(),
-        );
-        Ok(())
-    })
-    .context("Error generating owner-addresses.yml")?;
 
     let owner_output = ctx
         .run_owner_tool(
@@ -116,28 +110,6 @@ async fn test_to() -> Result<()> {
         })?;
     }
 
-    let owner_output = ctx
-        .run_owner_tool(
-            &key_path,
-            &[
-                "report-to-rendezvous",
-                &format!("--ownership-voucher={}", ov_path.to_str().unwrap()),
-                &format!(
-                    "--owner-private-key={}",
-                    key_path.join("owner_key.der").to_str().unwrap()
-                ),
-                &format!(
-                    "--owner-addresses-path={}",
-                    owner_address_path.to_str().unwrap()
-                ),
-                "--wait-time=600",
-            ],
-        )
-        .context("Error running report-to-rendezvous")?;
-    owner_output
-        .expect_success()
-        .context("report-to-rendezvous failed")?;
-
     let device_guid = determine_device_credential_guid(&dc_path)
         .context("Error determining device GUID")?
         .to_string();
@@ -168,6 +140,16 @@ async fn test_to() -> Result<()> {
         .context("dump-ownership-voucher failed")?;
     fs::write(ov_to, dump_output.raw_stdout())
         .context("Error writing ownership voucher to disk")?;
+
+    let client = reqwest::Client::new();
+    let res = client
+        .post(format!(
+            "http://localhost:{}/report-to-rendezvous",
+            owner_onboarding_server.server_port().unwrap()
+        ))
+        .send()
+        .await?;
+    L.l(format!("Status code report-to-rendezvous {}", res.status()));
 
     let ssh_authorized_keys_path = ctx.testpath().join("authorized_keys");
     let marker_file_path = ctx.testpath().join("marker");

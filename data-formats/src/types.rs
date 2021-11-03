@@ -1,5 +1,6 @@
 use std::{
     convert::{TryFrom, TryInto},
+    net::IpAddr,
     ops::Deref,
     str::FromStr,
     string::ToString,
@@ -1869,5 +1870,110 @@ impl COSESign {
             None => Ok(None),
             Some(val) => Ok(Some(serde_cbor::value::from_value(val.clone())?)),
         }
+    }
+}
+
+#[derive(Debug)]
+pub enum RemoteTransport {
+    Tcp,
+    Tls,
+    Http,
+    CoAP,
+    Https,
+    CoAPS,
+}
+
+impl<'de> Deserialize<'de> for RemoteTransport {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct RemoteTransportVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for RemoteTransportVisitor {
+            type Value = RemoteTransport;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a string")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(match &v.to_lowercase()[..] {
+                    "tcp" => RemoteTransport::Tcp,
+                    "tls" => RemoteTransport::Tls,
+                    "http" => RemoteTransport::Http,
+                    "coap" => RemoteTransport::CoAP,
+                    "https" => RemoteTransport::Https,
+                    "coaps" => RemoteTransport::CoAPS,
+                    _ => {
+                        return Err(serde::de::Error::invalid_value(
+                            serde::de::Unexpected::Str(v),
+                            &"a supported transport type",
+                        ))
+                    }
+                })
+            }
+        }
+
+        deserializer.deserialize_str(RemoteTransportVisitor)
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum RemoteAddress {
+    IP { ip_address: String },
+    Dns { dns_name: String },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub struct RemoteConnection {
+    transport: RemoteTransport,
+    addresses: Vec<RemoteAddress>,
+    port: u16,
+}
+
+impl TryFrom<RemoteConnection> for Vec<TO2AddressEntry> {
+    type Error = Error;
+
+    fn try_from(rc: RemoteConnection) -> Result<Vec<TO2AddressEntry>, Error> {
+        let transport = match rc.transport {
+            RemoteTransport::Tcp => TransportProtocol::Tcp,
+            RemoteTransport::Tls => TransportProtocol::Tls,
+            RemoteTransport::Http => TransportProtocol::Http,
+            RemoteTransport::CoAP => TransportProtocol::CoAP,
+            RemoteTransport::Https => TransportProtocol::Https,
+            RemoteTransport::CoAPS => TransportProtocol::CoAPS,
+        };
+
+        let mut results = Vec::new();
+
+        for addr in &rc.addresses {
+            match addr {
+                RemoteAddress::IP { ip_address } => {
+                    let addr = IpAddr::from_str(ip_address)?;
+                    results.push(TO2AddressEntry::new(
+                        Some(addr.into()),
+                        None,
+                        rc.port,
+                        transport,
+                    ));
+                }
+                RemoteAddress::Dns { dns_name } => {
+                    results.push(TO2AddressEntry::new(
+                        None,
+                        Some(dns_name.clone()),
+                        rc.port,
+                        transport,
+                    ));
+                }
+            }
+        }
+
+        Ok(results)
     }
 }

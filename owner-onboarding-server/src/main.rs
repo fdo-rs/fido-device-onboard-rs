@@ -1,10 +1,15 @@
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::fs;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
+use fdo_data_formats::constants::HashType;
+use fdo_data_formats::enhanced_types::RendezvousInterpreterSide;
+use fdo_data_formats::types::{COSESign, Hash, RemoteConnection, TO0Data, TO1DataPayload};
+use fdo_data_formats::{messages, Serializable, PROTOCOL_VERSION};
+use fdo_http_wrapper::client::RequestResult;
 use openssl::{
     asn1::{Asn1Integer, Asn1Time},
     bn::BigNum,
@@ -19,7 +24,10 @@ use tokio::signal::unix::{signal, SignalKind};
 use warp::Filter;
 
 use fdo_data_formats::{
-    enhanced_types::X5Bag, ownershipvoucher::OwnershipVoucher, publickey::PublicKey, types::Guid,
+    enhanced_types::X5Bag,
+    ownershipvoucher::OwnershipVoucher,
+    publickey::PublicKey,
+    types::{Guid, TO2AddressEntry},
 };
 use fdo_store::{Store, StoreDriver};
 use fdo_util::servers::{settings_for, OwnershipVoucherStoreMetadataKey};
@@ -27,7 +35,7 @@ use fdo_util::servers::{settings_for, OwnershipVoucherStoreMetadataKey};
 mod handlers;
 mod serviceinfo;
 
-struct OwnerServiceUD {
+pub(crate) struct OwnerServiceUD {
     // Trusted keys
     #[allow(dead_code)]
     trusted_device_keys: X5Bag,
@@ -53,9 +61,11 @@ struct OwnerServiceUD {
 
     // ServiceInfo
     service_info_configuration: crate::serviceinfo::ServiceInfoConfiguration,
+
+    owner_addresses: Vec<TO2AddressEntry>,
 }
 
-type OwnerServiceUDT = Arc<OwnerServiceUD>;
+pub(crate) type OwnerServiceUDT = Arc<OwnerServiceUD>;
 
 #[derive(Debug, Deserialize)]
 struct Settings {
@@ -79,11 +89,140 @@ struct Settings {
 
     // Service Info
     service_info: crate::serviceinfo::ServiceInfoSettings,
+
+    // owner addresses path for report to rendezvous
+    owner_addresses_path: String,
+
+    report_to_rendezvous_endpoint_enabled: bool,
 }
 
 fn load_private_key(path: &str) -> Result<PKey<Private>> {
     let contents = fs::read(path)?;
     Ok(PKey::private_key_from_der(&contents)?)
+}
+
+async fn report_to_rendezvous(udt: OwnerServiceUDT) -> Result<()> {
+    let mut ft = udt.ownership_voucher_store.query_data().await.unwrap();
+    ft.neq(
+        &fdo_store::MetadataKey::Local(OwnershipVoucherStoreMetadataKey::To2Performed),
+        &true,
+    );
+    ft.lt(
+        &fdo_store::MetadataKey::Local(OwnershipVoucherStoreMetadataKey::To0AcceptOwnerWaitSeconds),
+        chrono::Local::now().timestamp(),
+    );
+
+    let ov_iter = ft.query().await?;
+    if let Some(ovs) = ov_iter {
+        for ov in ovs {
+            match report_ov_to_rendezvous(&ov, &udt.owner_addresses, &udt.owner_key).await {
+                Ok(wait_seconds) => {
+                    udt.ownership_voucher_store.store_metadata(
+                        ov.header().guid(),
+                        &fdo_store::MetadataKey::Local(
+                            OwnershipVoucherStoreMetadataKey::To0AcceptOwnerWaitSeconds,
+                        ),
+                        // we don't use chrono::Duration::seconds as that panics and can DOS the service (?)
+                        &chrono::Duration::from_std(std::time::Duration::from_secs(
+                            wait_seconds.into(),
+                        ))?,
+                    );
+                }
+                Err(e) => {
+                    log::warn!(
+                        "OV({}): failed to report to rendezvous: {}",
+                        ov.header().guid().to_string(),
+                        e
+                    );
+                }
+            };
+        }
+    }
+    Ok(())
+}
+
+async fn report_ov_to_rendezvous(
+    ov: &OwnershipVoucher,
+    owner_addresses: &[TO2AddressEntry],
+    owner_key: &PKey<Private>,
+) -> Result<u32> {
+    let ov_header = ov.header();
+    if ov_header.protocol_version() != PROTOCOL_VERSION {
+        bail!(
+            "Protocol version in OV ({}) not supported ({})",
+            ov_header.protocol_version(),
+            PROTOCOL_VERSION
+        );
+    }
+    // Determine the RV IP
+    let rv_info = ov_header
+        .rendezvous_info()
+        .to_interpreted(RendezvousInterpreterSide::Owner)
+        .context("Error parsing rendezvous directives")?;
+    if rv_info.is_empty() {
+        bail!("No rendezvous information found that's usable for the owner");
+    }
+    for rv_directive in rv_info {
+        let rv_urls = rv_directive.get_urls();
+        if rv_urls.is_empty() {
+            log::info!(
+                "No usable rendezvous URLs were found for RV directive: {:?}",
+                rv_directive
+            );
+            continue;
+        }
+
+        for rv_url in rv_urls {
+            log::info!(
+                "OV({}): Using rendezvous server at url {}",
+                ov_header.guid().to_string(),
+                rv_url
+            );
+
+            let mut rv_client = fdo_http_wrapper::client::ServiceClient::new(&rv_url);
+
+            // Send: Hello, Receive: HelloAck
+            let hello_ack: RequestResult<messages::to0::HelloAck> = rv_client
+                .send_request(messages::to0::Hello::new(), None)
+                .await;
+
+            let hello_ack = match hello_ack {
+                Ok(hello_ack) => hello_ack,
+                Err(e) => {
+                    log::info!("Error requesting nonce from rendezvous server: {:?}", e);
+                    continue;
+                }
+            };
+
+            // Build to0d and to1d
+            // TODO(runcom): 600 has to come from configuration
+            let to0d = TO0Data::new(ov.clone(), 600, hello_ack.nonce3().clone())
+                .context("Error creating to0d")?;
+            let to0d_vec = to0d.serialize_data().context("Error serializing TO0Data")?;
+            let to0d_hash =
+                Hash::from_data(HashType::Sha384, &to0d_vec).context("Error hashing to0d")?;
+            let to1d_payload = TO1DataPayload::new(Vec::from(owner_addresses), to0d_hash);
+            let to1d =
+                COSESign::new(&to1d_payload, None, owner_key).context("Error signing to1d")?;
+            // Send: OwnerSign, Receive: AcceptOwner
+            let msg = messages::to0::OwnerSign::new(to0d, to1d)
+                .context("Error creating OwnerSign message")?;
+            let accept_owner: RequestResult<messages::to0::AcceptOwner> =
+                rv_client.send_request(msg, None).await;
+            let accept_owner =
+                accept_owner.context("Error registering self to rendezvous server")?;
+
+            // Done!
+            log::info!(
+                "OV({}): Rendezvous server registered us for {} seconds",
+                ov_header.guid().to_string(),
+                accept_owner.wait_seconds()
+            );
+
+            return Ok(accept_owner.wait_seconds());
+        }
+    }
+    bail!("Report to rendezvous not performed");
 }
 
 const MAINTENANCE_INTERVAL: u64 = 60;
@@ -99,14 +238,19 @@ async fn perform_maintenance(udt: OwnerServiceUDT) -> std::result::Result<(), &'
 
         let ov_maint = udt.ownership_voucher_store.perform_maintenance();
         let ses_maint = udt.session_store.perform_maintenance();
+        let rtr_maint = report_to_rendezvous(udt.clone());
 
         #[allow(unused_must_use)]
-        let (ov_res, ses_res) = tokio::join!(ov_maint, ses_maint);
+        let (ov_res, ses_res, rtr_res) = tokio::join!(ov_maint, ses_maint, rtr_maint);
+
         if let Err(e) = ov_res {
             log::warn!("Error during ownership voucher store maintenance: {:?}", e);
         }
         if let Err(e) = ses_res {
             log::warn!("Error during session store maintenance: {:?}", e);
+        }
+        if let Err(e) = rtr_res {
+            log::warn!("Error during report to rendezvous maintenance: {:?}", e)
         }
     }
 }
@@ -209,6 +353,30 @@ async fn main() -> Result<()> {
     let (owner2_key, owner2_pub) =
         generate_owner2_keys().context("Error generating new owner2 keys")?;
 
+    // Owner addresses for report to rendezvous
+    let owner_addresses = {
+        let owner_addresses_path = &settings.owner_addresses_path;
+        let mut owner_addresses: Vec<RemoteConnection> = {
+            let f = fs::File::open(&owner_addresses_path)?;
+            serde_yaml::from_reader(f)
+        }
+        .with_context(|| {
+            format!(
+                "Error reading owner addresses from {}",
+                owner_addresses_path
+            )
+        })?;
+        let owner_addresses: Result<Vec<Vec<TO2AddressEntry>>> = owner_addresses
+            .drain(..)
+            .map(|v| v.try_into().context("Error converting owner addresses"))
+            .collect();
+        owner_addresses
+            .context("Error parsing owner addresses")?
+            .drain(..)
+            .flatten()
+            .collect()
+    };
+
     // Initialize user data
     let user_data = Arc::new(OwnerServiceUD {
         // Stores
@@ -228,6 +396,9 @@ async fn main() -> Result<()> {
 
         // Service Info
         service_info_configuration,
+
+        // Owner addresses
+        owner_addresses,
     });
 
     // Initialize handlers
@@ -266,10 +437,19 @@ async fn main() -> Result<()> {
         handlers::done,
     );
 
+    let rtr_enabled = settings.report_to_rendezvous_endpoint_enabled;
+    let ud = user_data.clone();
+    let handler_report_to_rendezvous = warp::path("report-to-rendezvous")
+        .and(warp::post())
+        .and(warp::any().map(move || (ud.clone(), rtr_enabled)))
+        .untuple_one()
+        .and_then(handlers::report_to_rendezvous_handler);
+
     let routes = warp::post()
         .and(
             hello
                 .or(handler_ping)
+                .or(handler_report_to_rendezvous)
                 // TO2
                 .or(handler_to2_hello_device)
                 .or(handler_to2_get_ov_next_entry)

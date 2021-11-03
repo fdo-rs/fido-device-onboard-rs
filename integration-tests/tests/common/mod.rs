@@ -739,6 +739,11 @@ impl<'a> TestServerConfigurator<'a> {
                     "bind",
                     &format!("127.0.0.1:{}", self.server_number.server_port().unwrap()),
                 );
+                cfg.insert("owner_port", &self.server_number.server_port().unwrap());
+                cfg.insert(
+                    "config_dir",
+                    &self.test_context.runner_path(&self.server_number),
+                );
                 // TODO: Insert more defaults
 
                 context_configurator(cfg)
