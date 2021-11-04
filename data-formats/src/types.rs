@@ -1,4 +1,9 @@
-use std::{convert::TryInto, ops::Deref, str::FromStr, string::ToString};
+use std::{
+    convert::{TryFrom, TryInto},
+    ops::Deref,
+    str::FromStr,
+    string::ToString,
+};
 
 use aws_nitro_enclaves_cose::crypto::{SigningPrivateKey, SigningPublicKey};
 use aws_nitro_enclaves_cose::CoseSign1 as COSESignInner;
@@ -198,6 +203,37 @@ impl SigInfo {
     }
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(transparent)]
+struct Bstr16(#[serde(with = "serde_bytes")] Vec<u8>);
+
+impl Bstr16 {
+    fn check(&self) -> Result<(), Error> {
+        if self.0.len() != 16 {
+            return Err(Error::InconsistentValue("Bstr16 is not 16 bytes"));
+        }
+        Ok(())
+    }
+}
+
+impl TryFrom<Bstr16> for Nonce {
+    type Error = Error;
+
+    fn try_from(value: Bstr16) -> Result<Self, Self::Error> {
+        value.check()?;
+        Ok(Nonce(value.0))
+    }
+}
+
+impl TryFrom<Bstr16> for Guid {
+    type Error = Error;
+
+    fn try_from(value: Bstr16) -> Result<Self, Self::Error> {
+        value.check()?;
+        Ok(Guid(value.0))
+    }
+}
+
 fn new_nonce_or_guid_val() -> Result<[u8; 16], Error> {
     let mut val = [0u8; 16];
 
@@ -207,6 +243,7 @@ fn new_nonce_or_guid_val() -> Result<[u8; 16], Error> {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(try_from = "Bstr16")]
 pub struct Nonce(#[serde(with = "serde_bytes")] Vec<u8>);
 
 impl Nonce {
@@ -257,6 +294,7 @@ impl Deref for Nonce {
 const EAT_RAND: u8 = 0x01;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Hash, Eq, Default)]
+#[serde(try_from = "Bstr16")]
 pub struct Guid(#[serde(with = "serde_bytes")] Vec<u8>);
 
 impl Guid {
@@ -307,12 +345,6 @@ impl Deref for Guid {
         &self.0
     }
 }
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct IP4(std::net::Ipv4Addr);
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct IP6(std::net::Ipv6Addr);
 
 #[derive(Debug, Clone)]
 pub struct IPAddress(std::net::IpAddr);
@@ -385,6 +417,7 @@ pub type DNSAddress = String;
 pub type Port = u16;
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(transparent)]
 pub struct RendezvousInfo(Vec<RendezvousDirective>);
 
 impl RendezvousInfo {
@@ -631,6 +664,7 @@ impl TO2ProveDevicePayload {
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct ServiceInfo(Vec<(String, CborSimpleType)>);
 
 impl ServiceInfo {
@@ -812,6 +846,7 @@ impl TO2ProveOVHdrPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct MAROEPrefix(Vec<u8>);
 
 impl MAROEPrefix {
