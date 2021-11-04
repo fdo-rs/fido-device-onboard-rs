@@ -236,8 +236,19 @@ impl RendezvousVariable {
                 _ => return Err(Error::InconsistentValue("protocol (type)")),
             },
 
+            RendezvousVariable::IPAddress => match val {
+                serde_cbor::Value::Text(v) => {
+                    let addr = std::net::IpAddr::from_str(&v)
+                        .map_err(|_| Error::InconsistentValue(self.name()))?;
+                    serde_cbor::Value::Bytes(match addr {
+                        std::net::IpAddr::V4(v) => v.octets().to_vec(),
+                        std::net::IpAddr::V6(v) => v.octets().to_vec(),
+                    })
+                }
+                _ => return Err(Error::InconsistentValue(self.name())),
+            },
+
             // TODO
-            RendezvousVariable::IPAddress => todo!(),
             RendezvousVariable::ServerCertHash => todo!(),
             RendezvousVariable::CaCertHash => todo!(),
             RendezvousVariable::Medium => todo!(),
