@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::IpAddr};
+use std::collections::HashMap;
 
 use openssl::{hash::MessageDigest, pkey::PKeyRef, x509::X509};
 use serde_cbor::value::from_value;
@@ -6,7 +6,7 @@ use serde_cbor::value::from_value;
 use crate::{
     constants::{RendezvousProtocolValue, RendezvousVariable},
     publickey::PublicKey,
-    types::{Hash, RendezvousDirective, RendezvousInfo},
+    types::{Hash, IPAddress, RendezvousDirective, RendezvousInfo},
     Error,
 };
 
@@ -18,7 +18,7 @@ pub enum RendezvousInterpreterSide {
 
 #[derive(Debug)]
 pub struct RendezvousInterpretedDirective {
-    pub ip_addresses: Option<Vec<IpAddr>>,
+    pub ip_addresses: Option<Vec<IPAddress>>,
     pub dns_name: Option<String>,
     pub port: u32,
 
