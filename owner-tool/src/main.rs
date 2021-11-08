@@ -1,6 +1,7 @@
 use std::{
     convert::{TryFrom, TryInto},
     fs,
+    io::Write,
     path::Path,
     str::FromStr,
 };
@@ -100,7 +101,15 @@ async fn main() -> Result<()> {
                         .required(true)
                         .help("Path to the ownership voucher")
                         .index(1),
-                ),
+                )
+                .arg(
+                    Arg::with_name("outform")
+                        .required(false)
+                        .takes_value(true)
+                        .possible_values(&["pem", "cose"])
+                        .help("Output format")
+                        .long("outform")
+                )
         )
         .subcommand(
             SubCommand::with_name("dump-device-credential")
@@ -467,9 +476,7 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
         .context("Error building ownership voucher")?;
 
     // Write out the ownership voucher and device credential
-    let ov = ov
-        .serialize_data()
-        .context("Error serializing ownership voucher")?;
+    let ov = ov.to_pem().context("Error serializing device credential")?;
     let devcred = devcred
         .serialize_data()
         .context("Error serializing device credential")?;
@@ -487,11 +494,30 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
 
 fn dump_voucher(matches: &ArgMatches) -> Result<(), Error> {
     let ownershipvoucher_path = matches.value_of("path").unwrap();
+    let outform = matches.value_of("outform");
 
     let ov = {
         let cts = fs::read(ownershipvoucher_path).context("Error reading ownership voucher")?;
-        OwnershipVoucher::deserialize_data(&cts).context("Error deserializing ownership voucher")?
+        OwnershipVoucher::from_pem_or_raw(&cts).context("Error deserializing ownership voucher")?
     };
+
+    if let Some(outform) = outform {
+        let output = match outform {
+            "cose" => ov
+                .serialize_data()
+                .context("Error serializing ownership voucher")?,
+            "pem" => ov
+                .to_pem()
+                .context("Error serializing ownership voucher")?
+                .as_bytes()
+                .to_vec(),
+            _ => bail!("Invalid output format"),
+        };
+        std::io::stdout()
+            .write_all(&output)
+            .context("Error writing output")?;
+        return Ok(());
+    }
 
     let ov_header = ov.header();
     if ov_header.protocol_version() != PROTOCOL_VERSION {
@@ -587,7 +613,7 @@ fn extend_voucher(matches: &ArgMatches) -> Result<(), Error> {
 
     let mut ov = {
         let ov = fs::read(ownershipvoucher_path).context("Error reading ownership voucher")?;
-        OwnershipVoucher::deserialize_data(&ov).context("Error deserializing ownership voucher")?
+        OwnershipVoucher::from_pem_or_raw(&ov).context("Error deserializing ownership voucher")?
     };
 
     let ov_header = ov.header();
@@ -622,9 +648,7 @@ fn extend_voucher(matches: &ArgMatches) -> Result<(), Error> {
     let newname = format!("{}.new", ownershipvoucher_path);
     {
         // A new scope, to ensure the file gets closed before we move it
-        let ov = ov
-            .serialize_data()
-            .context("Error serializing ownership voucher")?;
+        let ov = ov.to_pem().context("Error serializing ownership voucher")?;
         fs::write(&newname, &ov).with_context(|| format!("Error writing to {}", newname))?;
     }
 
@@ -756,7 +780,7 @@ async fn report_to_rendezvous(matches: &ArgMatches<'_>) -> Result<(), Error> {
                 ownershipvoucher_path
             )
         })?;
-        OwnershipVoucher::deserialize_data(&ov).context("Error deserializing Ownership Voucher")?
+        OwnershipVoucher::from_pem_or_raw(&ov).context("Error deserializing Ownership Voucher")?
     };
 
     let ov_header = ov.header();
