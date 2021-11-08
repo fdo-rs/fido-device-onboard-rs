@@ -18,3 +18,4 @@ rand = "0.8.4"
 
 fdo-data-formats = { path = "../data-formats", version = "0.1.0" }
 fdo-http-wrapper = { path = "../http-wrapper", version = "0.1.0", features = ["client"] }
+fdo-util = { path = "../util", version = "0.1.0" }

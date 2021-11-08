@@ -10,7 +10,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 fdo-data-formats = { path = "../data-formats", version = "0.1.0" }
-
 libc = "0.2"
 
 [build-dependencies]

@@ -26,6 +26,8 @@ use openssl::{
     sign::Signer,
 };
 
+use fdo_util::device_credential_locations;
+
 const DEVICE_CREDENTIAL_FILESYSTEM_PATH: &str = "/etc/device-credentials";
 
 async fn perform_diun(
@@ -125,7 +127,6 @@ async fn perform_diun(
         )
         .await;
     let done = done.context("Error sending ProvideKey")?;
-
     Ok((key_ref, done.mfg_string_type()))
 }
 
@@ -194,6 +195,26 @@ impl DiunPublicKeyVerificationMode {
 #[tokio::main]
 async fn main() -> Result<()> {
     fdo_http_wrapper::init_logging();
+
+    match device_credential_locations::find() {
+        None => {
+            log::info!("No usable device credential located, performing Device Onboarding");
+        }
+        Some(Err(e)) => {
+            log::error!("Error opening device credential: {:?}", e);
+            return Err(e).context("Error getting device credential at any of the known locations");
+        }
+        Some(Ok(dc)) => {
+            log::info!("Found device credential at {:?}", dc);
+            let dc = dc.read().context("Error reading device credential")?;
+            log::trace!("Device credential: {:?}", dc);
+
+            if dc.is_active() {
+                log::info!("Device credential already active");
+                return Ok(());
+            }
+        }
+    };
 
     let url =
         env::var("MANUFACTURING_SERVER_URL").context("Please provide MANUFACTURING_SERVER_URL")?;
