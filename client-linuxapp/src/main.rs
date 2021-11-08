@@ -17,10 +17,10 @@ use fdo_data_formats::{
 };
 use fdo_http_wrapper::client::{RequestResult, ServiceClient};
 
-mod device_credential_locations;
 mod serviceinfo;
 
-use device_credential_locations::UsableDeviceCredentialLocation;
+use fdo_util::device_credential_locations;
+use fdo_util::device_credential_locations::UsableDeviceCredentialLocation;
 use rand::Rng;
 
 const DEVICE_ONBOARDING_EXECUTED_MARKER_FILE: &str = "/etc/device_onboarding_performed";
