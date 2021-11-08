@@ -24,6 +24,10 @@ use fdo_util::servers::format_conf_env;
 
 const PORT_BASE: u16 = 5080;
 
+lazy_static::lazy_static! {
+    static ref CURRENT_PORT: std::sync::Mutex<u16> = std::sync::Mutex::new(PORT_BASE);
+}
+
 const TARGET_TMPDIR: &str = env!("CARGO_TARGET_TMPDIR");
 const KEY_NAMES: &[&str] = &[
     "manufacturer",
@@ -123,15 +127,26 @@ pub struct TestBinaryNumber {
     binary: Binary,
     number: u16,
     name: String,
+    server_port: Option<u16>,
 }
 
 impl TestBinaryNumber {
     fn new(binary: Binary, number: u16) -> Self {
         let name = format!("{}-{}", binary, number);
+        let server_port = if binary.is_server() {
+            let mut current = CURRENT_PORT.lock().unwrap();
+            let port = *current;
+            *current += 1;
+            L.l(&format!("{} is a server, using port {}", name, port));
+            Some(port)
+        } else {
+            None
+        };
         TestBinaryNumber {
             binary,
             number,
             name,
+            server_port,
         }
     }
 
@@ -140,11 +155,7 @@ impl TestBinaryNumber {
     }
 
     pub fn server_port(&self) -> Option<u16> {
-        if self.binary.is_server() {
-            Some(PORT_BASE + self.number)
-        } else {
-            None
-        }
+        self.server_port
     }
 
     fn server_url(&self) -> Option<String> {
