@@ -48,10 +48,19 @@ impl Serializable for StoredItem {
     }
 }
 
+#[non_exhaustive]
+pub enum RendezvousStoreMetadataKey {}
+
+impl fdo_store::MetadataLocalKey for RendezvousStoreMetadataKey {
+    fn to_key(&self) -> &'static str {
+        todo!()
+    }
+}
+
 struct RendezvousUD {
     max_wait_seconds: u32,
     trusted_manufacturer_keys: Option<X5Bag>,
-    store: Box<dyn Store<fdo_store::ReadWriteOpen, Guid, StoredItem>>,
+    store: Box<dyn Store<fdo_store::ReadWriteOpen, Guid, StoredItem, RendezvousStoreMetadataKey>>,
 
     session_store: Arc<fdo_http_wrapper::server::SessionStore>,
 }

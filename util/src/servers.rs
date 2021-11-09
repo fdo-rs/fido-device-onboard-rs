@@ -4,6 +4,21 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
+// TODO(runcom): find a better home for this as it's shared between
+// owner-onboarding-server and manufacturing-server...
+#[non_exhaustive]
+pub enum OwnershipVoucherStoreMetadataKey {
+    To2Performed,
+}
+
+impl fdo_store::MetadataLocalKey for OwnershipVoucherStoreMetadataKey {
+    fn to_key(&self) -> &'static str {
+        match self {
+            OwnershipVoucherStoreMetadataKey::To2Performed => "fdo.to2_performed",
+        }
+    }
+}
+
 pub fn settings_for(component: &str) -> Result<config::Config> {
     Ok(config::Config::default()
         .merge(

@@ -9,16 +9,19 @@ use xattr::FileExt;
 
 use fdo_data_formats::Serializable;
 
+use crate::MetadataValue;
+
 use super::Store;
 use super::StoreError;
 
-pub(super) fn initialize<OT, K, V>(
+pub(super) fn initialize<OT, K, V, MKT>(
     cfg: Option<config::Value>,
-) -> Result<Box<dyn Store<OT, K, V>>, StoreError>
+) -> Result<Box<dyn Store<OT, K, V, MKT>>, StoreError>
 where
     OT: crate::StoreOpenMode,
     K: std::str::FromStr + std::string::ToString + Send + Sync + 'static,
     V: Serializable + Send + Sync + Clone + 'static,
+    MKT: crate::MetadataLocalKey,
 {
     let directory: String = match cfg {
         None => {
@@ -93,11 +96,12 @@ fn ttl_to_disk(ttl: SystemTime) -> Result<Vec<u8>, StoreError> {
 const XATTR_NAME_TTL: &str = "user.store_ttl";
 
 #[async_trait]
-impl<OT, K, V> Store<OT, K, V> for DirectoryStore<K, V>
+impl<OT, K, V, MKT> Store<OT, K, V, MKT> for DirectoryStore<K, V>
 where
     OT: crate::StoreOpenMode,
     K: std::str::FromStr + std::string::ToString + Send + Sync + 'static,
     V: Serializable + Send + Sync + Clone + 'static,
+    MKT: crate::MetadataLocalKey,
 {
     async fn load_data(&self, key: &K) -> Result<Option<V>, StoreError> {
         let path = self.get_path(key);
@@ -136,6 +140,37 @@ where
         Ok(Some(V::deserialize_from_reader(&file).map_err(|e| {
             StoreError::Unspecified(format!("Error deserializing value: {:?}", e))
         })?))
+    }
+
+    async fn store_metadata(
+        &self,
+        key: &K,
+        metadata_key: &crate::MetadataKey<MKT>,
+        metadata_value: &dyn MetadataValue,
+    ) -> Result<(), StoreError> {
+        let path = self.get_path(key);
+        log::trace!("Attempting to load data from {}", path.display());
+
+        let file = match File::open(&path) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => {
+                return Err(StoreError::Unspecified(format!(
+                    "Error opening file: {}",
+                    e.to_string()
+                )))
+            }
+            Ok(f) => f,
+        };
+
+        Ok(file
+            .set_xattr(metadata_key.to_key(), &metadata_value.to_stored()?)
+            .map_err(|e| {
+                StoreError::Unspecified(format!(
+                    "Error creating xattr on {}: {:?}",
+                    path.display(),
+                    e
+                ))
+            })?)
     }
 
     async fn store_data(&self, key: K, ttl: Option<Duration>, value: V) -> Result<(), StoreError> {

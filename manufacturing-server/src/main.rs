@@ -20,7 +20,7 @@ use fdo_data_formats::{
     types::{Guid, RendezvousInfo},
 };
 use fdo_store::{Store, StoreDriver};
-use fdo_util::servers::settings_for;
+use fdo_util::servers::{settings_for, OwnershipVoucherStoreMetadataKey};
 
 const PERFORMED_DIUN_SES_KEY: &str = "mfg_global_diun_performed";
 const DEVICE_KEY_FROM_DIUN_SES_KEY: &str = "mfg_global_device_key_from_diun";
@@ -37,11 +37,28 @@ struct DiunConfiguration {
     public_keys: PublicKey,
 }
 
+#[non_exhaustive]
+pub enum PublicKeyStoreMetadataKey {}
+
+impl fdo_store::MetadataLocalKey for PublicKeyStoreMetadataKey {
+    fn to_key(&self) -> &'static str {
+        todo!()
+    }
+}
+
 struct ManufacturingServiceUD {
     // Stores
     session_store: Arc<fdo_http_wrapper::server::SessionStore>,
-    ownership_voucher_store: Box<dyn Store<fdo_store::WriteOnlyOpen, Guid, OwnershipVoucher>>,
-    public_key_store: Option<Box<dyn Store<fdo_store::ReadOnlyOpen, String, Vec<u8>>>>,
+    ownership_voucher_store: Box<
+        dyn Store<
+            fdo_store::WriteOnlyOpen,
+            Guid,
+            OwnershipVoucher,
+            OwnershipVoucherStoreMetadataKey,
+        >,
+    >,
+    public_key_store:
+        Option<Box<dyn Store<fdo_store::ReadOnlyOpen, String, Vec<u8>, PublicKeyStoreMetadataKey>>>,
 
     // Certificates
     manufacturer_cert: X509,

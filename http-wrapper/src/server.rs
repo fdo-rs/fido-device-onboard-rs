@@ -7,7 +7,7 @@ use fdo_data_formats::{
     constants::{ErrorCode, MessageType},
     messages::{self, ClientMessage, EncryptionRequirement, Message, ServerMessage},
 };
-use fdo_store::Store;
+use fdo_store::{MetadataLocalKey, Store};
 
 use thiserror::Error;
 use warp::{Filter, Rejection};
@@ -20,12 +20,23 @@ pub struct SessionWithStore {
 
 type SessionStoreT = Arc<SessionStore>;
 
+#[non_exhaustive]
+pub enum SessionStoreMetadataKey {}
+
+impl MetadataLocalKey for SessionStoreMetadataKey {
+    fn to_key(&self) -> &'static str {
+        todo!()
+    }
+}
+
 pub struct SessionStore {
-    store: Box<dyn Store<fdo_store::ReadWriteOpen, String, Session>>,
+    store: Box<dyn Store<fdo_store::ReadWriteOpen, String, Session, SessionStoreMetadataKey>>,
 }
 
 impl SessionStore {
-    pub fn new(store: Box<dyn Store<fdo_store::ReadWriteOpen, String, Session>>) -> Arc<Self> {
+    pub fn new(
+        store: Box<dyn Store<fdo_store::ReadWriteOpen, String, Session, SessionStoreMetadataKey>>,
+    ) -> Arc<Self> {
         Arc::new(SessionStore { store })
     }
 }
