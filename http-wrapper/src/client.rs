@@ -14,7 +14,7 @@ use crate::EncryptionKeys;
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Cryptographic error encrypting/decrypting")]
-    Crypto(CoseError),
+    Crypto(#[from] CoseError),
     #[error("Error parsing or generating request")]
     Parse(#[from] fdo_data_formats::messages::ParseError),
     #[error("Data format error: {0}")]
@@ -37,12 +37,6 @@ pub enum Error {
     InvalidSequenceRequest,
     #[error("Programming error: invalid message sequence for expected response")]
     InvalidSequenceResponse,
-}
-
-impl From<CoseError> for Error {
-    fn from(e: CoseError) -> Self {
-        Error::Crypto(e)
-    }
 }
 
 pub type RequestResult<MT> = Result<MT, Error>;
