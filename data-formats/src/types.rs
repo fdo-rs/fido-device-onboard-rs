@@ -7,6 +7,7 @@ use std::{
 
 use aws_nitro_enclaves_cose::crypto::{SigningPrivateKey, SigningPublicKey};
 use aws_nitro_enclaves_cose::CoseSign1 as COSESignInner;
+use serde_bytes::ByteBuf;
 use serde_tuple::Serialize_tuple;
 
 use crate::{
@@ -650,6 +651,7 @@ impl TO2SetupDevicePayload {
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct TO2ProveDevicePayload {
+    #[serde(with = "serde_bytes")]
     b_key_exchange: Vec<u8>,
 }
 
@@ -756,7 +758,7 @@ pub struct TO2ProveOVHdrPayload {
     cached_hmac: HMac,
     cached_nonce5: Nonce,
     cached_b_signature_info: SigInfo,
-    cached_a_key_exchange: Vec<u8>,
+    cached_a_key_exchange: ByteBuf,
 }
 
 impl Serializable for TO2ProveOVHdrPayload {
@@ -796,6 +798,8 @@ impl TO2ProveOVHdrPayload {
         b_signature_info: SigInfo,
         a_key_exchange: Vec<u8>,
     ) -> Result<Self, Error> {
+        let a_key_exchange = ByteBuf::from(a_key_exchange);
+
         let mut contents = unsafe { ParsedArray::new() };
         contents.set(0, &ov_header)?;
         contents.set(1, &num_ov_entries)?;
@@ -1190,8 +1194,8 @@ impl<'de> Deserialize<'de> for KexSuite {
 impl KexSuite {
     fn get_ecdh_random_size(&self) -> usize {
         match self {
-            KexSuite::Ecdh256 => 128,
-            KexSuite::Ecdh384 => 384,
+            KexSuite::Ecdh256 => 16,
+            KexSuite::Ecdh384 => 48,
             _ => panic!("Invalid get_ecdh_random_size call"),
         }
     }

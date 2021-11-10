@@ -64,17 +64,11 @@ macro_rules! simple_message_serializable {
     ($name:ident, $inner_type:ident) => {
         impl crate::Serializable for $name {
             fn serialize_data(&self) -> core::result::Result<Vec<u8>, crate::Error> {
-                let mut contents: crate::cborparser::ParsedArray<
-                    crate::cborparser::ParsedArraySize1,
-                > = unsafe { crate::cborparser::ParsedArray::new() };
-                contents.set(0, &self.0)?;
-                contents.serialize_data()
+                self.0.serialize_data()
             }
 
             fn deserialize_data(data: &[u8]) -> core::result::Result<Self, crate::Error> {
-                let outer: crate::cborparser::ParsedArray<crate::cborparser::ParsedArraySize1> =
-                    crate::cborparser::ParsedArray::deserialize_data(data)?;
-                outer.get(0).map($name)
+                Ok(Self($inner_type::deserialize_data(data)?))
             }
         }
     };
