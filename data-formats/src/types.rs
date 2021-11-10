@@ -667,11 +667,11 @@ impl TO2ProveDevicePayload {
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct ServiceInfo(Vec<(String, CborSimpleType)>);
+pub struct ServiceInfo(Vec<Vec<(String, CborSimpleType)>>);
 
 impl ServiceInfo {
     pub fn new() -> Self {
-        ServiceInfo(Vec::new())
+        ServiceInfo(vec![Vec::new()])
     }
 
     pub fn add<T>(&mut self, module: &str, key: &str, value: &T) -> Result<(), Error>
@@ -679,7 +679,7 @@ impl ServiceInfo {
         T: serde::Serialize,
     {
         let value = serde_cbor::value::to_value(&value)?;
-        self.0.push((format!("{}:{}", module, key), value));
+        self.0[0].push((format!("{}:{}", module, key), value));
         Ok(())
     }
 
@@ -700,12 +700,17 @@ impl ServiceInfo {
     }
 
     pub fn iter(&self) -> ServiceInfoIter {
-        ServiceInfoIter { info: self, pos: 0 }
+        ServiceInfoIter {
+            info: self,
+            inner_pos: 0,
+            pos: 0,
+        }
     }
 
     pub fn values(&self) -> Result<Vec<(String, String, CborSimpleType)>, Error> {
         self.0
             .iter()
+            .flatten()
             .map(|(k, v)| match k.find(':') {
                 None => Err(Error::InconsistentValue(
                     "ServiceInfo key missing module separation",
@@ -722,6 +727,7 @@ impl ServiceInfo {
 #[derive(Debug)]
 pub struct ServiceInfoIter<'a> {
     info: &'a ServiceInfo,
+    inner_pos: usize,
     pos: usize,
 }
 
@@ -729,10 +735,14 @@ impl Iterator for ServiceInfoIter<'_> {
     type Item = (String, String, CborSimpleType);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.pos >= self.info.0.len() {
+        if self.inner_pos >= self.info.0.len() {
             return None;
         }
-        let (module_key, val) = &self.info.0[self.pos];
+        if self.pos >= self.info.0[self.inner_pos].len() {
+            self.inner_pos += 1;
+            return self.next();
+        }
+        let (module_key, val) = &self.info.0[self.inner_pos][self.pos];
         self.pos += 1;
 
         // When it's stable, use str.split_once
