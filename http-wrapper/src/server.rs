@@ -159,7 +159,17 @@ where
 {
     let last_msg_type: Option<MessageType> = ses_with_store.session.get(LAST_MSG_SES_KEY);
     if !IM::is_valid_previous_message(last_msg_type) {
-        todo!();
+        log::warn!(
+            "Client sent invalid message type {:?}, after message {:?}",
+            IM::message_type(),
+            last_msg_type
+        );
+        return Err(Error::new(
+            ErrorCode::InternalServerError,
+            IM::message_type(),
+            "Message sequence error",
+        )
+        .into());
     }
 
     let keys: EncryptionKeys = ses_with_store

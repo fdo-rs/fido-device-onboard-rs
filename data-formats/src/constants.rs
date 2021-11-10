@@ -129,6 +129,7 @@ pub enum HeaderKeys {
 
     CUPHNonce = -17760701,       // IANA Pending
     CUPHOwnerPubKey = -17760702, // IANA Pending
+    EUPHNonce = -17760709,       // IANA Pending
 
     EatFDO = -17760707,
 }
