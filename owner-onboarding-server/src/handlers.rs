@@ -103,6 +103,9 @@ pub(super) async fn hello_device(
     res_header
         .insert(HeaderKeys::CUPHNonce, &nonce6)
         .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
+    res_header
+        .insert(HeaderKeys::CUPHOwnerPubKey, &user_data.owner_pubkey)
+        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
 
     let res = COSESign::new(&res_payload, Some(res_header), &user_data.owner_key)
         .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
@@ -258,7 +261,7 @@ pub(super) async fn prove_device(
     // Get device EAT
     let token = msg.into_token();
     let nonce7: Nonce = match token
-        .get_unprotected_value(HeaderKeys::CUPHNonce)
+        .get_unprotected_value(HeaderKeys::EUPHNonce)
         .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?
     {
         Some(n) => n,
