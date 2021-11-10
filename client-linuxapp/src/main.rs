@@ -370,7 +370,7 @@ async fn perform_to2(
     .context("Error building provedevice EAT")?;
     let mut prove_device_eat_unprotected = COSEHeaderMap::new();
     prove_device_eat_unprotected
-        .insert(HeaderKeys::CUPHNonce, &nonce7)
+        .insert(HeaderKeys::EUPHNonce, &nonce7)
         .context("Error adding nonce7 to unprotected")?;
     let signer = devcred.get_signer().context("Error getting Cose signer")?;
     let prove_device_token = COSESign::from_eat(
