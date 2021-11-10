@@ -18,6 +18,7 @@ path = "tests/to.rs"
 
 [dependencies]
 anyhow = "1"
+hex = "0.4"
 tempfile = "3"
 tera = "1"
 lazy_static = "1.4.0"
