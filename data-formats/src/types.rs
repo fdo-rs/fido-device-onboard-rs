@@ -7,6 +7,7 @@ use std::{
 
 use aws_nitro_enclaves_cose::crypto::{SigningPrivateKey, SigningPublicKey};
 use aws_nitro_enclaves_cose::CoseSign1 as COSESignInner;
+use serde_bytes::ByteBuf;
 use serde_tuple::Serialize_tuple;
 
 use crate::{
@@ -650,6 +651,7 @@ impl TO2SetupDevicePayload {
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct TO2ProveDevicePayload {
+    #[serde(with = "serde_bytes")]
     b_key_exchange: Vec<u8>,
 }
 
@@ -665,11 +667,11 @@ impl TO2ProveDevicePayload {
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct ServiceInfo(Vec<(String, CborSimpleType)>);
+pub struct ServiceInfo(Vec<Vec<(String, CborSimpleType)>>);
 
 impl ServiceInfo {
     pub fn new() -> Self {
-        ServiceInfo(Vec::new())
+        ServiceInfo(vec![Vec::new()])
     }
 
     pub fn add<T>(&mut self, module: &str, key: &str, value: &T) -> Result<(), Error>
@@ -677,7 +679,7 @@ impl ServiceInfo {
         T: serde::Serialize,
     {
         let value = serde_cbor::value::to_value(&value)?;
-        self.0.push((format!("{}:{}", module, key), value));
+        self.0[0].push((format!("{}:{}", module, key), value));
         Ok(())
     }
 
@@ -698,12 +700,17 @@ impl ServiceInfo {
     }
 
     pub fn iter(&self) -> ServiceInfoIter {
-        ServiceInfoIter { info: self, pos: 0 }
+        ServiceInfoIter {
+            info: self,
+            inner_pos: 0,
+            pos: 0,
+        }
     }
 
     pub fn values(&self) -> Result<Vec<(String, String, CborSimpleType)>, Error> {
         self.0
             .iter()
+            .flatten()
             .map(|(k, v)| match k.find(':') {
                 None => Err(Error::InconsistentValue(
                     "ServiceInfo key missing module separation",
@@ -720,6 +727,7 @@ impl ServiceInfo {
 #[derive(Debug)]
 pub struct ServiceInfoIter<'a> {
     info: &'a ServiceInfo,
+    inner_pos: usize,
     pos: usize,
 }
 
@@ -727,10 +735,14 @@ impl Iterator for ServiceInfoIter<'_> {
     type Item = (String, String, CborSimpleType);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.pos >= self.info.0.len() {
+        if self.inner_pos >= self.info.0.len() {
             return None;
         }
-        let (module_key, val) = &self.info.0[self.pos];
+        if self.pos >= self.info.0[self.inner_pos].len() {
+            self.inner_pos += 1;
+            return self.next();
+        }
+        let (module_key, val) = &self.info.0[self.inner_pos][self.pos];
         self.pos += 1;
 
         // When it's stable, use str.split_once
@@ -756,7 +768,7 @@ pub struct TO2ProveOVHdrPayload {
     cached_hmac: HMac,
     cached_nonce5: Nonce,
     cached_b_signature_info: SigInfo,
-    cached_a_key_exchange: Vec<u8>,
+    cached_a_key_exchange: ByteBuf,
 }
 
 impl Serializable for TO2ProveOVHdrPayload {
@@ -796,6 +808,8 @@ impl TO2ProveOVHdrPayload {
         b_signature_info: SigInfo,
         a_key_exchange: Vec<u8>,
     ) -> Result<Self, Error> {
+        let a_key_exchange = ByteBuf::from(a_key_exchange);
+
         let mut contents = unsafe { ParsedArray::new() };
         contents.set(0, &ov_header)?;
         contents.set(1, &num_ov_entries)?;
@@ -1231,8 +1245,8 @@ impl<'de> Deserialize<'de> for KexSuite {
 impl KexSuite {
     fn get_ecdh_random_size(&self) -> usize {
         match self {
-            KexSuite::Ecdh256 => 128,
-            KexSuite::Ecdh384 => 384,
+            KexSuite::Ecdh256 => 16,
+            KexSuite::Ecdh384 => 48,
             _ => panic!("Invalid get_ecdh_random_size call"),
         }
     }
@@ -1450,7 +1464,7 @@ where
 {
     _phantom_state: std::marker::PhantomData<S>,
 
-    payload: Option<Vec<u8>>,
+    payload: Option<CborSimpleType>,
     nonce: Nonce,
     device_guid: Vec<u8>,
     other_claims: COSEHeaderMap,
@@ -1466,7 +1480,7 @@ where
     {
         match &self.payload {
             None => Ok(None),
-            Some(val) => Ok(Some(serde_cbor::from_slice(val)?)),
+            Some(val) => Ok(Some(serde_cbor::value::from_value(val.clone())?)),
         }
     }
 
@@ -1490,11 +1504,8 @@ where
         let mut res = self.other_claims.clone();
 
         if let Some(payload) = &self.payload {
-            res.insert(
-                HeaderKeys::EatFDO,
-                &serde_bytes::ByteBuf::from(payload.clone()),
-            )
-            .expect("Error adding to res");
+            res.insert(HeaderKeys::EatFDO, payload)
+                .expect("Error adding to res");
         }
         res.insert(HeaderKeys::EatNonce, &self.nonce)
             .expect("Error adding to res");
@@ -1573,11 +1584,7 @@ fn eat_from_map<S>(mut claims: COSEHeaderMap) -> Result<EATokenPayload<S>, Error
 where
     S: PayloadState,
 {
-    let payload: Option<serde_bytes::ByteBuf> = match claims.0.remove(&(HeaderKeys::EatFDO as i64))
-    {
-        None => None,
-        Some(val) => Some(serde_cbor::value::from_value(val)?),
-    };
+    let payload: Option<CborSimpleType> = claims.0.remove(&(HeaderKeys::EatFDO as i64));
     let nonce = match claims.0.remove(&(HeaderKeys::EatNonce as i64)) {
         None => return Err(Error::InconsistentValue("Missing nonce")),
         Some(val) => serde_cbor::value::from_value(val)?,
@@ -1594,7 +1601,6 @@ where
         }
     };
 
-    let payload = payload.map(|val| val.into_vec());
     let ueid = ueid.into_vec();
 
     Ok(EATokenPayload {
@@ -1618,7 +1624,7 @@ where
 {
     let payload = match payload {
         None => None,
-        Some(payload) => Some(serde_cbor::to_vec(&payload)?),
+        Some(payload) => Some(serde_cbor::value::to_value(&payload)?),
     };
     Ok(EATokenPayload {
         _phantom_state: std::marker::PhantomData,
