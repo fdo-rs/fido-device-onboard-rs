@@ -48,13 +48,7 @@ pub trait MetadataValue: Send + Sync {
 
 impl MetadataValue for bool {
     fn to_stored(&self) -> Result<Vec<u8>, StoreError> {
-        Ok(self.to_string().as_bytes().to_vec())
-    }
-}
-
-impl MetadataValue for &str {
-    fn to_stored(&self) -> Result<Vec<u8>, StoreError> {
-        Ok(self.to_string().as_bytes().to_vec())
+            Ok(self.to_string().as_bytes().to_vec())
     }
 }
 
