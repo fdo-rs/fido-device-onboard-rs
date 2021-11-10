@@ -1194,8 +1194,8 @@ impl<'de> Deserialize<'de> for KexSuite {
 impl KexSuite {
     fn get_ecdh_random_size(&self) -> usize {
         match self {
-            KexSuite::Ecdh256 => 128,
-            KexSuite::Ecdh384 => 384,
+            KexSuite::Ecdh256 => 16,
+            KexSuite::Ecdh384 => 48,
             _ => panic!("Invalid get_ecdh_random_size call"),
         }
     }
