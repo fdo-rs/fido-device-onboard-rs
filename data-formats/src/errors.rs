@@ -20,7 +20,9 @@ pub enum Error {
     #[error("Cryptographic error stack: {0}")]
     CryptoStack(#[from] openssl::error::ErrorStack),
     #[error("Serialization error: {0}")]
-    Serialization(#[from] serde_cbor::Error),
+    SerdeCborError(#[from] serde_cbor::Error),
+    #[error("Serialization error (ciborium): {0}")]
+    CiboriumSerError(#[from] ciborium::ser::Error<std::io::Error>),
     #[error("COSE error: {0}")]
     Cose(#[from] aws_nitro_enclaves_cose::error::CoseError),
     #[error("Invalid hash value")]
