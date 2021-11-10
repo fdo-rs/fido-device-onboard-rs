@@ -1,8 +1,9 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_tuple::Serialize_tuple;
 
 use super::{ClientMessage, EncryptionRequirement, Message, ServerMessage};
 
+use crate::simple_message_serializable;
 use crate::{
     constants::MessageType,
     types::{COSESign, Guid, Nonce, SigInfo},
@@ -86,8 +87,10 @@ impl Message for HelloRVAck {
 
 impl ServerMessage for HelloRVAck {}
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct ProveToRV(COSESign);
+
+simple_message_serializable!(ProveToRV, COSESign);
 
 impl ProveToRV {
     pub fn new(token: COSESign) -> Self {
@@ -115,8 +118,10 @@ impl Message for ProveToRV {
 
 impl ClientMessage for ProveToRV {}
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct RVRedirect(COSESign);
+
+simple_message_serializable!(RVRedirect, COSESign);
 
 impl RVRedirect {
     pub fn new(to1d: COSESign) -> Self {

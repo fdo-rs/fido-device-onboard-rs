@@ -1,4 +1,4 @@
-use std::convert::TryInto;
+use std::{convert::TryFrom, str::FromStr};
 
 use thiserror::Error;
 
@@ -6,6 +6,7 @@ use aws_nitro_enclaves_cose::error::CoseError;
 use fdo_data_formats::{
     constants::MessageType,
     messages::{ClientMessage, EncryptionRequirement, ErrorMessage, Message, ServerMessage},
+    Serializable,
 };
 
 use crate::EncryptionKeys;
@@ -13,11 +14,11 @@ use crate::EncryptionKeys;
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Cryptographic error encrypting/decrypting")]
-    Crypto(CoseError),
-    #[error("Serialization/deserialization error")]
-    Serde(#[from] serde_cbor::Error),
+    Crypto(#[from] CoseError),
     #[error("Error parsing or generating request")]
     Parse(#[from] fdo_data_formats::messages::ParseError),
+    #[error("Data format error: {0}")]
+    DataFormat(#[from] fdo_data_formats::Error),
     #[error("Error performing request")]
     Request(#[from] reqwest::Error),
     #[error("Missing message type in response")]
@@ -36,12 +37,6 @@ pub enum Error {
     InvalidSequenceRequest,
     #[error("Programming error: invalid message sequence for expected response")]
     InvalidSequenceResponse,
-}
-
-impl From<CoseError> for Error {
-    fn from(e: CoseError) -> Self {
-        Error::Crypto(e)
-    }
 }
 
 pub type RequestResult<MT> = Result<MT, Error>;
@@ -109,8 +104,9 @@ impl ServiceClient {
             }
         }
 
-        let to_send = to_send.to_wire()?;
+        let to_send = to_send.serialize_data()?;
         let to_send = self.encryption_keys.encrypt(&to_send)?;
+        log::trace!("Sending message: {:?}", hex::encode(&to_send));
 
         let url = format!(
             "{}/fdo/100/msg/{}",
@@ -137,14 +133,26 @@ impl ServiceClient {
         let msgtype = resp
             .headers()
             .get("message-type")
-            .ok_or(Error::MissingMessageType)?
-            .to_str()
-            .map_err(|_| Error::MissingMessageType)?;
+            .map(reqwest::header::HeaderValue::to_str)
+            .transpose()
+            .map_err(|_| Error::InvalidMessageType("non-string".to_string()))?;
         let msgtype = msgtype
-            .parse::<u8>()
-            .map_err(|_| Error::InvalidMessageType(msgtype.to_string()))?
-            .try_into()
-            .unwrap();
+            .map(u8::from_str)
+            .transpose()
+            .map_err(|_| Error::InvalidMessageType(msgtype.unwrap().to_string()))?
+            .map(MessageType::try_from)
+            .transpose()
+            .map_err(|_| Error::InvalidMessageType(msgtype.unwrap().to_string()))?;
+        let msgtype = match msgtype {
+            Some(msgtype) => msgtype,
+            None => {
+                if resp.status().is_success() {
+                    return Err(Error::MissingMessageType);
+                } else {
+                    MessageType::Error
+                }
+            }
+        };
 
         if let Some(val) = resp.headers().get("authorization") {
             self.authorization_token = Some(val.to_str().unwrap().to_string());
@@ -163,12 +171,13 @@ impl ServiceClient {
         };
 
         let resp = resp.bytes().await?;
+        log::trace!("Received: {:?}", hex::encode(&resp));
 
         if is_success {
             let resp = self.encryption_keys.decrypt(&resp)?;
-            Ok(serde_cbor::from_slice(&resp)?)
+            Ok(SM::deserialize_data(&resp)?)
         } else {
-            Err(Error::Error(serde_cbor::from_slice(&resp)?))
+            Err(Error::Error(ErrorMessage::deserialize_data(&resp)?))
         }
     }
 }

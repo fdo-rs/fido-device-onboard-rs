@@ -1,0 +1,3 @@
+[allowlist]
+  description = "Allowlist"
+  paths = ['''integration-tests\/vouchers\/([a-z0-9_]*)''']

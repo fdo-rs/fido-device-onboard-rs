@@ -14,9 +14,9 @@ thiserror= "1"
 serde = "1"
 openssl = "0.10"
 warp = "0.3"
-serde_cbor = "0.11"
 log = "0.4"
 
-fdo-data-formats = { path = "../data-formats" }
-fdo-http-wrapper = { path = "../http-wrapper", features = ["server"] }
-fdo-store = { path = "../store" }
+fdo-data-formats = { path = "../data-formats", version = "0.1.0" }
+fdo-http-wrapper = { path = "../http-wrapper", version = "0.1.0", features = ["server"] }
+fdo-store = { path = "../store", version = "0.1.0" }
+fdo-util = { path = "../util", version = "0.1.0" }

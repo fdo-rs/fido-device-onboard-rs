@@ -18,6 +18,18 @@ pub enum HashType {
     HmacSha384 = 6,
 }
 
+impl FromStr for HashType {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "sha256" => Ok(HashType::Sha256),
+            "sha384" => Ok(HashType::Sha384),
+            _ => Err(Error::InconsistentValue("Invalid digest name")),
+        }
+    }
+}
+
 impl TryFrom<HashType> for MessageDigest {
     type Error = Error;
 
@@ -40,11 +52,21 @@ impl HashType {
         }
     }
 
-    pub fn guess_from_length(len: usize) -> Option<Self> {
-        match len {
-            32 => Some(HashType::Sha256),
-            48 => Some(HashType::Sha384),
-            _ => None,
+    pub fn digest_size(&self) -> usize {
+        match self {
+            HashType::Sha256 => 32,
+            HashType::Sha384 => 48,
+            HashType::HmacSha256 => 32,
+            HashType::HmacSha384 => 48,
+        }
+    }
+
+    pub fn inner_hash(&self) -> HashType {
+        match self {
+            HashType::Sha256 => HashType::Sha256,
+            HashType::Sha384 => HashType::Sha384,
+            HashType::HmacSha256 => HashType::Sha256,
+            HashType::HmacSha384 => HashType::Sha384,
         }
     }
 }
@@ -102,11 +124,12 @@ pub enum PublicKeyEncoding {
 #[repr(i64)]
 #[non_exhaustive]
 pub enum HeaderKeys {
-    EatNonce = 9,
-    EatUeid = 10,
+    EatNonce = 10,
+    EatUeid = 11,
 
     CUPHNonce = -17760701,       // IANA Pending
     CUPHOwnerPubKey = -17760702, // IANA Pending
+    EUPHNonce = -17760709,       // IANA Pending
 
     EatFDO = -17760707,
 }
@@ -214,8 +237,19 @@ impl RendezvousVariable {
                 _ => return Err(Error::InconsistentValue("protocol (type)")),
             },
 
+            RendezvousVariable::IPAddress => match val {
+                serde_cbor::Value::Text(v) => {
+                    let addr = std::net::IpAddr::from_str(&v)
+                        .map_err(|_| Error::InconsistentValue(self.name()))?;
+                    serde_cbor::Value::Bytes(match addr {
+                        std::net::IpAddr::V4(v) => v.octets().to_vec(),
+                        std::net::IpAddr::V6(v) => v.octets().to_vec(),
+                    })
+                }
+                _ => return Err(Error::InconsistentValue(self.name())),
+            },
+
             // TODO
-            RendezvousVariable::IPAddress => todo!(),
             RendezvousVariable::ServerCertHash => todo!(),
             RendezvousVariable::CaCertHash => todo!(),
             RendezvousVariable::Medium => todo!(),

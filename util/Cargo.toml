@@ -1,0 +1,15 @@
+[package]
+name = "fdo-util"
+version = "0.1.0"
+authors = ["Antonio Murdaca <runcom@linux.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1"
+config = "0.11"
+glob = "0.3.0"
+log = "0.4"
+
+fdo-data-formats = { path = "../data-formats", version = "0.1.0" }

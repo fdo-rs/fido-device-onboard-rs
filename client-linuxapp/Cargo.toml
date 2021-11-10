@@ -10,11 +10,11 @@ edition = "2018"
 anyhow = "1"
 log = "0.4"
 openssl = "0.10"
-serde_cbor = "0.11"
 tokio = { version = "1", features = ["full"] }
-sys-info = "0.8"
+sys-info = "0.9"
 passwd = "0.0.1"
 rand = "0.8.4"
 
-fdo-data-formats = { path = "../data-formats" }
-fdo-http-wrapper = { path = "../http-wrapper", features = ["client"] }
+fdo-data-formats = { path = "../data-formats", version = "0.1.0" }
+fdo-http-wrapper = { path = "../http-wrapper", version = "0.1.0", features = ["client"] }
+fdo-util = { path = "../util", version = "0.1.0" }

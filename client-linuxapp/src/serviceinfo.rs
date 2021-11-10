@@ -7,7 +7,7 @@ use anyhow::{anyhow, bail, Context, Result};
 
 use fdo_data_formats::{
     messages::to2::{DeviceServiceInfo, OwnerServiceInfo},
-    types::ServiceInfo,
+    types::{CborSimpleTypeExt, ServiceInfo},
 };
 use fdo_http_wrapper::client::{RequestResult, ServiceClient};
 
@@ -122,8 +122,7 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo) -> Result<()> {
     for (module, key, value) in si_in.iter() {
         log::trace!("Got module {}, command {}, value {:?}", module, key, value);
         if key == "active" {
-            let value: bool =
-                serde_cbor::value::from_value(value).context("Error parsing active value")?;
+            let value = value.as_bool().context("Error parsing active value")?;
             if value {
                 log::trace!("Activating module {}", module);
                 active_modules.push(module.to_string());
@@ -133,24 +132,26 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo) -> Result<()> {
             continue;
         }
         if module == "sshkey" {
-            let value: String = serde_cbor::value::from_value(value)
-                .with_context(|| format!("Error parsing sshkey {} value", key))?;
+            let value = value.as_str().context("Error parsing sshkey value")?;
             if key == "username" {
-                sshkey_user = Some(value);
+                sshkey_user = Some(value.to_string());
             } else if key == "key" {
-                sshkey_key = Some(value);
+                sshkey_key = Some(value.to_string());
             }
         } else if module == "rhsm" {
             if key == "organization_id" {
-                let value: String = serde_cbor::value::from_value(value)
+                let value = value
+                    .as_str()
                     .with_context(|| format!("Error parsing rhsm {} value", key))?;
-                rhsm_organization_id = Some(value);
+                rhsm_organization_id = Some(value.to_string());
             } else if key == "activation_key" {
-                let value: String = serde_cbor::value::from_value(value)
+                let value = value
+                    .as_str()
                     .with_context(|| format!("Error parsing rhsm {} value", key))?;
-                rhsm_activation_key = Some(value);
+                rhsm_activation_key = Some(value.to_string());
             } else if key == "perform_insights" {
-                let value: bool = serde_cbor::value::from_value(value)
+                let value = value
+                    .as_bool()
                     .with_context(|| format!("Error parsing rhsm {} value", key))?;
                 rhsm_perform_insights = Some(value);
             }

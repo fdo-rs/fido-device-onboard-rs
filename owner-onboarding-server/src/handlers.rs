@@ -75,18 +75,17 @@ pub(super) async fn hello_device(
         .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
 
     // Now produce the result
-    let ov_hdr = ownership_voucher
-        .get_header()
-        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
+    let ov_hdr = ownership_voucher.header();
 
     let res_payload = TO2ProveOVHdrPayload::new(
-        ov_hdr,
+        ov_hdr.clone(),
         ownership_voucher.num_entries(),
         ownership_voucher.header_hmac().clone(),
         msg.nonce5().clone(),
         SigInfo::new(msg.a_signature_info().sig_type(), vec![]),
         a_key_exchange_public,
-    );
+    )
+    .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
 
     // Store data
     session
@@ -103,6 +102,9 @@ pub(super) async fn hello_device(
     let mut res_header = COSEHeaderMap::new();
     res_header
         .insert(HeaderKeys::CUPHNonce, &nonce6)
+        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
+    res_header
+        .insert(HeaderKeys::CUPHOwnerPubKey, &user_data.owner_pubkey)
         .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
 
     let res = COSESign::new(&res_payload, Some(res_header), &user_data.owner_key)
@@ -149,18 +151,7 @@ pub(super) async fn get_ov_next_entry(
         Some(dev) => dev,
     };
 
-    let entry = match ownership_voucher.entry(msg.entry_num() as u16) {
-        Ok(Some(v)) => v,
-        other => {
-            log::info!("Error when retrieving OV entry: {:?}", other);
-            return Err(Error::new(
-                ErrorCode::InvalidMessageError,
-                messages::to2::GetOVNextEntry::message_type(),
-                "Error in getting entries",
-            )
-            .into());
-        }
-    };
+    let entry = ownership_voucher.entry(msg.entry_num() as usize).unwrap();
 
     Ok((
         messages::to2::OVNextEntry::new(msg.entry_num() as u16, entry),
@@ -270,7 +261,7 @@ pub(super) async fn prove_device(
     // Get device EAT
     let token = msg.into_token();
     let nonce7: Nonce = match token
-        .get_unprotected_value(HeaderKeys::CUPHNonce)
+        .get_unprotected_value(HeaderKeys::EUPHNonce)
         .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?
     {
         Some(n) => n,

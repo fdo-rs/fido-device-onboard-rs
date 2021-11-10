@@ -12,7 +12,7 @@ use fdo_data_formats::{
         CborSimpleType, CipherSuite, Guid, HMac, Hash, KexSuite, KeyDeriveSide, KeyExchange, Nonce,
         RendezvousInfo,
     },
-    PROTOCOL_VERSION,
+    Serializable, PROTOCOL_VERSION,
 };
 use fdo_http_wrapper::{
     client::{RequestResult, ServiceClient},
@@ -25,6 +25,8 @@ use openssl::{
     pkey::{PKey, Private},
     sign::Signer,
 };
+
+use fdo_util::device_credential_locations;
 
 const DEVICE_CREDENTIAL_FILESYSTEM_PATH: &str = "/etc/device-credentials";
 
@@ -125,7 +127,6 @@ async fn perform_diun(
         )
         .await;
     let done = done.context("Error sending ProvideKey")?;
-
     Ok((key_ref, done.mfg_string_type()))
 }
 
@@ -142,18 +143,22 @@ async fn perform_di(
         .await;
     let set_credentials = set_credentials.context("Error sending AppStart")?;
     let ov_header = set_credentials.into_ov_header();
-    let ov_header_buf =
-        serde_cbor::to_vec(&ov_header).context("Error serializing Ownership Voucher header")?;
+    let ov_header_buf = ov_header
+        .serialize_data()
+        .context("Error serializing Ownership Voucher header")?;
     let ov_header_hmac = key_reference
         .perform_hmac(&ov_header_buf)
         .context("Error computing HMac over Ownership Voucher Header")?;
+    let manufacturer_public_key_hash = ov_header
+        .manufacturer_public_key_hash(HashType::Sha384)
+        .context("Error getting manufacturer public key hash")?;
 
     key_reference
         .save_to_credential(
-            ov_header.device_info,
-            ov_header.guid,
-            ov_header.rendezvous_info,
-            ov_header.public_key,
+            ov_header.device_info().to_string(),
+            ov_header.guid().clone(),
+            ov_header.rendezvous_info().clone(),
+            manufacturer_public_key_hash,
         )
         .context("Error saving key reference to credential")?;
 
@@ -177,10 +182,7 @@ impl DiunPublicKeyVerificationMode {
             todo!()
         } else if let Ok(hash) = env::var("DIUN_PUB_KEY_HASH") {
             Ok(DiunPublicKeyVerificationMode::Hash(
-                Hash::guess_new_from_data(
-                    hex::decode(hash).context("DIUN_PUB_KEY_HASH is not valid hex")?,
-                )
-                .context("Error parsing DIUN_PUB_KEY_HASH as hash")?,
+                Hash::from_str(&hash).context("Error parsing DIUN_PUB_KEY_HASH as hash")?,
             ))
         } else if env::var("DIUN_PUB_KEY_INSECURE").is_ok() {
             Ok(DiunPublicKeyVerificationMode::Insecure)
@@ -194,8 +196,28 @@ impl DiunPublicKeyVerificationMode {
 async fn main() -> Result<()> {
     fdo_http_wrapper::init_logging();
 
-    let url = env::var("MANUFACTURING_SERVICE_URL")
-        .context("Please provide MANUFACTURING_SERVICE_URL")?;
+    match device_credential_locations::find() {
+        None => {
+            log::info!("No usable device credential located, performing Device Onboarding");
+        }
+        Some(Err(e)) => {
+            log::error!("Error opening device credential: {:?}", e);
+            return Err(e).context("Error getting device credential at any of the known locations");
+        }
+        Some(Ok(dc)) => {
+            log::info!("Found device credential at {:?}", dc);
+            let dc = dc.read().context("Error reading device credential")?;
+            log::trace!("Device credential: {:?}", dc);
+
+            if dc.is_active() {
+                log::info!("Device credential already active");
+                return Ok(());
+            }
+        }
+    };
+
+    let url =
+        env::var("MANUFACTURING_SERVER_URL").context("Please provide MANUFACTURING_SERVER_URL")?;
     let use_plain_di: bool = match env::var("USE_PLAIN_DI") {
         Ok(val) => val == "true",
         Err(_) => false,
@@ -370,19 +392,13 @@ impl KeyReference {
         device_info: String,
         guid: Guid,
         rvinfo: RendezvousInfo,
-        manufacturer_public_key: PublicKey,
+        manufacturer_public_key_hash: Hash,
     ) -> Result<()> {
         match self {
             KeyReference::FileSystem { sign_key, hmac_key } => {
                 let private_key = sign_key
                     .private_key_to_der()
                     .context("Error serializing private sign key")?;
-                let manufacturer_pubkey_hash = Hash::new(
-                    None,
-                    &serde_cbor::to_vec(&manufacturer_public_key)
-                        .context("Error serializing manufacturer public key")?,
-                )
-                .context("Error hashing manufacturer public key")?;
 
                 let cred = FileDeviceCredential {
                     active: true,
@@ -391,12 +407,13 @@ impl KeyReference {
                     device_info,
                     guid,
                     rvinfo,
-                    pubkey_hash: manufacturer_pubkey_hash,
+                    pubkey_hash: manufacturer_public_key_hash,
                     private_key,
                 };
 
-                let cred =
-                    serde_cbor::to_vec(&cred).context("Error serializing device credential")?;
+                let cred = cred
+                    .serialize_data()
+                    .context("Error serializing device credential")?;
 
                 let filename = match env::var_os("DEVICE_CREDENTIAL_FILENAME") {
                     Some(filename) => filename.into_string().unwrap(),
@@ -421,7 +438,7 @@ impl KeyReference {
                 let hmac = hmac_signer
                     .sign_to_vec()
                     .context("Error finalizing hmac computation")?;
-                Ok(HMac::new_from_data(HashType::Sha384, hmac))
+                Ok(HMac::from_digest(HashType::HmacSha384, hmac))
             }
         }
     }
