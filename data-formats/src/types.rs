@@ -1409,7 +1409,7 @@ where
 {
     _phantom_state: std::marker::PhantomData<S>,
 
-    payload: Option<Vec<u8>>,
+    payload: Option<CborSimpleType>,
     nonce: Nonce,
     device_guid: Vec<u8>,
     other_claims: COSEHeaderMap,
@@ -1425,7 +1425,7 @@ where
     {
         match &self.payload {
             None => Ok(None),
-            Some(val) => Ok(Some(serde_cbor::from_slice(val)?)),
+            Some(val) => Ok(Some(serde_cbor::value::from_value(val.clone())?)),
         }
     }
 
@@ -1449,11 +1449,8 @@ where
         let mut res = self.other_claims.clone();
 
         if let Some(payload) = &self.payload {
-            res.insert(
-                HeaderKeys::EatFDO,
-                &serde_bytes::ByteBuf::from(payload.clone()),
-            )
-            .expect("Error adding to res");
+            res.insert(HeaderKeys::EatFDO, payload)
+                .expect("Error adding to res");
         }
         res.insert(HeaderKeys::EatNonce, &self.nonce)
             .expect("Error adding to res");
@@ -1532,11 +1529,7 @@ fn eat_from_map<S>(mut claims: COSEHeaderMap) -> Result<EATokenPayload<S>, Error
 where
     S: PayloadState,
 {
-    let payload: Option<serde_bytes::ByteBuf> = match claims.0.remove(&(HeaderKeys::EatFDO as i64))
-    {
-        None => None,
-        Some(val) => Some(serde_cbor::value::from_value(val)?),
-    };
+    let payload: Option<CborSimpleType> = claims.0.remove(&(HeaderKeys::EatFDO as i64));
     let nonce = match claims.0.remove(&(HeaderKeys::EatNonce as i64)) {
         None => return Err(Error::InconsistentValue("Missing nonce")),
         Some(val) => serde_cbor::value::from_value(val)?,
@@ -1553,7 +1546,6 @@ where
         }
     };
 
-    let payload = payload.map(|val| val.into_vec());
     let ueid = ueid.into_vec();
 
     Ok(EATokenPayload {
@@ -1577,7 +1569,7 @@ where
 {
     let payload = match payload {
         None => None,
-        Some(payload) => Some(serde_cbor::to_vec(&payload)?),
+        Some(payload) => Some(serde_cbor::value::to_value(&payload)?),
     };
     Ok(EATokenPayload {
         _phantom_state: std::marker::PhantomData,
