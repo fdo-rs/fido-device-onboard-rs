@@ -43,13 +43,15 @@ where
     }
 
     fn serialize_data(&self) -> Result<Vec<u8>, Error> {
-        serde_cbor::to_vec(self).map_err(Error::from)
+        let mut output = Vec::new();
+        ciborium::ser::into_writer(self, &mut output)?;
+        Ok(output)
     }
 
     fn serialize_to_writer<W>(&self, mut writer: W) -> Result<(), Error>
     where
         W: std::io::Write,
     {
-        serde_cbor::to_writer(&mut writer, self).map_err(Error::from)
+        ciborium::ser::into_writer(self, &mut writer).map_err(Error::from)
     }
 }
