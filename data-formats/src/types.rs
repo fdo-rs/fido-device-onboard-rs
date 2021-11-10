@@ -1692,7 +1692,7 @@ impl Serializable for COSESign {
 
         if array.tag() != Some(COSESIGN_TAG) {
             if array.tag().is_none() {
-                log::warn!("COSESign encountered without tag");
+                return Err(Error::InconsistentValue("Missing tag on COSESign"));
             } else {
                 return Err(Error::InconsistentValue("Invalid tag on COSESign"));
             }
@@ -1711,7 +1711,11 @@ impl Serializable for COSESign {
         // There is no way this data structure should be able to be constructed without either
         // deserializing (which checks the tag) or us constructing it, where we set the tag.
         // Just make sure it's there before serializing.
-        assert_eq!(self.contents.tag(), Some(COSESIGN_TAG));
+        if !matches!(self.contents.tag(), Some(COSESIGN_TAG)) {
+            return Err(Error::InconsistentValue(
+                "Invalid tag on COSESign on serialize_data",
+            ));
+        }
 
         self.contents.serialize_data()
     }
