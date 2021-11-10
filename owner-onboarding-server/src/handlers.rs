@@ -261,7 +261,7 @@ pub(super) async fn prove_device(
     // Get device EAT
     let token = msg.into_token();
     let nonce7: Nonce = match token
-        .get_unprotected_value(HeaderKeys::CUPHNonce)
+        .get_unprotected_value(HeaderKeys::EUPHNonce)
         .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?
     {
         Some(n) => n,
