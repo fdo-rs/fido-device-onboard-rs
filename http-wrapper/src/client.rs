@@ -1,4 +1,4 @@
-use std::convert::TryInto;
+use std::{convert::TryFrom, str::FromStr};
 
 use thiserror::Error;
 
@@ -133,14 +133,26 @@ impl ServiceClient {
         let msgtype = resp
             .headers()
             .get("message-type")
-            .ok_or(Error::MissingMessageType)?
-            .to_str()
-            .map_err(|_| Error::MissingMessageType)?;
+            .map(reqwest::header::HeaderValue::to_str)
+            .transpose()
+            .map_err(|_| Error::InvalidMessageType("non-string".to_string()))?;
         let msgtype = msgtype
-            .parse::<u8>()
-            .map_err(|_| Error::InvalidMessageType(msgtype.to_string()))?
-            .try_into()
-            .unwrap();
+            .map(u8::from_str)
+            .transpose()
+            .map_err(|_| Error::InvalidMessageType(msgtype.unwrap().to_string()))?
+            .map(MessageType::try_from)
+            .transpose()
+            .map_err(|_| Error::InvalidMessageType(msgtype.unwrap().to_string()))?;
+        let msgtype = match msgtype {
+            Some(msgtype) => msgtype,
+            None => {
+                if resp.status().is_success() {
+                    return Err(Error::MissingMessageType);
+                } else {
+                    MessageType::Error
+                }
+            }
+        };
 
         if let Some(val) = resp.headers().get("authorization") {
             self.authorization_token = Some(val.to_str().unwrap().to_string());

@@ -38,6 +38,7 @@ struct OwnerServiceUD {
 
     // Our keys
     owner_key: PKey<Private>,
+    owner_pubkey: PublicKey,
 
     // The new Owner2Key, randomly generated, but not stored
     owner2_key: PKey<Private>,
@@ -64,6 +65,7 @@ struct Settings {
 
     // Our private owner key
     owner_private_key_path: String,
+    owner_public_key_path: String,
 
     // Bind information
     bind: String,
@@ -174,6 +176,16 @@ async fn main() -> Result<()> {
             &settings.owner_private_key_path
         )
     })?;
+    let owner_pubkey = {
+        let contents = std::fs::read(&settings.owner_public_key_path).with_context(|| {
+            format!(
+                "Error reading owner public key from {}",
+                &settings.owner_public_key_path
+            )
+        })?;
+        PublicKey::try_from(X509::from_pem(&contents).context("Error parsing owner public key")?)
+            .context("Error converting owner public key to PK")?
+    };
 
     // Initialize stores
     let ownership_voucher_store = settings
@@ -201,6 +213,7 @@ async fn main() -> Result<()> {
 
         // Private owner key
         owner_key,
+        owner_pubkey,
 
         // Ephemeral owner2 key
         owner2_key,
