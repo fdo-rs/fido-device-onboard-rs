@@ -119,4 +119,13 @@ Device Info: testdevice1",
         );
         result.stderr_equals("");
     }
+
+    #[test]
+    fn dont_crash_on_empty_ov() {
+        let result = TC::run_external("ownershipvoucher", &["/dev/null"]);
+
+        assert!(result.status.success());
+        result.stdout_equals("Failed to parse");
+        result.stderr_equals("");
+    }
 }

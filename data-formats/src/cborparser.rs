@@ -1,3 +1,5 @@
+use std::slice::SliceIndex;
+
 use thiserror::Error;
 
 use paste::paste;
@@ -90,6 +92,8 @@ pub enum ArrayParseError {
     UnsupportedMajorType(u8),
     #[error("Invalid number of elements encountered: {0} received, {1} expected")]
     InvalidNumberOfElements(usize, usize),
+    #[error("Insufficient data to decode")]
+    InsufficientData,
 }
 
 const MASK_TYPE: u8 = 0b1110_0000;
@@ -157,6 +161,28 @@ fn encode_item_start(major_type: MajorType, val: u64) -> Vec<u8> {
     vec![((major_type as u8) << 5) | ((val as u8) & MASK_VAL)]
 }
 
+#[derive(Debug)]
+struct SafeData<'a>(&'a [u8]);
+
+impl<'a> SafeData<'a> {
+    fn new(data: &'a [u8]) -> Self {
+        Self(data)
+    }
+
+    fn get<I>(&self, index: I) -> Result<&<I as SliceIndex<[u8]>>::Output, Error>
+    where
+        I: SliceIndex<[u8]>,
+    {
+        self.0
+            .get(index)
+            .ok_or_else(|| Error::from(ArrayParseError::InsufficientData))
+    }
+
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
 impl<N: ParsedArraySize> Serializable for ParsedArray<N> {
     fn serialize_data(&self) -> Result<Vec<u8>, Error> {
         let result_len: usize = self.contents.iter().map(|v| v.len()).sum::<usize>();
@@ -180,28 +206,33 @@ impl<N: ParsedArraySize> Serializable for ParsedArray<N> {
     }
 
     fn deserialize_data(data: &[u8]) -> Result<Self, Error> {
+        let data = SafeData::new(data);
+
         // Parse JUST the top-level array, leave everything else as raw binary things
         let mut parsed_items = Vec::new();
 
-        let first_major_type = MajorType::maybe_from_u8(data[0] & MASK_TYPE)?;
+        let first_major_type = MajorType::maybe_from_u8(data.get(0)? & MASK_TYPE)?;
         let (data, tag) = match first_major_type {
             MajorType::Tag => {
-                let tag_val_size = length_size(data[0] & MASK_VAL)?;
-                let tag_val = parse_length(&data[..=tag_val_size])?;
+                let tag_val_size = length_size(data.get(0)? & MASK_VAL)?;
+                let tag_val = parse_length(data.get(..=tag_val_size)?)?;
 
-                (&data[1 + tag_val_size..], Some(tag_val as u64))
+                (
+                    SafeData::new(data.get(1 + tag_val_size..)?),
+                    Some(tag_val as u64),
+                )
             }
             MajorType::Array => (data, None),
             _ => return Err(Error::from(ArrayParseError::InvalidTopLevelType)),
         };
 
-        let first_major_type = MajorType::maybe_from_u8(data[0] & MASK_TYPE)?;
+        let first_major_type = MajorType::maybe_from_u8(data.get(0)? & MASK_TYPE)?;
         if first_major_type != MajorType::Array {
             return Err(Error::from(ArrayParseError::InvalidTopLevelType));
         }
 
-        let map_len_size = length_size(data[0] & MASK_VAL)?;
-        let map_len = parse_length(&data[0..=map_len_size])?;
+        let map_len_size = length_size(data.get(0)? & MASK_VAL)?;
+        let map_len = parse_length(data.get(0..=map_len_size)?)?;
 
         let start_index = map_len_size + 1;
 
@@ -227,14 +258,14 @@ impl<N: ParsedArraySize> Serializable for ParsedArray<N> {
                 return Err(ArrayParseError::ParseFailure("Too many items in array").into());
             }
 
-            let major_type = MajorType::maybe_from_u8(data[index] & MASK_TYPE)?;
-            let minor = data[index] & MASK_VAL;
+            let major_type = MajorType::maybe_from_u8(data.get(index)? & MASK_TYPE)?;
+            let minor = data.get(index)? & MASK_VAL;
 
             let (tag_len, major_type, minor) = if major_type == MajorType::Tag {
                 let tag_val_size = length_size(minor)?;
                 let major_type =
-                    MajorType::maybe_from_u8(data[index + tag_val_size + 1] & MASK_TYPE)?;
-                let minor = data[index + tag_val_size + 1] & MASK_VAL;
+                    MajorType::maybe_from_u8(data.get(index + tag_val_size + 1)? & MASK_TYPE)?;
+                let minor = data.get(index + tag_val_size + 1)? & MASK_VAL;
                 (tag_val_size + 1, major_type, minor)
             } else {
                 (0, major_type, minor)
@@ -250,12 +281,12 @@ impl<N: ParsedArraySize> Serializable for ParsedArray<N> {
                 }
                 MajorType::ByteString | MajorType::TextString => {
                     let len_size = length_size(minor)?;
-                    let length = parse_length(&data[index..=index + len_size])?;
+                    let length = parse_length(data.get(index..=index + len_size)?)?;
                     value_len = 1 + len_size + length;
                 }
                 MajorType::Array => {
                     let len_size = length_size(minor)?;
-                    let length = parse_length(&data[index..=index + len_size])?;
+                    let length = parse_length(data.get(index..=index + len_size)?)?;
                     value_len = 1 + len_size;
                     if length != 0 {
                         left_at_depth.insert(0, length);
@@ -263,7 +294,7 @@ impl<N: ParsedArraySize> Serializable for ParsedArray<N> {
                 }
                 MajorType::Map => {
                     let len_size = length_size(minor)?;
-                    let length = parse_length(&data[index..=index + len_size])?;
+                    let length = parse_length(data.get(index..=index + len_size)?)?;
                     value_len = 1 + len_size;
                     if length != 0 {
                         // With a map, "length" is the number of key-value pairs, so there are 2 * length items.
@@ -279,7 +310,7 @@ impl<N: ParsedArraySize> Serializable for ParsedArray<N> {
 
             if left_at_depth.len() == 1 {
                 // This was the end of an item at the top level
-                parsed_items.push(data[current_top_level_index..index_end].to_vec());
+                parsed_items.push(data.get(current_top_level_index..index_end)?.to_vec());
                 current_top_level_index = index_end;
             }
             if left_at_depth[0] == 1 {

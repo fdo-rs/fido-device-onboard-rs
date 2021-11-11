@@ -23,7 +23,8 @@ func main() {
 
 	voucher := C.fdo_ownershipvoucher_from_data(cts, ctslen)
 	if voucher == nil {
-		panic("failed to parse")
+		fmt.Println("Failed to parse")
+		return
 	}
 	defer C.fdo_ownershipvoucher_free(voucher)
 
