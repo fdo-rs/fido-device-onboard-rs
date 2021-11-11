@@ -14,7 +14,7 @@ pub enum OwnershipVoucherStoreMetadataKey {
 impl fdo_store::MetadataLocalKey for OwnershipVoucherStoreMetadataKey {
     fn to_key(&self) -> &'static str {
         match self {
-            OwnershipVoucherStoreMetadataKey::To2Performed => "fdo.to2_performed",
+            OwnershipVoucherStoreMetadataKey::To2Performed => "user.fdo.to2_performed",
         }
     }
 }

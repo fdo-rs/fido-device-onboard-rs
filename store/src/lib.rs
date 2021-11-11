@@ -44,11 +44,15 @@ impl Writable for WriteOnlyOpen {}
 
 pub trait MetadataValue: Send + Sync {
     fn to_stored(&self) -> Result<Vec<u8>, StoreError>;
+    fn to_text(&self) -> String;
 }
 
 impl MetadataValue for bool {
     fn to_stored(&self) -> Result<Vec<u8>, StoreError> {
-            Ok(self.to_string().as_bytes().to_vec())
+        Ok(self.to_string().as_bytes().to_vec())
+    }
+    fn to_text(&self) -> String {
+        self.to_string()
     }
 }
 
@@ -60,6 +64,9 @@ impl MetadataValue for Duration {
         })?;
         let ttl = ttl.as_secs();
         Ok(u64::to_le_bytes(ttl).into())
+    }
+    fn to_text(&self) -> String {
+        self.as_secs().to_string()
     }
 }
 
@@ -81,6 +88,52 @@ impl<T: MetadataLocalKey> MetadataKey<T> {
         }
     }
 }
+
+pub trait FilterType<V, MKT>: Send + Sync
+where
+    V: Clone,
+    MKT: MetadataLocalKey,
+{
+    fn eq(&mut self, key: &MetadataKey<MKT>, expected: &dyn MetadataValue);
+    fn or(&mut self);
+    fn lt(&mut self, key: &MetadataKey<MKT>, max: i64);
+    fn query<'life0, 'async_trait>(
+        &'life0 self,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<ValueIter<V>>, StoreError>> + 'async_trait + Send>>
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait;
+}
+
+pub struct ValueIter<V: Clone> {
+    values: Vec<V>,
+    index: usize,
+}
+
+impl<V> Iterator for ValueIter<V>
+where
+    V: Clone,
+{
+    type Item = V;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index >= self.values.len() {
+            return None;
+        }
+
+        let entry = self.values.get(self.index);
+        if let Some(e) = entry {
+            self.index += 1;
+            return Some(e.clone());
+        } else {
+            log::warn!("Error getting next entry");
+        }
+
+        None
+    }
+}
+
+type QueryResult<V, MKT> = Box<dyn FilterType<V, MKT>>;
 
 pub trait Store<OT: StoreOpenMode, K, V, MKT: MetadataLocalKey>: Send + Sync {
     fn load_data<'life0, 'life1, 'async_trait>(
@@ -104,6 +157,14 @@ pub trait Store<OT: StoreOpenMode, K, V, MKT: MetadataLocalKey>: Send + Sync {
         'life1: 'async_trait,
         'life2: 'async_trait,
         'life3: 'async_trait,
+        Self: 'async_trait,
+        OT: Writable;
+
+    fn query_data<'life0, 'async_trait>(
+        &'life0 self,
+    ) -> Pin<Box<dyn Future<Output = Result<QueryResult<V, MKT>, StoreError>> + 'async_trait + Send>>
+    where
+        'life0: 'async_trait,
         Self: 'async_trait,
         OT: Writable;
 

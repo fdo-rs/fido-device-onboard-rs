@@ -9,7 +9,7 @@ use xattr::FileExt;
 
 use fdo_data_formats::Serializable;
 
-use crate::MetadataValue;
+use crate::{FilterType, MetadataLocalKey, MetadataValue, ValueIter};
 
 use super::Store;
 use super::StoreError;
@@ -21,7 +21,7 @@ where
     OT: crate::StoreOpenMode,
     K: std::str::FromStr + std::string::ToString + Send + Sync + 'static,
     V: Serializable + Send + Sync + Clone + 'static,
-    MKT: crate::MetadataLocalKey,
+    MKT: crate::MetadataLocalKey + 'static,
 {
     let directory: String = match cfg {
         None => {
@@ -93,6 +93,99 @@ fn ttl_to_disk(ttl: SystemTime) -> Result<Vec<u8>, StoreError> {
     Ok(u64::to_le_bytes(ttl).into())
 }
 
+pub struct DirectoryStoreFilterType {
+    directory: PathBuf,
+    eqs: Vec<(String, Vec<u8>)>,
+}
+
+#[async_trait]
+impl<V, MKT> FilterType<V, MKT> for DirectoryStoreFilterType
+where
+    V: Serializable + Send + Sync + Clone + 'static,
+    MKT: MetadataLocalKey,
+{
+    fn eq(&mut self, key: &crate::MetadataKey<MKT>, expected: &dyn MetadataValue) {
+        self.eqs
+            .push((key.to_key().to_owned(), expected.to_stored().unwrap()));
+    }
+    fn or(&mut self) {
+        todo!()
+    }
+    fn lt(&mut self, _: &crate::MetadataKey<MKT>, _: i64) {
+        todo!()
+    }
+    async fn query(&self) -> Result<Option<ValueIter<V>>, StoreError> {
+        let dir_entries = match fs::read_dir(&self.directory) {
+            Err(e) => {
+                log::trace!(
+                    "Error during maintenance: unable to list directory {}: {:?}",
+                    &self.directory.display(),
+                    e
+                );
+                return Ok(None);
+            }
+            Ok(v) => v,
+        };
+        let mut results = Vec::new();
+        for entry in dir_entries {
+            let entry = match entry {
+                Ok(v) => v,
+                Err(e) => {
+                    log::trace!("Error during maintenance: unable to process entry: {:?}", e);
+                    continue;
+                }
+            };
+            let path = entry.path();
+            match entry.file_type() {
+                Err(e) => {
+                    log::trace!(
+                        "Error during maintenance: Unable to determine file type of {}: {:?}",
+                        path.display(),
+                        e
+                    );
+                    continue;
+                }
+                Ok(v) if v.is_file() => {}
+                Ok(_) => continue,
+            }
+            let file = match File::open(&path) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(e) => {
+                    log::trace!("Error opening file {}", e.to_string());
+                    continue;
+                }
+                Ok(f) => f,
+            };
+            // TODO(runcom): implement "or" and "lt"
+            for eq in &self.eqs {
+                let (key, expected) = eq;
+                match file.get_xattr(key) {
+                    Ok(Some(v)) => {
+                        let matching = expected.iter().zip(&v).filter(|&(a, b)| a == b).count();
+                        if expected.len() == matching {
+                            results.push(V::deserialize_from_reader(&file).map_err(|e| {
+                                StoreError::Unspecified(format!(
+                                    "Error deserializing value: {:?}",
+                                    e
+                                ))
+                            })?)
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        log::trace!("Error checking {}: {}", key, e.to_string());
+                        continue;
+                    }
+                }
+            }
+        }
+        Ok(Some(ValueIter {
+            index: 0,
+            values: results,
+        }))
+    }
+}
+
 const XATTR_NAME_TTL: &str = "user.store_ttl";
 
 #[async_trait]
@@ -101,7 +194,7 @@ where
     OT: crate::StoreOpenMode,
     K: std::str::FromStr + std::string::ToString + Send + Sync + 'static,
     V: Serializable + Send + Sync + Clone + 'static,
-    MKT: crate::MetadataLocalKey,
+    MKT: crate::MetadataLocalKey + 'static,
 {
     async fn load_data(&self, key: &K) -> Result<Option<V>, StoreError> {
         let path = self.get_path(key);
@@ -171,6 +264,13 @@ where
                     e
                 ))
             })?)
+    }
+
+    async fn query_data(&self) -> Result<Box<dyn crate::FilterType<V, MKT>>, StoreError> {
+        Ok(Box::new(DirectoryStoreFilterType {
+            directory: self.directory.clone(),
+            eqs: Vec::new(),
+        }))
     }
 
     async fn store_data(&self, key: K, ttl: Option<Duration>, value: V) -> Result<(), StoreError> {
