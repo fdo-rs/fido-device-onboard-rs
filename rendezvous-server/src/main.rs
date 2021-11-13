@@ -49,7 +49,7 @@ impl Serializable for StoredItem {
 }
 
 #[non_exhaustive]
-pub enum RendezvousStoreMetadataKey {}
+enum RendezvousStoreMetadataKey {}
 
 impl fdo_store::MetadataLocalKey for RendezvousStoreMetadataKey {
     fn to_key(&self) -> &'static str {

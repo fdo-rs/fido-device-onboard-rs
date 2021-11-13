@@ -38,7 +38,7 @@ struct DiunConfiguration {
 }
 
 #[non_exhaustive]
-pub enum PublicKeyStoreMetadataKey {}
+enum PublicKeyStoreMetadataKey {}
 
 impl fdo_store::MetadataLocalKey for PublicKeyStoreMetadataKey {
     fn to_key(&self) -> &'static str {

@@ -1,7 +1,5 @@
 use core::future::Future;
 use core::pin::Pin;
-use core::time::Duration;
-use std::time::SystemTime;
 
 use serde::Deserialize;
 use thiserror::Error;
@@ -56,17 +54,14 @@ impl MetadataValue for bool {
     }
 }
 
-impl MetadataValue for Duration {
+impl MetadataValue for chrono::Duration {
     fn to_stored(&self) -> Result<Vec<u8>, StoreError> {
-        let ttl = SystemTime::now() + *self;
-        let ttl = ttl.duration_since(SystemTime::UNIX_EPOCH).map_err(|e| {
-            StoreError::Unspecified(format!("Error determining time from epoch to TTL: {:?}", e))
-        })?;
-        let ttl = ttl.as_secs();
-        Ok(u64::to_le_bytes(ttl).into())
+        let ttl = chrono::Local::now() + *self;
+        Ok(i64::to_le_bytes(ttl.timestamp()).into())
     }
     fn to_text(&self) -> String {
-        self.as_secs().to_string()
+        let ttl = chrono::Local::now() + *self;
+        ttl.format("%Y-%m-%d %H:%M:%S").to_string()
     }
 }
 
@@ -171,7 +166,6 @@ pub trait Store<OT: StoreOpenMode, K, V, MKT: MetadataLocalKey>: Send + Sync {
     fn store_data<'life0, 'async_trait>(
         &'life0 self,
         key: K,
-        ttl: Option<Duration>,
         value: V,
     ) -> Pin<Box<dyn Future<Output = Result<(), StoreError>> + 'async_trait + Send>>
     where

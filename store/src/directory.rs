@@ -73,6 +73,7 @@ where
     }
 }
 
+// TODO(runcom): fix this to use chrono::Duration and time
 fn ttl_from_disk(ttl: &[u8]) -> Result<SystemTime, StoreError> {
     if ttl.len() != 8 {
         return Err(StoreError::Unspecified(format!(
@@ -83,14 +84,6 @@ fn ttl_from_disk(ttl: &[u8]) -> Result<SystemTime, StoreError> {
     let ttl = u64::from_le_bytes(ttl.try_into().unwrap());
     let ttl = Duration::from_secs(ttl as u64);
     Ok(SystemTime::UNIX_EPOCH + ttl)
-}
-
-fn ttl_to_disk(ttl: SystemTime) -> Result<Vec<u8>, StoreError> {
-    let ttl = ttl.duration_since(SystemTime::UNIX_EPOCH).map_err(|e| {
-        StoreError::Unspecified(format!("Error determining time from epoch to TTL: {:?}", e))
-    })?;
-    let ttl = ttl.as_secs();
-    Ok(u64::to_le_bytes(ttl).into())
 }
 
 pub struct DirectoryStoreFilterType {
@@ -273,7 +266,7 @@ where
         }))
     }
 
-    async fn store_data(&self, key: K, ttl: Option<Duration>, value: V) -> Result<(), StoreError> {
+    async fn store_data(&self, key: K, value: V) -> Result<(), StoreError> {
         let finalpath = self.get_path(&key);
         let mut path = finalpath.clone();
         path.set_file_name(format!(
@@ -286,23 +279,9 @@ where
             path.display()
         );
 
-        let ttl = match ttl {
-            None => None,
-            Some(ttl) => Some(ttl_to_disk(SystemTime::now() + ttl)?),
-        };
-
         let file = File::create(&path).map_err(|e| {
             StoreError::Unspecified(format!("Error creating file {}: {:?}", path.display(), e))
         })?;
-        if let Some(ttl) = ttl {
-            file.set_xattr(XATTR_NAME_TTL, &ttl).map_err(|e| {
-                StoreError::Unspecified(format!(
-                    "Error creating xattr on {}: {:?}",
-                    path.display(),
-                    e
-                ))
-            })?;
-        }
         value.serialize_to_writer(&file).map_err(|e| {
             StoreError::Unspecified(format!("Error writing file {}: {:?}", path.display(), e))
         })?;
