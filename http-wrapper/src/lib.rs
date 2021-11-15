@@ -11,7 +11,11 @@ pub mod server;
 pub mod client;
 
 pub fn init_logging() {
-    pretty_env_logger::try_init_timed_custom_env("LOG_LEVEL").unwrap();
+    let filter = std::env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
+    pretty_env_logger::formatted_timed_builder()
+        .filter_level(log::LevelFilter::Info)
+        .parse_filters(&filter)
+        .init();
 }
 
 #[derive(Debug, Serialize, Deserialize)]
