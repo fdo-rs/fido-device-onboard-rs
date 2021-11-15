@@ -84,6 +84,8 @@ impl<T: MetadataLocalKey> MetadataKey<T> {
     }
 }
 
+type FilterQueryResult<V> = Option<ValueIter<V>>;
+
 pub trait FilterType<V, MKT>: Send + Sync
 where
     V: Clone,
@@ -93,7 +95,7 @@ where
     fn lt(&mut self, key: &MetadataKey<MKT>, max: i64);
     fn query<'life0, 'async_trait>(
         &'life0 self,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<ValueIter<V>>, StoreError>> + 'async_trait + Send>>
+    ) -> Pin<Box<dyn Future<Output = Result<FilterQueryResult<V>, StoreError>> + 'async_trait + Send>>
     where
         'life0: 'async_trait,
         Self: 'async_trait;
@@ -135,7 +137,7 @@ where
     }
 }
 
-type QueryResult<V, MKT> = Box<dyn FilterType<V, MKT>>;
+type QueryResult<V, MKT> = Result<Box<dyn FilterType<V, MKT>>, StoreError>;
 
 pub trait Store<OT: StoreOpenMode, K, V, MKT: MetadataLocalKey>: Send + Sync {
     fn load_data<'life0, 'life1, 'async_trait>(
@@ -176,7 +178,7 @@ pub trait Store<OT: StoreOpenMode, K, V, MKT: MetadataLocalKey>: Send + Sync {
 
     fn query_data<'life0, 'async_trait>(
         &'life0 self,
-    ) -> Pin<Box<dyn Future<Output = Result<QueryResult<V, MKT>, StoreError>> + 'async_trait + Send>>
+    ) -> Pin<Box<dyn Future<Output = QueryResult<V, MKT>> + 'async_trait + Send>>
     where
         'life0: 'async_trait,
         Self: 'async_trait,

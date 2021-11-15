@@ -105,7 +105,7 @@ where
     fn lt(&mut self, key: &crate::MetadataKey<MKT>, max: i64) {
         self.lts.push((key.to_key().to_owned(), max));
     }
-    async fn query(&self) -> Result<Option<ValueIter<V>>, StoreError> {
+    async fn query(&self) -> Result<crate::FilterQueryResult<V>, StoreError> {
         let dir_entries = match fs::read_dir(&self.directory) {
             Err(e) => {
                 log::trace!(
@@ -194,7 +194,7 @@ where
         }
         Ok(Some(ValueIter {
             index: 0,
-            values: values,
+            values,
             errored: false,
         }))
     }
@@ -308,7 +308,7 @@ where
         })?)
     }
 
-    async fn query_data(&self) -> Result<Box<dyn crate::FilterType<V, MKT>>, StoreError> {
+    async fn query_data(&self) -> crate::QueryResult<V, MKT> {
         Ok(Box::new(DirectoryStoreFilterType {
             directory: self.directory.clone(),
             neqs: Vec::new(),
