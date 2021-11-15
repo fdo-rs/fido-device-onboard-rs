@@ -1,5 +1,6 @@
 queue_rules:
 - name: fido-device-onboard-rs
+  batch_size: 5
   conditions:
     - base=main
     - "#approved-reviews-by>=1"
@@ -9,6 +10,18 @@ pull_request_rules:
     conditions:
     - base=main
     - "#approved-reviews-by>=1"
+    - "label!=possible stability impact"
+    actions:
+      queue:
+        name: fido-device-onboard-rs
+        method: merge
+        rebase_fallback: none
+
+  - name: Automatic merge on approval (stability impact)
+    conditions:
+    - base=main
+    - "#approved-reviews-by>=2"
+    - "label=possible stability impact"
     actions:
       queue:
         name: fido-device-onboard-rs
