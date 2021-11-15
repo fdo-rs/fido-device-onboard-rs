@@ -10,3 +10,8 @@ Cargo.lock
 **/*.rs.bk
 
 /testfiles
+
+# Jekyll output
+/docs/_site/
+/docs/.jekyll-cache/
+/docs/Gemfile.lock
