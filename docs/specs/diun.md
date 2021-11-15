@@ -1,4 +1,10 @@
-# Device Initialize Protocol over Untrusted Networks
+---
+layout: default
+title: Device Initialize over Untrusted Networks
+parent: Specifications
+---
+
+## Device Initialize Protocol over Untrusted Networks
 
 **STATUS: Draft**
 
@@ -15,20 +21,20 @@ This protocol also implements support for proving in-band that a device private 
 *Note: at this moment, the attestation part is not included in this protocol. This will come in a later revision. This later revision WILL be incompatible with the current one.*
 
 
-## Preparations
+### Preparations
 
 The Device ROE can be seeded with a hash of a public key to trust for the Device Initialize Protocol, `DIUNPubKeyHash`, or a list of trusted certificates `DIUNPubKeyRootCerts`, this is strongly adviced to perform.
 This could also be left unconfigured, in which case the device operates under Trust On First Use.
 
 
-## Protocol
-### Device-side preparation
+### Protocol
+#### Device-side preparation
 
 The Device ROE starts preparing for the Device Initialize Protocol by generating a new private key for the Device key and a new hmac key for the Ownership Voucher hmac signing.
 If the TPM extension is to be used, it also extracts the Endorsement Certificate out of the TPM.
 
 
-### Step 1: Connect, Type 210
+#### Step 1: Connect, Type 210
 
 **From Device ROE to Manufacturer**
 
@@ -58,7 +64,7 @@ Starts the key exchange, by sending the information needed to perform one side
 of the key exchange.
 
 
-### Step 2: Accept, Type 211
+#### Step 2: Accept, Type 211
 
 **From Manufacturer to Device ROE**
 
@@ -93,7 +99,7 @@ Completes the key exchange, by sending xBKeyExchange.
 Further messages in the DIUN and DI protocols are all encrypted and signed.
 
 
-### Step 3: Request Key Parameters, Type 212
+#### Step 3: Request Key Parameters, Type 212
 
 **From Device ROE to Manufacturer**
 
@@ -113,7 +119,7 @@ TenantId = null / tstr
 Requests parameters for creating the device public key.
 
 
-### Step 4: Provide Key Parameters, Type 213
+#### Step 4: Provide Key Parameters, Type 213
 
 **From Manufacturer to Device ROE**
 
@@ -139,7 +145,7 @@ If no KeyStorageTypes are provided, the client can select any type of key storag
 that it wants.
 
 
-### Step 5: Provide Key, Type 214
+#### Step 5: Provide Key, Type 214
 
 **From Device ROE to Manufacturer**
 
@@ -158,7 +164,7 @@ DIUN.ProvideKey = [
 Provides the generated public key.
 
 
-### Step 6: Done, Type 215
+#### Step 6: Done, Type 215
 
 **From Manufacturer to Device ROE**
 

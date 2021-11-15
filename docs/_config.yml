@@ -1,1 +1,33 @@
-theme: jekyll-theme-architect
+title: "FIDO Device Onboarding Rust implementation"
+theme: "just-the-docs"
+remote_theme: pmarsceill/just-the-docs
+color_scheme: "dark"
+search_enabled: false
+
+plugins:
+  - jekyll-remote-theme
+  - jekyll-seo-tag
+
+aux_links:
+  "FIDO Device Onboard Rust on GitHub":
+    - "https://github.com/fedora-iot/fido-device-onboard-rs/"
+aux_links_new_tab: true
+
+heading_anchors: true
+
+gh_edit_link: true
+gh_edit_link_text: "Edit this page on GitHub."
+gh_edit_repository: "https://github.com/fedora-iot/fido-device-onboard-rs"
+gh_edit_branch: "main"
+gh_edit_source: "docs"
+gh_edit_view_mode: "tree"
+
+# Non-changeable (GH Pages)
+lsi: false
+incremental: false
+highlighter: rouge
+gist:
+  noscript: false
+kramdown:
+  math_engine: mathjax
+  syntax_highlighter: rouge
