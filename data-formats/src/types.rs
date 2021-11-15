@@ -1777,6 +1777,14 @@ impl COSESign {
         Self::new_from_inner(inner)
     }
 
+    pub fn verify(&self, sign_key: &dyn SigningPublicKey) -> Result<(), Error> {
+        if self.cached_inner.verify_signature(sign_key)? {
+            Ok(())
+        } else {
+            Err(Error::InconsistentValue("Signature verification failed"))
+        }
+    }
+
     pub fn from_eat<ES>(
         eat: EATokenPayload<ES>,
         unprotected: Option<COSEHeaderMap>,

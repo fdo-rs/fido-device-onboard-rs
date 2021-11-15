@@ -217,6 +217,7 @@ async fn perform_to2(
     devcredloc: &dyn UsableDeviceCredentialLocation,
     devcred: &dyn DeviceCredential,
     url: &str,
+    to1d: &COSESign,
 ) -> Result<()> {
     log::info!("Performing TO2 protocol, URL: {:?}", url);
 
@@ -344,6 +345,10 @@ async fn perform_to2(
         "ProveOVHdr validated with public key: {:?}",
         ov_owner_entry.public_key()
     );
+
+    // Verify that to1d was signed by the current owner
+    to1d.verify(ov_owner_entry.public_key().pkey())
+        .context("Error validating to1d after receiving full ownership voucher")?;
 
     // Perform the key derivation
     let a_key_exchange = prove_ov_hdr_payload.a_key_exchange();
@@ -508,21 +513,27 @@ async fn main() -> Result<()> {
 
             // Get owner info
             let to1d = get_to1d(dc.as_ref(), client_list).await;
-
-            let to1d_payload: UnverifiedValue<TO1DataPayload> = match to1d {
-                Ok(to1d) => match to1d.get_payload_unverified() {
-                    Ok(to1d_payload) => to1d_payload,
-                    Err(e) => {
-                        log::trace!(
-                            "Error getting TO1 payload unverified {:?} with rv_entry {:?}",
-                            e,
-                            rv_entry
-                        );
-                        continue;
-                    }
-                },
+            let to1d = match to1d {
+                Ok(to1d) => to1d,
                 Err(e) => {
-                    log::trace!("Error getting TO1d {:?} with rv_entry {:?}", e, rv_entry);
+                    log::trace!(
+                        "Error {:?} getting usable To1d from rv_entry {:?}",
+                        e,
+                        rv_entry
+                    );
+                    continue;
+                }
+            };
+
+            let to1d_payload: UnverifiedValue<TO1DataPayload> = match to1d.get_payload_unverified()
+            {
+                Ok(to1d_payload) => to1d_payload,
+                Err(e) => {
+                    log::trace!(
+                        "Error getting TO1 payload unverified {:?} with rv_entry {:?}",
+                        e,
+                        rv_entry
+                    );
                     continue;
                 }
             };
@@ -541,7 +552,7 @@ async fn main() -> Result<()> {
             }
 
             for to2_address in to2_addresses {
-                match perform_to2(devcred_location.borrow(), dc.as_ref(), &to2_address)
+                match perform_to2(devcred_location.borrow(), dc.as_ref(), &to2_address, &to1d)
                     .await
                     .context("Error performing TO2 ownership protocol")
                 {
