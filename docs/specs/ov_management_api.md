@@ -1,4 +1,10 @@
-# Ownership Voucher Management API
+---
+layout: default
+title: Ownership Voucher Management API
+parent: Specifications
+---
+
+## Ownership Voucher Management API
 
 **STATUS: Draft**
 
@@ -10,45 +16,45 @@ NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and
 "OPTIONAL" in this document are to be interpreted as described in
 RFC 2119.
 
-## General Features
+### General Features
 
-### Encoding
+#### Encoding
 
 Requests and responses for the Management API use JSON encoding, instead of the CBOR encoding used throughout the FIDO specification.
 
-### Authentication
+#### Authentication
 
 Multiple authentication methods are specified in this document, and a server can support any combination of them.
 Clients will need to interact with Management API server operators to determine which authentication method to use, and to obtain credentials.
 The server will log who performs actions, and which authentication method was used, but it is not required to store this information in its data stores.
 The method by which clients are provided with credentials is outside the scope of this specification.
 
-#### X.509 Client Certificate
+##### X.509 Client Certificate
 
 In this authentication method, a client will send its certificate as part of the TLS connection handshake.
 For this, the certificate needs to be signed by a Certificate Authority that the server trusts.
 The `username` in the protocol is the value of the `CN` field in the `Subject` of the certificate.
 
-#### OAuth2 Bearer token in Authorization header
+##### OAuth2 Bearer token in Authorization header
 
 In this authentication method, the client will send an OAuth2 Bearer token, as per [RFC6750, section 2.1](https://datatracker.ietf.org/doc/html/rfc6750#section-2.1).
 How the server determines a `username` for this authentication method is outside the scope of this specification.
 
-### Responses
+#### Responses
 
 Requests that got parsed and executed succesfully will have a Status code in the Succesful range ([section 6.3, RFC 7231](https://datatracker.ietf.org/doc/html/rfc7231#section-6.3)).
 If an error occured during processing, a Status code in either the Client Error ([section 6.5, RFC 7231](https://datatracker.ietf.org/doc/html/rfc7231#section-6.5)) or Server Error ([section 6.6, RFC 7231](https://datatracker.ietf.org/doc/html/rfc7231#section-6.6)) will be returned.
 
 Responses will have `Content-Type: application/json` and consist of JSON strings.
 
-#### Error responses
+##### Error responses
 
 Error responses will consist of JSON objects, with at least the following keys:
 
 - `error_code`: An operation-specific string error code.
 - `error_details`: A JSON object with keys defined by the specific `error_code` value.
 
-## Ownership Voucher upload
+### Ownership Voucher upload
 
 HTTP Request context: `POST $base/v1/ownership_voucher`.
 
@@ -64,7 +70,7 @@ A successful response will contain a JSON list containing objects, which each ha
 
 - `guid`: the FDO GUID of the Ownership Voucher.
 
-### Error codes
+#### Error codes
 
 - `incomplete_voucher`: when an uploaded voucher was incomplete. `error_details` contains at least the key `parsed_correctly`, containing the number of Ownership Vouchers succesfully parsed.
 - `parse_error`: when an Ownership Voucher was uploaded that is structurally invalid. `error_details` contains the key `parsed_correctly`, containing the number of Ownership Vouchers succesfully parsed, and the key `description`, containing a string with a description of the parse failure.
@@ -73,11 +79,11 @@ A successful response will contain a JSON list containing objects, which each ha
 - `invalid_voucher_signatures`: when an Ownership Voucher was uploaded for which one of the cryptographic verifications failed. `error_details` contains the key `invalid`, which contains a list of objects with the key `index` describing the index of the failing voucher, and `description` containing a string description of what failed to verify on the voucher.
 
 
-### Example
+#### Example
 
 This assumes a URI base of `/management`, and an authentication method of `OAuth2 bearer token`.
 
-#### Request
+##### Request
 
 ``` HTTP
 POST /management/v1/ownership_voucher HTTP/1.1
@@ -91,7 +97,7 @@ Accept: application/json
 <voucher-1-bytes><voucher-2-bytes><voucher-3-bytes>
 ```
 
-#### Successful response
+##### Successful response
 
 ``` HTTP
 HTTP/1.1 201 Created
@@ -101,7 +107,7 @@ Server: FDO-Owner-Server/1.0
 [{“guid”: “ec1c2515-98f4-40f6-a880-8db987a423c1”}, {“guid”: “d2e4fc0e-fc0b-42a0-8767-6e82bb58dd86”,}, {“guid”: “ccb05292-cba6-484f-b803-55d66c50887b”}]
 ```
 
-#### Failed response: incomplete_voucher
+##### Failed response: incomplete_voucher
 
 ``` HTTP
 HTTP/1.1 400 Bad Request
@@ -111,7 +117,7 @@ Server: FDO-Owner-Server/1.0
 {"error_code": "incomplete_voucher", "error_details": {"parsed_correctly": 2}}
 ```
 
-#### Failed response: unowned_voucher
+##### Failed response: unowned_voucher
 
 ``` HTTP
 HTTP/1.1 400 Bad Request
@@ -121,7 +127,7 @@ Server: FDO-Owner-Server/1.0
 {"error_code": "unowned_voucher", "error_details": {"unowned": ["4fd43ba9-12ec-4f32-bda0-d5c0956a19be"]}}
 ```
 
-## Ownership Voucher delete
+### Ownership Voucher delete
 
 HTTP Request context: `POST $base/v1/ownership_voucher/delete`.
 
@@ -130,15 +136,15 @@ The request body consists of a JSON list of GUIDs for which the Ownership Vouche
 
 A succesful response contains an empty body.
 
-### Error codes
+#### Error codes
 
 - `unknown_device`: at least one of the GUIDs that were submitted were unknown to this Owner Onboarding Service. `error_details` contains the key `unknown`, which contains a JSON list of GUIDs that were unknown to this server.
 
-### Example
+#### Example
 
 This assumes a URI base of `/management`, and an authentication method of `OAuth2 bearer token`.
 
-#### Request
+##### Request
 
 ``` HTTP
 POST /management/v1/ownership_voucher/delete HTTP/1.1
@@ -151,7 +157,7 @@ Accept: application/json
 [“a9bcd683-a7e4-46ed-80b2-6e55e8610d04”, “1ea69fcb-b784-4d0f-ab4d-94589c6cc7ad”]
 ```
 
-#### Successful response
+##### Successful response
 
 ``` HTTP
 HTTP/1.1 200 OK
@@ -159,7 +165,7 @@ Content-Type: application/json
 Server: FDO-Owner-Server/1.0
 ```
 
-#### Failed response: unknown_device
+##### Failed response: unknown_device
 
 ``` HTTP
 HTTP/1.1 400 Bad Request
