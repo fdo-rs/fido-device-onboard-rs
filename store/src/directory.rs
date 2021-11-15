@@ -92,6 +92,10 @@ pub struct DirectoryStoreFilterType {
     lts: Vec<(String, i64)>,
 }
 
+fn format_xattr(key: &str) -> String {
+    format!("user.{}", key)
+}
+
 #[async_trait]
 impl<V, MKT> FilterType<V, MKT> for DirectoryStoreFilterType
 where
@@ -141,7 +145,7 @@ where
             }
             for neq in &self.neqs {
                 let (key, expected) = neq;
-                match xattr::get(path.clone(), key) {
+                match xattr::get(path.clone(), format_xattr(key)) {
                     Ok(Some(v)) => {
                         let matching = expected.iter().zip(&v).filter(|&(a, b)| a == b).count();
                         if expected.len() != matching {
@@ -159,7 +163,7 @@ where
             }
             for lt in &self.lts {
                 let (key, max) = lt;
-                match xattr::get(path.clone(), key) {
+                match xattr::get(path.clone(), format_xattr(key)) {
                     Ok(Some(v)) => {
                         let value = i64::from_le_bytes(v.try_into().unwrap());
                         if *max > value {
@@ -200,8 +204,6 @@ where
     }
 }
 
-const XATTR_NAME_TTL: &str = "user.store_ttl";
-
 #[async_trait]
 impl<OT, K, V, MKT> Store<OT, K, V, MKT> for DirectoryStore<K, V>
 where
@@ -224,7 +226,7 @@ where
             }
             Ok(f) => f,
         };
-        match file.get_xattr(XATTR_NAME_TTL) {
+        match file.get_xattr(format_xattr(crate::MetadataKey::<MKT>::Ttl.to_key())) {
             Ok(Some(ttl)) => {
                 let ttl = ttl_from_disk(&ttl)?;
                 if SystemTime::now() > ttl {
@@ -270,7 +272,10 @@ where
         };
 
         Ok(file
-            .set_xattr(metadata_key.to_key(), &metadata_value.to_stored()?)
+            .set_xattr(
+                format_xattr(metadata_key.to_key()),
+                &metadata_value.to_stored()?,
+            )
             .map_err(|e| {
                 StoreError::Unspecified(format!(
                     "Error creating xattr on {}: {:?}",
@@ -299,13 +304,15 @@ where
             Ok(f) => f,
         };
 
-        Ok(file.remove_xattr(metadata_key.to_key()).map_err(|e| {
-            StoreError::Unspecified(format!(
-                "Error removing xattr on {}: {:?}",
-                path.display(),
-                e
-            ))
-        })?)
+        Ok(file
+            .remove_xattr(format_xattr(metadata_key.to_key()))
+            .map_err(|e| {
+                StoreError::Unspecified(format!(
+                    "Error removing xattr on {}: {:?}",
+                    path.display(),
+                    e
+                ))
+            })?)
     }
 
     async fn query_data(&self) -> crate::QueryResult<V, MKT> {
@@ -388,7 +395,8 @@ where
                 Ok(v) if v.is_file() => {}
                 Ok(_) => continue,
             }
-            let ttl = match xattr::get(&path, XATTR_NAME_TTL) {
+            let ttl = match xattr::get(&path, format_xattr(crate::MetadataKey::<MKT>::Ttl.to_key()))
+            {
                 Err(e) => {
                     log::trace!("Error looking up TTL xattr for {}: {:?}", path.display(), e);
                     continue;

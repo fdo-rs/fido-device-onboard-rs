@@ -78,7 +78,7 @@ pub enum MetadataKey<T: MetadataLocalKey> {
 impl<T: MetadataLocalKey> MetadataKey<T> {
     fn to_key(&self) -> &str {
         match self {
-            MetadataKey::Ttl => "user.store_ttl",
+            MetadataKey::Ttl => "store_ttl",
             MetadataKey::Local(k) => k.to_key(),
         }
     }
