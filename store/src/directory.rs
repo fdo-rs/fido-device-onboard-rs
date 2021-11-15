@@ -175,6 +175,7 @@ where
         Ok(Some(ValueIter {
             index: 0,
             values: results,
+            errored: false,
         }))
     }
 }

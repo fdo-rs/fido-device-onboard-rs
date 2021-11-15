@@ -103,6 +103,7 @@ where
 pub struct ValueIter<V: Clone> {
     values: Vec<V>,
     index: usize,
+    errored: bool,
 }
 
 impl<V> Iterator for ValueIter<V>
@@ -112,19 +113,26 @@ where
     type Item = V;
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.errored {
+            log::warn!("Previous entry validation failed");
+            return None;
+        }
         if self.index >= self.values.len() {
             return None;
         }
 
         let entry = self.values.get(self.index);
-        if let Some(e) = entry {
-            self.index += 1;
-            return Some(e.clone());
-        } else {
-            log::warn!("Error getting next entry");
+        match entry {
+            Some(e) => {
+                self.index += 1;
+                Some(e.clone())
+            }
+            None => {
+                log::warn!("Error getting next entry");
+                self.errored = true;
+                None
+            }
         }
-
-        None
     }
 }
 
