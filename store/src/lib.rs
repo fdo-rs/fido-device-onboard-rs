@@ -84,11 +84,9 @@ pub trait Store<OT: StoreOpenMode, K, V>: Send + Sync {
 
 #[cfg(feature = "directory")]
 mod directory;
-mod in_memory;
 
 #[derive(Debug, Deserialize)]
 pub enum StoreDriver {
-    InMemory,
     #[cfg(feature = "directory")]
     Directory,
 }
@@ -105,7 +103,6 @@ impl StoreDriver {
         V: Send + Sync + Clone + Serializable + 'static,
     {
         match self {
-            StoreDriver::InMemory => in_memory::initialize(cfg),
             #[cfg(feature = "directory")]
             StoreDriver::Directory => directory::initialize(cfg),
         }
