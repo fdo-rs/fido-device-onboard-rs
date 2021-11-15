@@ -51,14 +51,8 @@ jobs:
 
   build_and_test:
     runs-on: ubuntu-latest
-    container: fedora:latest
     steps:
-      - name: Install deps
-        run: |
-          dnf install -y make gcc openssl openssl-devel findutils golang git
-
       - uses: actions/checkout@v2
-
       - name: Cache
         uses: actions/cache@v2
         with:
@@ -69,21 +63,14 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-
       - name: Build
         uses: actions-rs/cargo@v1
         with:
           command: build
-
       - name: Run tests
         uses: actions-rs/cargo@v1
         with:
           command: test
-
       # This is primarily to ensure that changes to fdo_data.h are committed,
       # which is critical for determining whether any stability changes were made
       # during the PR review.

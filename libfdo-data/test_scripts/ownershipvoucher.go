@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 )
 
@@ -14,7 +15,7 @@ func main() {
 		fmt.Printf("Usage: %s <ownershipvoucher.bin>\n", os.Args[0])
 		os.Exit(1)
 	}
-	ctsB, err := os.ReadFile(os.Args[1])
+	ctsB, err := ioutil.ReadFile(os.Args[1])
 	if err != nil {
 		panic(err)
 	}

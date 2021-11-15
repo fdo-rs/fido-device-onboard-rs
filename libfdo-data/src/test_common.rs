@@ -34,6 +34,28 @@ pub fn run_external(script: &str, args: &[&str]) -> Output {
         .join("test_scripts")
         .join(format!("{}.go", script));
 
+    match std::fs::remove_file(format!(
+        "{}/../target/debug/libfdo_data.so.{}",
+        std::env::var("CARGO_MANIFEST_DIR").unwrap(),
+        std::env::var("CARGO_PKG_VERSION_MAJOR").unwrap()
+    )) {
+        Ok(_) => (),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
+        Err(e) => panic!("Failed to remove libfdo_data.so symlink {:?}", e),
+    }
+    std::os::unix::fs::symlink(
+        format!(
+            "{}/../target/debug/libfdo_data.so",
+            std::env::var("CARGO_MANIFEST_DIR").unwrap()
+        ),
+        format!(
+            "{}/../target/debug/libfdo_data.so.{}",
+            std::env::var("CARGO_MANIFEST_DIR").unwrap(),
+            std::env::var("CARGO_PKG_VERSION_MAJOR").unwrap()
+        ),
+    )
+    .unwrap();
+
     let result = Command::new("go")
         .arg("run")
         .arg(script_path)
