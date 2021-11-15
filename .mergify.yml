@@ -1,6 +1,5 @@
 queue_rules:
 - name: fido-device-onboard-rs
-  batch_size: 5
   conditions:
     - base=main
     - "#approved-reviews-by>=1"
