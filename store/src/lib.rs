@@ -61,7 +61,7 @@ impl MetadataValue for chrono::Duration {
     }
     fn to_text(&self) -> String {
         let ttl = chrono::Local::now() + *self;
-        ttl.format("%Y-%m-%d %H:%M:%S").to_string()
+        ttl.timestamp().to_string()
     }
 }
 
@@ -89,8 +89,7 @@ where
     V: Clone,
     MKT: MetadataLocalKey,
 {
-    fn eq(&mut self, key: &MetadataKey<MKT>, expected: &dyn MetadataValue);
-    fn or(&mut self);
+    fn neq(&mut self, key: &MetadataKey<MKT>, expected: &dyn MetadataValue);
     fn lt(&mut self, key: &MetadataKey<MKT>, max: i64);
     fn query<'life0, 'async_trait>(
         &'life0 self,
@@ -160,6 +159,18 @@ pub trait Store<OT: StoreOpenMode, K, V, MKT: MetadataLocalKey>: Send + Sync {
         'life1: 'async_trait,
         'life2: 'async_trait,
         'life3: 'async_trait,
+        Self: 'async_trait,
+        OT: Writable;
+
+    fn destroy_metadata<'life0, 'life1, 'life2, 'async_trait>(
+        &'life0 self,
+        key: &'life1 K,
+        metadata_key: &'life2 MetadataKey<MKT>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), StoreError>> + 'async_trait + Send>>
+    where
+        'life0: 'async_trait,
+        'life1: 'async_trait,
+        'life2: 'async_trait,
         Self: 'async_trait,
         OT: Writable;
 

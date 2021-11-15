@@ -88,7 +88,8 @@ fn ttl_from_disk(ttl: &[u8]) -> Result<SystemTime, StoreError> {
 
 pub struct DirectoryStoreFilterType {
     directory: PathBuf,
-    eqs: Vec<(String, Vec<u8>)>,
+    neqs: Vec<(String, Vec<u8>)>,
+    lts: Vec<(String, i64)>,
 }
 
 #[async_trait]
@@ -97,15 +98,12 @@ where
     V: Serializable + Send + Sync + Clone + 'static,
     MKT: MetadataLocalKey,
 {
-    fn eq(&mut self, key: &crate::MetadataKey<MKT>, expected: &dyn MetadataValue) {
-        self.eqs
+    fn neq(&mut self, key: &crate::MetadataKey<MKT>, expected: &dyn MetadataValue) {
+        self.neqs
             .push((key.to_key().to_owned(), expected.to_stored().unwrap()));
     }
-    fn or(&mut self) {
-        todo!()
-    }
-    fn lt(&mut self, _: &crate::MetadataKey<MKT>, _: i64) {
-        todo!()
+    fn lt(&mut self, key: &crate::MetadataKey<MKT>, max: i64) {
+        self.lts.push((key.to_key().to_owned(), max));
     }
     async fn query(&self) -> Result<Option<ValueIter<V>>, StoreError> {
         let dir_entries = match fs::read_dir(&self.directory) {
@@ -141,27 +139,31 @@ where
                 Ok(v) if v.is_file() => {}
                 Ok(_) => continue,
             }
-            let file = match File::open(&path) {
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-                Err(e) => {
-                    log::trace!("Error opening file {}", e.to_string());
-                    continue;
-                }
-                Ok(f) => f,
-            };
-            // TODO(runcom): implement "or" and "lt"
-            for eq in &self.eqs {
-                let (key, expected) = eq;
-                match file.get_xattr(key) {
+            for neq in &self.neqs {
+                let (key, expected) = neq;
+                match xattr::get(path.clone(), key) {
                     Ok(Some(v)) => {
                         let matching = expected.iter().zip(&v).filter(|&(a, b)| a == b).count();
-                        if expected.len() == matching {
-                            results.push(V::deserialize_from_reader(&file).map_err(|e| {
-                                StoreError::Unspecified(format!(
-                                    "Error deserializing value: {:?}",
-                                    e
-                                ))
-                            })?)
+                        if expected.len() != matching {
+                            results.push(path.clone());
+                        }
+                    }
+                    Ok(None) => {
+                        results.push(path.clone());
+                    }
+                    Err(e) => {
+                        log::trace!("Error checking {}: {}", key, e.to_string());
+                        continue;
+                    }
+                }
+            }
+            for lt in &self.lts {
+                let (key, max) = lt;
+                match xattr::get(path.clone(), key) {
+                    Ok(Some(v)) => {
+                        let value = i64::from_le_bytes(v.try_into().unwrap());
+                        if *max > value {
+                            results.push(path.clone());
                         }
                     }
                     Ok(None) => {}
@@ -172,9 +174,27 @@ where
                 }
             }
         }
+        let mut values = Vec::new();
+        for r in results {
+            println!("{:?}", r);
+            let file = match File::open(&r) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(e) => {
+                    log::trace!("Error opening file {}", e.to_string());
+                    continue;
+                }
+                Ok(f) => f,
+            };
+            let val = V::deserialize_from_reader(&file);
+            if let Ok(v) = val {
+                values.push(v)
+            } else {
+                log::trace!("Error deserializing data {:?}", r);
+            }
+        }
         Ok(Some(ValueIter {
             index: 0,
-            values: results,
+            values: values,
             errored: false,
         }))
     }
@@ -260,10 +280,39 @@ where
             })?)
     }
 
+    async fn destroy_metadata(
+        &self,
+        key: &K,
+        metadata_key: &crate::MetadataKey<MKT>,
+    ) -> Result<(), StoreError> {
+        let path = self.get_path(key);
+        log::trace!("Attempting to load data from {}", path.display());
+
+        let file = match File::open(&path) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => {
+                return Err(StoreError::Unspecified(format!(
+                    "Error opening file: {}",
+                    e.to_string()
+                )))
+            }
+            Ok(f) => f,
+        };
+
+        Ok(file.remove_xattr(metadata_key.to_key()).map_err(|e| {
+            StoreError::Unspecified(format!(
+                "Error removing xattr on {}: {:?}",
+                path.display(),
+                e
+            ))
+        })?)
+    }
+
     async fn query_data(&self) -> Result<Box<dyn crate::FilterType<V, MKT>>, StoreError> {
         Ok(Box::new(DirectoryStoreFilterType {
             directory: self.directory.clone(),
-            eqs: Vec::new(),
+            neqs: Vec::new(),
+            lts: Vec::new(),
         }))
     }
 
