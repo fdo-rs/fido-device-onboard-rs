@@ -13,3 +13,4 @@ glob = "0.3.0"
 log = "0.4"
 
 fdo-data-formats = { path = "../data-formats", version = "0.1.0" }
+fdo-store = { path = "../store", version = "0.1.0" }

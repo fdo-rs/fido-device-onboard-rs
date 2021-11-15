@@ -15,6 +15,7 @@ serde = "1"
 openssl = "0.10"
 warp = "0.3"
 log = "0.4"
+chrono = "0.4"
 
 fdo-data-formats = { path = "../data-formats", version = "0.1.0" }
 fdo-http-wrapper = { path = "../http-wrapper", version = "0.1.0", features = ["server"] }
