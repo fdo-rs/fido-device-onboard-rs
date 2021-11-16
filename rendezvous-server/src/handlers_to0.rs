@@ -193,12 +193,22 @@ pub(super) async fn ownersign(
     user_data
         .store
         .store_data(
-            device_guid,
-            Some(ttl),
+            device_guid.clone(),
             StoredItem {
                 public_key: device_pubkey,
                 to1d: msg.to1d().clone(),
             },
+        )
+        .await
+        .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
+
+    user_data
+        .store
+        .store_metadata(
+            &device_guid,
+            &fdo_store::MetadataKey::Ttl,
+            &chrono::Duration::from_std(ttl)
+                .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?,
         )
         .await
         .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;

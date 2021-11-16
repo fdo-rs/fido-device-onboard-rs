@@ -14,6 +14,8 @@ use fdo_data_formats::{
 use fdo_http_wrapper::server::Error;
 use fdo_http_wrapper::server::SessionWithStore;
 use fdo_http_wrapper::EncryptionKeys;
+use fdo_store::MetadataKey;
+use fdo_util::servers::OwnershipVoucherStoreMetadataKey;
 
 use crate::serviceinfo::perform_service_info;
 
@@ -449,7 +451,7 @@ pub(super) async fn device_service_info(
 }
 
 pub(super) async fn done(
-    _user_data: super::OwnerServiceUDT,
+    user_data: super::OwnerServiceUDT,
     mut ses_with_store: SessionWithStore,
     msg: messages::to2::Done,
 ) -> Result<(messages::to2::Done2, SessionWithStore), warp::Rejection> {
@@ -513,6 +515,12 @@ pub(super) async fn done(
     };
     ses_with_store.session.remove("nonce7");
     ses_with_store.session.destroy();
+
+    user_data.ownership_voucher_store.store_metadata(
+        &device_guid,
+        &MetadataKey::Local(OwnershipVoucherStoreMetadataKey::To2Performed),
+        &true,
+    );
 
     Ok((messages::to2::Done2::new(nonce7), ses_with_store))
 }

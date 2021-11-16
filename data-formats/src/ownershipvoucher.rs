@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use openssl::pkey::{PKeyRef, Private};
 use serde::Deserialize;
 use serde_tuple::Serialize_tuple;
@@ -10,6 +12,9 @@ use crate::{
     types::{COSESign, Guid, HMac, Hash, RendezvousInfo, UnverifiedValue},
     Error, Serializable,
 };
+
+const VOUCHER_PEM_TAG: &str = "OWNERSHIP VOUCHER";
+const ACCEPTABLE_ASCII_RANGE: Range<u8> = 32..127;
 
 #[derive(Debug)]
 enum OwnershipVoucherIndex {
@@ -54,8 +59,6 @@ impl Serializable for OwnershipVoucher {
         self.contents.serialize_data()
     }
 }
-
-const VOUCHER_PEM_TAG: &str = "OWNERSHIP VOUCHER";
 
 impl OwnershipVoucher {
     pub fn from_parts(
@@ -355,6 +358,7 @@ impl OwnershipVoucherHeader {
         manufacturer_public_key: PublicKey,
         device_certificate_chain_hash: Option<Hash>,
     ) -> Result<Self> {
+        let device_info = device_info.trim().to_string();
         let mut contents = unsafe { ParsedArray::new() };
         contents.set(
             OwnershipVoucherHeaderIndex::ProtocolVersion as usize,
@@ -441,6 +445,30 @@ impl OwnershipVoucherHeader {
     }
 }
 
+fn check_device_info(device_info: &str) -> Result<()> {
+    let mut chars = device_info.chars();
+    let are_all_chars_supported_ascii = chars.all(|f| ACCEPTABLE_ASCII_RANGE.contains(&(f as u8)));
+    if are_all_chars_supported_ascii {
+        Ok(())
+    } else {
+        Err(Error::InconsistentValue("Invalid values in Device Info"))
+    }
+}
+
+#[test]
+fn test_check_device_info_unsupported_characters() {
+    let device_info: String = "FDO\n".to_string();
+    let is_device_info_valid = check_device_info(&device_info);
+    assert!(is_device_info_valid.is_err());
+}
+
+#[test]
+fn test_check_device_info_supported_characters() {
+    let device_info: String = "FDO".to_string();
+    let is_device_info_valid = check_device_info(&device_info);
+    assert_eq!((), is_device_info_valid.unwrap());
+}
+
 impl Serializable for OwnershipVoucherHeader {
     fn deserialize_data(data: &[u8]) -> Result<Self> {
         let contents = ParsedArray::deserialize_data(data)?;
@@ -450,7 +478,9 @@ impl Serializable for OwnershipVoucherHeader {
         let cached_guid = contents.get(OwnershipVoucherHeaderIndex::Guid as usize)?;
         let cached_rendezvous_info =
             contents.get(OwnershipVoucherHeaderIndex::RendezvousInfo as usize)?;
-        let cached_device_info = contents.get(OwnershipVoucherHeaderIndex::DeviceInfo as usize)?;
+        let cached_device_info: String =
+            contents.get(OwnershipVoucherHeaderIndex::DeviceInfo as usize)?;
+        check_device_info(&cached_device_info)?;
         let cached_manufacturer_public_key =
             contents.get(OwnershipVoucherHeaderIndex::ManufacturerPublicKey as usize)?;
         let cached_device_certificate_chain_hash =
@@ -469,6 +499,7 @@ impl Serializable for OwnershipVoucherHeader {
     }
 
     fn serialize_data(&self) -> Result<Vec<u8>> {
+        check_device_info(&self.cached_device_info)?;
         self.contents.serialize_data()
     }
 }

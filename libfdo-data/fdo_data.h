@@ -12,6 +12,10 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#define FDO_DATA_MAJOR 0
+#define FDO_DATA_MINOR 1
+#define FDO_DATA_PATCH 0
+
 typedef struct FdoOwnershipVoucher FdoOwnershipVoucher;
 
 /**

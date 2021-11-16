@@ -241,7 +241,7 @@ pub(crate) async fn set_hmac(
     // Write Ownership Voucher out to the store
     user_data
         .ownership_voucher_store
-        .store_data(device_guid, None, ov)
+        .store_data(device_guid, ov)
         .await
         .map_err(Error::from_error::<messages::di::SetHMAC, _>)?;
 
