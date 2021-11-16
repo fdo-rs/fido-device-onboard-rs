@@ -9,16 +9,19 @@ use xattr::FileExt;
 
 use fdo_data_formats::Serializable;
 
+use crate::{FilterType, MetadataLocalKey, MetadataValue, ValueIter};
+
 use super::Store;
 use super::StoreError;
 
-pub(super) fn initialize<OT, K, V>(
+pub(super) fn initialize<OT, K, V, MKT>(
     cfg: Option<config::Value>,
-) -> Result<Box<dyn Store<OT, K, V>>, StoreError>
+) -> Result<Box<dyn Store<OT, K, V, MKT>>, StoreError>
 where
     OT: crate::StoreOpenMode,
     K: std::str::FromStr + std::string::ToString + Send + Sync + 'static,
     V: Serializable + Send + Sync + Clone + 'static,
+    MKT: crate::MetadataLocalKey + 'static,
 {
     let directory: String = match cfg {
         None => {
@@ -70,6 +73,7 @@ where
     }
 }
 
+// TODO(runcom): fix this to use chrono::Duration and time
 fn ttl_from_disk(ttl: &[u8]) -> Result<SystemTime, StoreError> {
     if ttl.len() != 8 {
         return Err(StoreError::Unspecified(format!(
@@ -82,22 +86,131 @@ fn ttl_from_disk(ttl: &[u8]) -> Result<SystemTime, StoreError> {
     Ok(SystemTime::UNIX_EPOCH + ttl)
 }
 
-fn ttl_to_disk(ttl: SystemTime) -> Result<Vec<u8>, StoreError> {
-    let ttl = ttl.duration_since(SystemTime::UNIX_EPOCH).map_err(|e| {
-        StoreError::Unspecified(format!("Error determining time from epoch to TTL: {:?}", e))
-    })?;
-    let ttl = ttl.as_secs();
-    Ok(u64::to_le_bytes(ttl).into())
+pub struct DirectoryStoreFilterType {
+    directory: PathBuf,
+    neqs: Vec<(String, Vec<u8>)>,
+    lts: Vec<(String, i64)>,
 }
 
-const XATTR_NAME_TTL: &str = "user.store_ttl";
+fn format_xattr(key: &str) -> String {
+    format!("user.{}", key)
+}
 
 #[async_trait]
-impl<OT, K, V> Store<OT, K, V> for DirectoryStore<K, V>
+impl<V, MKT> FilterType<V, MKT> for DirectoryStoreFilterType
+where
+    V: Serializable + Send + Sync + Clone + 'static,
+    MKT: MetadataLocalKey,
+{
+    fn neq(&mut self, key: &crate::MetadataKey<MKT>, expected: &dyn MetadataValue) {
+        self.neqs
+            .push((key.to_key().to_owned(), expected.to_stored().unwrap()));
+    }
+    fn lt(&mut self, key: &crate::MetadataKey<MKT>, max: i64) {
+        self.lts.push((key.to_key().to_owned(), max));
+    }
+    async fn query(&self) -> Result<crate::FilterQueryResult<V>, StoreError> {
+        let dir_entries = match fs::read_dir(&self.directory) {
+            Err(e) => {
+                log::trace!(
+                    "Error during maintenance: unable to list directory {}: {:?}",
+                    &self.directory.display(),
+                    e
+                );
+                return Ok(None);
+            }
+            Ok(v) => v,
+        };
+        let mut results = Vec::new();
+        for entry in dir_entries {
+            let entry = match entry {
+                Ok(v) => v,
+                Err(e) => {
+                    log::trace!("Error during maintenance: unable to process entry: {:?}", e);
+                    continue;
+                }
+            };
+            let path = entry.path();
+            match entry.file_type() {
+                Err(e) => {
+                    log::trace!(
+                        "Error during maintenance: Unable to determine file type of {}: {:?}",
+                        path.display(),
+                        e
+                    );
+                    continue;
+                }
+                Ok(v) if v.is_file() => {}
+                Ok(_) => continue,
+            }
+            for neq in &self.neqs {
+                let (key, expected) = neq;
+                match xattr::get(path.clone(), format_xattr(key)) {
+                    Ok(Some(v)) => {
+                        let matching = expected.iter().zip(&v).filter(|&(a, b)| a == b).count();
+                        if expected.len() != matching {
+                            results.push(path.clone());
+                        }
+                    }
+                    Ok(None) => {
+                        results.push(path.clone());
+                    }
+                    Err(e) => {
+                        log::trace!("Error checking {}: {}", key, e.to_string());
+                        continue;
+                    }
+                }
+            }
+            for lt in &self.lts {
+                let (key, max) = lt;
+                match xattr::get(path.clone(), format_xattr(key)) {
+                    Ok(Some(v)) => {
+                        let value = i64::from_le_bytes(v.try_into().unwrap());
+                        if *max > value {
+                            results.push(path.clone());
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        log::trace!("Error checking {}: {}", key, e.to_string());
+                        continue;
+                    }
+                }
+            }
+        }
+        let mut values = Vec::new();
+        for r in results {
+            println!("{:?}", r);
+            let file = match File::open(&r) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(e) => {
+                    log::trace!("Error opening file {}", e.to_string());
+                    continue;
+                }
+                Ok(f) => f,
+            };
+            let val = V::deserialize_from_reader(&file);
+            if let Ok(v) = val {
+                values.push(v)
+            } else {
+                log::trace!("Error deserializing data {:?}", r);
+            }
+        }
+        Ok(Some(ValueIter {
+            index: 0,
+            values,
+            errored: false,
+        }))
+    }
+}
+
+#[async_trait]
+impl<OT, K, V, MKT> Store<OT, K, V, MKT> for DirectoryStore<K, V>
 where
     OT: crate::StoreOpenMode,
     K: std::str::FromStr + std::string::ToString + Send + Sync + 'static,
     V: Serializable + Send + Sync + Clone + 'static,
+    MKT: crate::MetadataLocalKey + 'static,
 {
     async fn load_data(&self, key: &K) -> Result<Option<V>, StoreError> {
         let path = self.get_path(key);
@@ -113,7 +226,7 @@ where
             }
             Ok(f) => f,
         };
-        match file.get_xattr(XATTR_NAME_TTL) {
+        match file.get_xattr(format_xattr(crate::MetadataKey::<MKT>::Ttl.to_key())) {
             Ok(Some(ttl)) => {
                 let ttl = ttl_from_disk(&ttl)?;
                 if SystemTime::now() > ttl {
@@ -138,7 +251,79 @@ where
         })?))
     }
 
-    async fn store_data(&self, key: K, ttl: Option<Duration>, value: V) -> Result<(), StoreError> {
+    async fn store_metadata(
+        &self,
+        key: &K,
+        metadata_key: &crate::MetadataKey<MKT>,
+        metadata_value: &dyn MetadataValue,
+    ) -> Result<(), StoreError> {
+        let path = self.get_path(key);
+        log::trace!("Attempting to load data from {}", path.display());
+
+        let file = match File::open(&path) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => {
+                return Err(StoreError::Unspecified(format!(
+                    "Error opening file: {}",
+                    e.to_string()
+                )))
+            }
+            Ok(f) => f,
+        };
+
+        Ok(file
+            .set_xattr(
+                format_xattr(metadata_key.to_key()),
+                &metadata_value.to_stored()?,
+            )
+            .map_err(|e| {
+                StoreError::Unspecified(format!(
+                    "Error creating xattr on {}: {:?}",
+                    path.display(),
+                    e
+                ))
+            })?)
+    }
+
+    async fn destroy_metadata(
+        &self,
+        key: &K,
+        metadata_key: &crate::MetadataKey<MKT>,
+    ) -> Result<(), StoreError> {
+        let path = self.get_path(key);
+        log::trace!("Attempting to load data from {}", path.display());
+
+        let file = match File::open(&path) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => {
+                return Err(StoreError::Unspecified(format!(
+                    "Error opening file: {}",
+                    e.to_string()
+                )))
+            }
+            Ok(f) => f,
+        };
+
+        Ok(file
+            .remove_xattr(format_xattr(metadata_key.to_key()))
+            .map_err(|e| {
+                StoreError::Unspecified(format!(
+                    "Error removing xattr on {}: {:?}",
+                    path.display(),
+                    e
+                ))
+            })?)
+    }
+
+    async fn query_data(&self) -> crate::QueryResult<V, MKT> {
+        Ok(Box::new(DirectoryStoreFilterType {
+            directory: self.directory.clone(),
+            neqs: Vec::new(),
+            lts: Vec::new(),
+        }))
+    }
+
+    async fn store_data(&self, key: K, value: V) -> Result<(), StoreError> {
         let finalpath = self.get_path(&key);
         let mut path = finalpath.clone();
         path.set_file_name(format!(
@@ -151,23 +336,9 @@ where
             path.display()
         );
 
-        let ttl = match ttl {
-            None => None,
-            Some(ttl) => Some(ttl_to_disk(SystemTime::now() + ttl)?),
-        };
-
         let file = File::create(&path).map_err(|e| {
             StoreError::Unspecified(format!("Error creating file {}: {:?}", path.display(), e))
         })?;
-        if let Some(ttl) = ttl {
-            file.set_xattr(XATTR_NAME_TTL, &ttl).map_err(|e| {
-                StoreError::Unspecified(format!(
-                    "Error creating xattr on {}: {:?}",
-                    path.display(),
-                    e
-                ))
-            })?;
-        }
         value.serialize_to_writer(&file).map_err(|e| {
             StoreError::Unspecified(format!("Error writing file {}: {:?}", path.display(), e))
         })?;
@@ -224,7 +395,8 @@ where
                 Ok(v) if v.is_file() => {}
                 Ok(_) => continue,
             }
-            let ttl = match xattr::get(&path, XATTR_NAME_TTL) {
+            let ttl = match xattr::get(&path, format_xattr(crate::MetadataKey::<MKT>::Ttl.to_key()))
+            {
                 Err(e) => {
                     log::trace!("Error looking up TTL xattr for {}: {:?}", path.display(), e);
                     continue;

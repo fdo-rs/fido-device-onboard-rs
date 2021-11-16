@@ -7,7 +7,7 @@ use fdo_data_formats::{
     constants::{ErrorCode, MessageType},
     messages::{self, ClientMessage, EncryptionRequirement, Message, ServerMessage},
 };
-use fdo_store::Store;
+use fdo_store::{MetadataLocalKey, Store};
 
 use thiserror::Error;
 use warp::{Filter, Rejection};
@@ -20,15 +20,28 @@ pub struct SessionWithStore {
 
 type SessionStoreT = Arc<SessionStore>;
 
+#[non_exhaustive]
+pub enum SessionStoreMetadataKey {}
+
+impl MetadataLocalKey for SessionStoreMetadataKey {
+    fn to_key(&self) -> &'static str {
+        todo!()
+    }
+}
+
 pub struct SessionStore {
-    store: Box<dyn Store<fdo_store::ReadWriteOpen, String, Session>>,
+    store: Box<dyn Store<fdo_store::ReadWriteOpen, String, Session, SessionStoreMetadataKey>>,
 }
 
 impl SessionStore {
-    pub fn new(store: Box<dyn Store<fdo_store::ReadWriteOpen, String, Session>>) -> Arc<Self> {
+    pub fn new(
+        store: Box<dyn Store<fdo_store::ReadWriteOpen, String, Session, SessionStoreMetadataKey>>,
+    ) -> Arc<Self> {
         Arc::new(SessionStore { store })
     }
 }
+
+const SESSION_TTL_SECS: u64 = 600;
 
 impl SessionStore {
     async fn load_session(&self, token: String) -> Result<Option<Session>, SessionError> {
@@ -39,10 +52,15 @@ impl SessionStore {
 
     async fn store_session(&self, session: Session) -> Result<Option<String>, SessionError> {
         self.store
-            .store_data(
-                session.id().to_string(),
-                Some(Duration::from_secs(600)),
-                session.clone(),
+            .store_data(session.id().to_string(), session.clone())
+            .await?;
+        self.store
+            .store_metadata(
+                &session.id().to_string(),
+                &fdo_store::MetadataKey::Ttl,
+                &chrono::Duration::from_std(Duration::from_secs(SESSION_TTL_SECS)).map_err(
+                    |_| SessionError::Unspecified("Couldn't convert duration".to_string()),
+                )?,
             )
             .await?;
         session.reset_data_changed();

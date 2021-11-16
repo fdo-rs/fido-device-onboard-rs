@@ -22,7 +22,7 @@ use fdo_data_formats::{
     enhanced_types::X5Bag, ownershipvoucher::OwnershipVoucher, publickey::PublicKey, types::Guid,
 };
 use fdo_store::{Store, StoreDriver};
-use fdo_util::servers::settings_for;
+use fdo_util::servers::{settings_for, OwnershipVoucherStoreMetadataKey};
 
 mod handlers;
 mod serviceinfo;
@@ -33,7 +33,14 @@ struct OwnerServiceUD {
     trusted_device_keys: X5Bag,
 
     // Stores
-    ownership_voucher_store: Box<dyn Store<fdo_store::ReadWriteOpen, Guid, OwnershipVoucher>>,
+    ownership_voucher_store: Box<
+        dyn Store<
+            fdo_store::ReadWriteOpen,
+            Guid,
+            OwnershipVoucher,
+            OwnershipVoucherStoreMetadataKey,
+        >,
+    >,
     session_store: Arc<fdo_http_wrapper::server::SessionStore>,
 
     // Our keys
