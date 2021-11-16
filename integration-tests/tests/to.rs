@@ -148,10 +148,26 @@ async fn test_to() -> Result<()> {
         .join("ownership_vouchers")
         .join(&device_guid);
     L.l(format!(
-        "Copying Ownership Voucher {:?} -> {:?}",
+        "Converting Ownership Voucher {:?}(pem) -> {:?}(cose)",
         ov_path, ov_to
     ));
-    fs::copy(&ov_path, &ov_to).context("Error copying ownership voucher")?;
+
+    let dump_output = ctx
+        .run_owner_tool(
+            &key_path,
+            &[
+                "dump-ownership-voucher",
+                ov_path.to_str().unwrap(),
+                "--outform",
+                "cose",
+            ],
+        )
+        .context("Error running dump-ownership-voucher")?;
+    dump_output
+        .expect_success()
+        .context("dump-ownership-voucher failed")?;
+    fs::write(ov_to, dump_output.raw_stdout())
+        .context("Error writing ownership voucher to disk")?;
 
     let ssh_authorized_keys_path = ctx.testpath().join("authorized_keys");
     let marker_file_path = ctx.testpath().join("marker");

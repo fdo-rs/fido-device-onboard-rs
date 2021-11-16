@@ -553,7 +553,8 @@ pub struct TestClientResult {
     client_number: TestBinaryNumber,
     client_path: PathBuf,
     status: ExitStatus,
-    stdout: Vec<String>,
+    raw_stdout: Vec<u8>,
+    stdout: Option<Vec<String>>,
     stderr: Vec<String>,
 }
 
@@ -569,11 +570,11 @@ impl TestClientResult {
             exit_status.success()
         ));
 
-        let stdout: Vec<String> = fs::read_to_string(client_path.join("stdout"))
-            .context("Error reading client stdout")?
-            .split('\n')
-            .map(String::from)
-            .collect();
+        let raw_stdout = fs::read(&client_path.join("stdout")).context("Error reading stdout")?;
+        let stdout = String::from_utf8(raw_stdout.clone())
+            .ok()
+            .map(|s| s.lines().map(|s| s.to_string()).collect());
+
         let stderr: Vec<String> = fs::read_to_string(client_path.join("stderr"))
             .context("Error reading client stderr")?
             .split('\n')
@@ -582,8 +583,12 @@ impl TestClientResult {
 
         L.l(format!("Stdout for client {}:", client_number.name()));
         L.l("=========================================");
-        for line in &stdout {
-            L.l(line);
+        if let Some(stdout) = &stdout {
+            for line in stdout {
+                L.l(line);
+            }
+        } else {
+            L.l(format!("Binary contents: {}", hex::encode(&raw_stdout)));
         }
         L.l("=========================================");
         L.l(format!("Stderr for client {}:", client_number.name()));
@@ -598,6 +603,7 @@ impl TestClientResult {
             client_number,
             client_path,
             status: exit_status,
+            raw_stdout,
             stdout,
             stderr,
         })
@@ -664,21 +670,31 @@ impl TestClientResult {
     }
 
     pub fn expect_stdout_line(&self, line: &str) -> Result<()> {
+        if self.stdout.is_none() {
+            bail!("Can only perform expect on non-binary stdout");
+        }
         L.l(format!(
             "Checking for line {} in {} stdout to occur",
             line,
             self.client_number.name()
         ));
-        self.expect_line(&self.stdout, line)
+        self.expect_line(self.stdout.as_ref().unwrap(), line)
     }
 
     pub fn expect_not_stdout_line(&self, line: &str) -> Result<()> {
+        if self.stdout.is_none() {
+            bail!("Can only perform expect on non-binary stdout");
+        }
         L.l(format!(
             "Checking for line {} in {} stdout to NOT occur",
             line,
             self.client_number.name()
         ));
-        self.expect_not_line(&self.stdout, line)
+        self.expect_not_line(self.stdout.as_ref().unwrap(), line)
+    }
+
+    pub fn raw_stdout(&self) -> &[u8] {
+        &self.raw_stdout
     }
 }
 
