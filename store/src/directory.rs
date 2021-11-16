@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::convert::TryInto;
 use std::fs::{self, File};
 use std::marker::PhantomData;
@@ -121,7 +122,7 @@ where
             }
             Ok(v) => v,
         };
-        let mut results = Vec::new();
+        let mut results: HashSet<PathBuf> = HashSet::new();
         for entry in dir_entries {
             let entry = match entry {
                 Ok(v) => v,
@@ -143,17 +144,18 @@ where
                 Ok(v) if v.is_file() => {}
                 Ok(_) => continue,
             }
+            let mut neqs: HashSet<PathBuf> = HashSet::new();
             for neq in &self.neqs {
                 let (key, expected) = neq;
                 match xattr::get(path.clone(), format_xattr(key)) {
                     Ok(Some(v)) => {
                         let matching = expected.iter().zip(&v).filter(|&(a, b)| a == b).count();
                         if expected.len() != matching {
-                            results.push(path.clone());
+                            neqs.insert(path.clone());
                         }
                     }
                     Ok(None) => {
-                        results.push(path.clone());
+                        neqs.insert(path.clone());
                     }
                     Err(e) => {
                         log::trace!("Error checking {}: {}", key, e.to_string());
@@ -161,19 +163,23 @@ where
                     }
                 }
             }
-            for lt in &self.lts {
-                let (key, max) = lt;
-                match xattr::get(path.clone(), format_xattr(key)) {
-                    Ok(Some(v)) => {
-                        let value = i64::from_le_bytes(v.try_into().unwrap());
-                        if *max > value {
-                            results.push(path.clone());
+            for n in neqs {
+                for lt in &self.lts {
+                    let (key, max) = lt;
+                    match xattr::get(n.clone(), format_xattr(key)) {
+                        Ok(Some(v)) => {
+                            let value = i64::from_le_bytes(v.try_into().unwrap());
+                            if value < *max {
+                                results.insert(n.clone());
+                            }
                         }
-                    }
-                    Ok(None) => {}
-                    Err(e) => {
-                        log::trace!("Error checking {}: {}", key, e.to_string());
-                        continue;
+                        Ok(None) => {
+                            results.insert(n.clone());
+                        }
+                        Err(e) => {
+                            log::trace!("Error checking {}: {}", key, e.to_string());
+                            continue;
+                        }
                     }
                 }
             }
