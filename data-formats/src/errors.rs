@@ -55,4 +55,6 @@ pub enum Error {
     IoError(#[from] std::io::Error),
     #[error("Error parsing hex value: {0}")]
     HexError(#[from] hex::FromHexError),
+    #[error("Error parsing ip address: {0}")]
+    AddrError(#[from] std::net::AddrParseError),
 }

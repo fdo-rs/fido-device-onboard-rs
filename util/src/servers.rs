@@ -9,12 +9,16 @@ use anyhow::{Context, Result};
 #[non_exhaustive]
 pub enum OwnershipVoucherStoreMetadataKey {
     To2Performed,
+    To0AcceptOwnerWaitSeconds,
 }
 
 impl fdo_store::MetadataLocalKey for OwnershipVoucherStoreMetadataKey {
     fn to_key(&self) -> &'static str {
         match self {
             OwnershipVoucherStoreMetadataKey::To2Performed => "fdo.to2_performed",
+            OwnershipVoucherStoreMetadataKey::To0AcceptOwnerWaitSeconds => {
+                "fdo.to0_accept_owner_wait_seconds"
+            }
         }
     }
 }

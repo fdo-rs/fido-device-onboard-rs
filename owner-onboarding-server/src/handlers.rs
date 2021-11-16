@@ -521,6 +521,27 @@ pub(super) async fn done(
         &MetadataKey::Local(OwnershipVoucherStoreMetadataKey::To2Performed),
         &true,
     );
+    user_data.ownership_voucher_store.destroy_metadata(
+        &device_guid,
+        &MetadataKey::Local(OwnershipVoucherStoreMetadataKey::To0AcceptOwnerWaitSeconds),
+    );
 
     Ok((messages::to2::Done2::new(nonce7), ses_with_store))
+}
+
+#[derive(Debug)]
+struct RtrFailure(anyhow::Error);
+impl warp::reject::Reject for RtrFailure {}
+
+pub(crate) async fn report_to_rendezvous_handler(
+    udt: crate::OwnerServiceUDT,
+    enabled: bool,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    if !enabled {
+        return Err(warp::reject::not_found());
+    }
+    crate::report_to_rendezvous(udt)
+        .await
+        .map_err(|e| warp::reject::custom(RtrFailure(e)))?;
+    Ok(warp::reply::Response::new("ok".into()))
 }
