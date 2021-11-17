@@ -1,0 +1,18 @@
+[Unit]
+Description=Manufacturing client DIUN
+DefaultDependencies=false
+
+After=coreos-installer.service
+Before=coreos-installer-reboot.service
+ConditionPathExists=/etc/manufacturing-client-config
+Requires=dev-disk-by\x2dlabel-boot.device
+
+OnFailure=emergency.target
+OnFailureJobMode=replace-irreversibly
+
+[Service]
+Type=oneshot
+Environment=LOG_LEVEL=info
+EnvironmentFile=/etc/manufacturing-client-config
+ExecStart=/usr/libexec/manufacturing-client-service
+RemainAfterExit=yes

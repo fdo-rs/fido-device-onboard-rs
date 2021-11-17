@@ -10,17 +10,18 @@ use openssl::{
     x509::X509,
 };
 use serde::Deserialize;
+use serde_yaml::Value;
 use tokio::signal::unix::{signal, SignalKind};
 use warp::Filter;
 
 use fdo_data_formats::{
-    constants::{KeyStorageType, MfgStringType, PublicKeyType},
+    constants::{KeyStorageType, MfgStringType, PublicKeyType, RendezvousVariable},
     ownershipvoucher::OwnershipVoucher,
     publickey::{PublicKey, X5Chain},
-    types::{Guid, RendezvousInfo},
+    types::{Guid, RendezvousDirective, RendezvousInfo},
 };
 use fdo_store::{Store, StoreDriver};
-use fdo_util::servers::{settings_for, OwnershipVoucherStoreMetadataKey};
+use fdo_util::servers::{settings_for, yaml_to_cbor, OwnershipVoucherStoreMetadataKey};
 
 const PERFORMED_DIUN_SES_KEY: &str = "mfg_global_diun_performed";
 const DEVICE_KEY_FROM_DIUN_SES_KEY: &str = "mfg_global_device_key_from_diun";
@@ -164,6 +165,51 @@ impl TryFrom<DiunSettings> for DiunConfiguration {
     }
 }
 
+fn load_rendezvous_info(path: &str) -> Result<RendezvousInfo> {
+    let contents = match fs::read(path) {
+        Ok(c) => c,
+        // backwards compatibility for tests...
+        Err(_) => return Ok(RendezvousInfo::new(Vec::new())),
+    };
+    let mut info: Vec<RendezvousDirective> = Vec::new();
+
+    let value: Value =
+        serde_yaml::from_slice(&contents).context("Error parsing rendezvous info")?;
+    let value = match value {
+        Value::Sequence(vals) => vals,
+        _ => bail!("Invalid yaml top type"),
+    };
+
+    for val in value {
+        let mut entry = Vec::new();
+
+        let val = match val {
+            Value::Mapping(map) => map,
+            _ => bail!("Invalid entry type"),
+        };
+
+        for (key, val) in val.iter() {
+            let key = match key {
+                Value::String(val) => val,
+                _ => bail!("Invalid key type"),
+            };
+            let key = RendezvousVariable::from_str(key)
+                .with_context(|| format!("Error parsing rendezvous key '{}'", key))?;
+
+            let val = yaml_to_cbor(val)?;
+            let val = key
+                .value_from_human_to_machine(val)
+                .with_context(|| format!("Error parsing value for key '{:?}'", key))?;
+
+            entry.push((key, val));
+        }
+
+        info.push(entry);
+    }
+
+    Ok(RendezvousInfo::new(info))
+}
+
 #[derive(Debug, Deserialize)]
 struct ManufacturingSettings {
     manufacturer_cert_path: String,
@@ -199,7 +245,7 @@ struct Settings {
 
     protocols: ProtocolSetting,
 
-    rendezvous_info: RendezvousInfo,
+    rendezvous_info_path: String,
 
     manufacturing: ManufacturingSettings,
 }
@@ -310,7 +356,8 @@ async fn main() -> Result<()> {
         Some(v) => Some(v.try_into().context("Error parsing DIUN configuration")?),
     };
 
-    let rendezvous_info = settings.rendezvous_info; // .into();
+    let rendezvous_info = load_rendezvous_info(&settings.rendezvous_info_path)
+        .context("Error processing rendezvous info")?;
 
     // Initialize user data
     let user_data = Arc::new(ManufacturingServiceUD {

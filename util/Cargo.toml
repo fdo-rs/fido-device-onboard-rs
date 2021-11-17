@@ -14,3 +14,5 @@ log = "0.4"
 
 fdo-data-formats = { path = "../data-formats", version = "0.1.0" }
 fdo-store = { path = "../store", version = "0.1.0" }
+serde_yaml = "0.8"
+serde_cbor = "0.11"

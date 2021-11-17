@@ -1,0 +1,11 @@
+[Unit]
+Description=FDO owner onboarding server
+After=network-online.target
+
+[Service]
+Environment=LOG_LEVEL=info
+ExecStart=/usr/libexec/fdo/fdo-owner-onboarding-server
+# restart and failure condition
+
+[Install]
+WantedBy=multi-user.target

@@ -2,7 +2,10 @@ use glob::glob;
 use std::env;
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
+
+use serde_cbor::Value as CborValue;
+use serde_yaml::Value;
 
 // TODO(runcom): find a better home for this as it's shared between
 // owner-onboarding-server and manufacturing-server...
@@ -26,9 +29,10 @@ impl fdo_store::MetadataLocalKey for OwnershipVoucherStoreMetadataKey {
 pub fn settings_for(component: &str) -> Result<config::Config> {
     Ok(config::Config::default()
         .merge(
-            config::File::from(Path::new(&format!("/usr/fdo/{}.yml", component))).required(false),
+            config::File::from(Path::new(&format!("/usr/share/fdo/{}.yml", component)))
+                .required(false),
         )
-        .context("Loading configuration file from /usr/fdo")?
+        .context("Loading configuration file from /usr/share/fdo")?
         .merge(
             config::File::from(Path::new(
                 &conf_dir_from_env(&format_conf_env(component))
@@ -69,4 +73,33 @@ fn conf_dir_from_env(key: &str) -> Option<String> {
             Err(_) => None,
         },
     }
+}
+
+pub fn yaml_to_cbor(val: &Value) -> Result<CborValue> {
+    Ok(match val {
+        Value::Null => CborValue::Null,
+        Value::Bool(b) => CborValue::Bool(*b),
+        Value::Number(nr) => {
+            if let Some(nr) = nr.as_u64() {
+                CborValue::Integer(nr as i128)
+            } else if let Some(nr) = nr.as_i64() {
+                CborValue::Integer(nr as i128)
+            } else if let Some(nr) = nr.as_f64() {
+                CborValue::Float(nr)
+            } else {
+                bail!("Invalid number encountered");
+            }
+        }
+        Value::String(str) => CborValue::Text(str.clone()),
+        Value::Sequence(seq) => CborValue::Array(
+            seq.iter()
+                .map(yaml_to_cbor)
+                .collect::<Result<Vec<CborValue>>>()?,
+        ),
+        Value::Mapping(map) => CborValue::Map(
+            map.iter()
+                .map(|(key, val)| (yaml_to_cbor(key).unwrap(), yaml_to_cbor(val).unwrap()))
+                .collect(),
+        ),
+    })
 }

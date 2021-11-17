@@ -1,0 +1,5 @@
+---
+- transport: HTTP
+  port: 8081
+  addresses:
+    - dns_name: fdo.example.com
