@@ -513,18 +513,19 @@ pub(super) async fn done(
             .into())
         }
     };
+
+    user_data
+        .ownership_voucher_store
+        .store_metadata(
+            &device_guid,
+            &MetadataKey::Local(OwnershipVoucherStoreMetadataKey::To2Performed),
+            &true,
+        )
+        .await
+        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?;
+
     ses_with_store.session.remove("nonce7");
     ses_with_store.session.destroy();
-
-    user_data.ownership_voucher_store.store_metadata(
-        &device_guid,
-        &MetadataKey::Local(OwnershipVoucherStoreMetadataKey::To2Performed),
-        &true,
-    );
-    user_data.ownership_voucher_store.destroy_metadata(
-        &device_guid,
-        &MetadataKey::Local(OwnershipVoucherStoreMetadataKey::To0AcceptOwnerWaitSeconds),
-    );
 
     Ok((messages::to2::Done2::new(nonce7), ses_with_store))
 }

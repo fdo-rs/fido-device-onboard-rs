@@ -36,25 +36,26 @@ pub fn run_external(script: &str, args: &[&str]) -> Output {
 
     match std::fs::remove_file(format!(
         "{}/../target/debug/libfdo_data.so.{}",
-        std::env::var("CARGO_MANIFEST_DIR").unwrap(),
+        ROOT_DIR,
         std::env::var("CARGO_PKG_VERSION_MAJOR").unwrap()
     )) {
         Ok(_) => (),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
-        Err(e) => panic!("Failed to remove libfdo_data.so symlink {:?}", e),
+        Err(e) => panic!("Failed to remove libfdo_data.so.0 symlink {:?}", e),
     }
-    std::os::unix::fs::symlink(
-        format!(
-            "{}/../target/debug/libfdo_data.so",
-            std::env::var("CARGO_MANIFEST_DIR").unwrap()
-        ),
+
+    match std::os::unix::fs::symlink(
+        format!("{}/../target/debug/libfdo_data.so", ROOT_DIR),
         format!(
             "{}/../target/debug/libfdo_data.so.{}",
-            std::env::var("CARGO_MANIFEST_DIR").unwrap(),
+            ROOT_DIR,
             std::env::var("CARGO_PKG_VERSION_MAJOR").unwrap()
         ),
-    )
-    .unwrap();
+    ) {
+        Ok(_) => (),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => (),
+        Err(e) => panic!("Failed to create libfdo_data.so.0 symlink {:?}", e),
+    }
 
     let result = Command::new("go")
         .arg("run")

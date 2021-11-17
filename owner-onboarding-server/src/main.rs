@@ -102,7 +102,7 @@ fn load_private_key(path: &str) -> Result<PKey<Private>> {
 }
 
 async fn report_to_rendezvous(udt: OwnerServiceUDT) -> Result<()> {
-    let mut ft = udt.ownership_voucher_store.query_data().await.unwrap();
+    let mut ft = udt.ownership_voucher_store.query_data().await?;
     ft.neq(
         &fdo_store::MetadataKey::Local(OwnershipVoucherStoreMetadataKey::To2Performed),
         &true,
@@ -117,16 +117,18 @@ async fn report_to_rendezvous(udt: OwnerServiceUDT) -> Result<()> {
         for ov in ovs {
             match report_ov_to_rendezvous(&ov, &udt.owner_addresses, &udt.owner_key).await {
                 Ok(wait_seconds) => {
-                    udt.ownership_voucher_store.store_metadata(
-                        ov.header().guid(),
-                        &fdo_store::MetadataKey::Local(
-                            OwnershipVoucherStoreMetadataKey::To0AcceptOwnerWaitSeconds,
-                        ),
-                        // we don't use chrono::Duration::seconds as that panics and can DOS the service (?)
-                        &chrono::Duration::from_std(std::time::Duration::from_secs(
-                            wait_seconds.into(),
-                        ))?,
-                    );
+                    udt.ownership_voucher_store
+                        .store_metadata(
+                            ov.header().guid(),
+                            &fdo_store::MetadataKey::Local(
+                                OwnershipVoucherStoreMetadataKey::To0AcceptOwnerWaitSeconds,
+                            ),
+                            // we don't use chrono::Duration::seconds as that panics and can DOS the service (?)
+                            &chrono::Duration::from_std(std::time::Duration::from_secs(
+                                wait_seconds.into(),
+                            ))?,
+                        )
+                        .await?;
                 }
                 Err(e) => {
                     log::warn!(
