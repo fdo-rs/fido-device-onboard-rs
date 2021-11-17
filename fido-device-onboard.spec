@@ -12,7 +12,7 @@ Release:        1%{?dist}
 Summary:        An implementation of the FIDO Device Onboard Specification written in rust
 
 License:        BSD 3
-URL:            https://github.com/fedora-iot/fido-device-onboard-rs
+URL:            %{forgeurl}
 Source:         %{url}/archive/%{commit}/%{name}-rs-%{commit}.tar.gz
 %if 0%{?rhel} && !0%{?eln}
 Source1:        %{name}-rs-%{commit}-vendor.tar.gz
@@ -28,6 +28,7 @@ BuildRequires:  rust-toolset
 BuildRequires:  rust-packaging
 %endif
 BuildRequires: systemd-rpm-macros
+BuildRequires: openssl-devel
 
 %description
 %{summary}.
@@ -49,7 +50,7 @@ install -D -m 0755 -t %{buildroot}%{_libexecdir}/fdo target/release/fdo-manufact
 install -D -m 0755 -t %{buildroot}%{_libexecdir}/fdo target/release/fdo-manufacturing-server
 install -D -m 0755 -t %{buildroot}%{_libexecdir}/fdo target/release/fdo-owner-onboarding-server
 install -D -m 0755 -t %{buildroot}%{_libexecdir}/fdo target/release/fdo-rendezvous-server
-install -D -m 0755 -t %{buildroot}%{_bindir}/fdo target/release/fdo-owner-tool
+install -D -m 0755 -t %{buildroot}%{_bindir} target/release/fdo-owner-tool
 install -D -m 0644 -t %{buildroot}%{_unitdir} examples/systemd/*
 install -D -m 0644 -t %{buildroot}%{_docdir}/fdo examples/config/*
 # 52fdo
@@ -155,7 +156,7 @@ Summary: FDO Owner tools implementation
 
 %files -n fdo-owner-cli
 %license LICENSE
-%{_bindir}/fdo/fdo-owner-tool
+%{_bindir}/fdo-owner-tool
 %{_docdir}/fdo/owner-addresses.yml
 
 %changelog
