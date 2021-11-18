@@ -13,7 +13,7 @@ Summary:        An implementation of the FIDO Device Onboard Specification writt
 
 License:        BSD 3
 URL:            %{forgeurl}
-Source:         %{url}/archive/%{commit}/%{name}-rs-%{commit}.tar.gz
+Source:         %{forgesource}
 %if 0%{?rhel} && !0%{?eln}
 Source1:        %{name}-rs-%{commit}-vendor.tar.gz
 %endif
