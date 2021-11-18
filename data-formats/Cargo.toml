@@ -27,5 +27,8 @@ pem = "1.0"
 http = "0.2"
 hyper = "0.14"
 
+# TODO: Move away from {allow,force}_custom when UseL and R are implemented for ossl11
+openssl-kdf = { version = "0.3", features = ["allow_custom", "force_custom"] }
+
 [dev-dependencies]
 maplit = "1.0"

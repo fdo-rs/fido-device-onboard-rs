@@ -26,11 +26,11 @@ use openssl::{
     ec::{EcGroup, EcKey, EcPoint},
     hash::{hash, MessageDigest},
     nid::Nid,
-    pkey::{PKey, Params},
+    pkey::Params,
     rand::rand_bytes,
-    sign::Signer,
     symm::Cipher,
 };
+use openssl_kdf::{perform_kdf, KdfArgument, KdfKbMode, KdfMacType, KdfType};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize_tuple, Deserialize, Clone)]
@@ -1069,55 +1069,6 @@ impl KeyExchange {
         }
     }
 
-    fn get_digest_length_bytes(digest_method: MessageDigest) -> Result<usize, Error> {
-        match digest_method.type_() {
-            Nid::SHA256 => Ok(32),
-            Nid::SHA384 => Ok(48),
-            Nid::SHA512 => Ok(64),
-            _ => Err(Error::KeyExchangeError("Invalid digest method")),
-        }
-    }
-
-    fn perform_fdo_sp800_108(
-        key: &[u8],
-        digest_method: MessageDigest,
-        output_len: usize,
-        context: &[u8],
-    ) -> Result<Vec<u8>, Error> {
-        // r, h, n are all in bits
-        const R: usize = 8;
-
-        let h = Self::get_digest_length_bytes(digest_method)? * 8;
-        let n = ((output_len * 8) as f32 / h as f32).ceil() as usize;
-
-        if n > ((2 ^ R) - 1) {
-            return Err(Error::KeyExchangeError("Too many iterations"));
-        }
-        let n: u8 = n
-            .try_into()
-            .map_err(|_| Error::KeyExchangeError("Too many iterations"))?;
-
-        // output_len is number of bytes
-        let l2 = ((output_len * 8) as u16).to_be_bytes();
-
-        let hmac_key = PKey::hmac(key)?;
-        let mut output = Vec::new();
-        for i in 1..=n {
-            let mut signer = Signer::new(digest_method, &hmac_key)?;
-
-            signer.update(&[i])?;
-            signer.update(KEY_DERIVE_LABEL)?;
-            signer.update(&[0x00])?;
-            signer.update(KEY_DERIVE_CONTEXT_PREFIX)?;
-            signer.update(context)?;
-            signer.update(&l2)?;
-
-            output.extend_from_slice(signer.sign_to_vec()?.as_slice());
-        }
-
-        Ok(output[..output_len].to_vec())
-    }
-
     pub fn derive_key(
         &self,
         our_side: KeyDeriveSide,
@@ -1129,12 +1080,21 @@ impl KeyExchange {
             KeyExchange::Ecdh(..) => self.derive_key_ecdh(our_side, other)?,
         };
 
-        let key_out = Self::perform_fdo_sp800_108(
-            &shared_secret,
-            cipher.kdf_digest(),
-            cipher.required_keylen(),
-            &context_rand,
-        )?;
+        let mut salt = Vec::with_capacity(KEY_DERIVE_CONTEXT_PREFIX.len() + context_rand.len() + 2);
+        salt.extend_from_slice(KEY_DERIVE_CONTEXT_PREFIX);
+        salt.extend_from_slice(&context_rand);
+        salt.extend_from_slice(&(cipher.required_keylen() as u16).to_be_bytes());
+
+        let kdf_args = [
+            &KdfArgument::KbMode(KdfKbMode::Counter),
+            &KdfArgument::Mac(KdfMacType::Hmac(cipher.kdf_digest())),
+            &KdfArgument::Salt(KEY_DERIVE_LABEL),
+            &KdfArgument::KbInfo(&salt),
+            &KdfArgument::Key(&shared_secret),
+            &KdfArgument::UseL(false),
+            &KdfArgument::R(8),
+        ];
+        let key_out = perform_kdf(KdfType::KeyBased, &kdf_args, cipher.required_keylen())?;
 
         if cipher.uses_combined_key() {
             Ok(DerivedKeys::Combined { sevk: key_out })

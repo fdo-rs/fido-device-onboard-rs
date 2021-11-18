@@ -19,6 +19,8 @@ pub enum ChainError {
 pub enum Error {
     #[error("Cryptographic error stack: {0}")]
     CryptoStack(#[from] openssl::error::ErrorStack),
+    #[error("Key derivation error: {0:?}")]
+    Kdf(#[from] openssl_kdf::KdfError),
     #[error("Serialization error: {0}")]
     SerdeCborError(#[from] serde_cbor::Error),
     #[error("Serialization error (ciborium): {0}")]
