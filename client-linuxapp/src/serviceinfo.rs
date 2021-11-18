@@ -38,14 +38,16 @@ fn set_perm_mode(path: &Path, mode: u32) -> Result<()> {
 }
 
 fn install_ssh_key(user: &str, key: &str) -> Result<()> {
+    let user_info = passwd::Passwd::from_name(user);
+    if user_info.is_none() {
+        bail!("User {} for SSH key installation missing", user);
+    }
+    let user_info = user_info.unwrap();
+    let uid = nix::unistd::Uid::from_raw(user_info.uid);
+    let gid = nix::unistd::Gid::from_raw(user_info.gid);
     let key_path = if let Ok(val) = env::var("SSH_KEY_PATH") {
         PathBuf::from(&val)
     } else {
-        let user_info = passwd::Passwd::from_name(user);
-        if user_info.is_none() {
-            bail!("User {} for SSH key installation missing", user);
-        }
-        let user_info = user_info.unwrap();
         let ssh_dir = Path::new(&user_info.home_dir).join(".ssh");
         if !ssh_dir.exists() {
             log::debug!("Creating SSH directory at {}", ssh_dir.display());
@@ -56,6 +58,7 @@ fn install_ssh_key(user: &str, key: &str) -> Result<()> {
                     ssh_dir.display()
                 )
             })?;
+            nix::unistd::chown(&ssh_dir, Some(uid), Some(gid))?;
         }
         ssh_dir.join("authorized_keys")
     };
@@ -81,6 +84,7 @@ fn install_ssh_key(user: &str, key: &str) -> Result<()> {
             key_path.display()
         )
     })?;
+    nix::unistd::chown(&key_path, Some(uid), Some(gid))?;
 
     Ok(())
 }

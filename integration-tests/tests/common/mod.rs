@@ -744,6 +744,10 @@ impl<'a> TestServerConfigurator<'a> {
                     "config_dir",
                     &self.test_context.runner_path(&self.server_number),
                 );
+                cfg.insert(
+                    "user",
+                    users::get_current_username().unwrap().to_str().unwrap(),
+                );
                 // TODO: Insert more defaults
 
                 context_configurator(cfg)
