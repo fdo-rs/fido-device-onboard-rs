@@ -34,7 +34,7 @@ BuildRequires: openssl-devel
 %{summary}.
 
 %prep
-%autosetup -n %{name}-rs-%{commit} -p1
+%forgesetup
 %if 0%{?rhel} && !0%{?eln}
 %cargo_prep -V 1
 %else
