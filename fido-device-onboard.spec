@@ -15,7 +15,11 @@ License:        BSD 3
 URL:            %{forgeurl}
 Source:         %{forgesource}
 %if 0%{?rhel} && !0%{?eln}
+%if "%{?commit}" != ""
 Source1:        %{name}-rs-%{commit}-vendor.tar.gz
+%else
+Source1:        %{name}-rs-%{version}-vendor.tar.gz
+%endif
 %endif
 
 ExclusiveArch:  %{rust_arches}
