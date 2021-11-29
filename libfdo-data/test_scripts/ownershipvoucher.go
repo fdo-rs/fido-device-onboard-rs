@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-)
 
-// #cgo LDFLAGS: -lfdo_data -L../../target/debug/
-// #include "../fdo_data.h"
-import "C"
+	libfdo_data "github.com/fedora-iot/fido-device-onboard-rs/libfdo-data-go"
+)
 
 func main() {
 	if len(os.Args) != 2 {
@@ -19,25 +17,19 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	ctslen := C.size_t(len(ctsB))
-	cts := C.CBytes(ctsB)
 
-	voucher := C.fdo_ownershipvoucher_from_data(cts, ctslen)
-	if voucher == nil {
-		fmt.Println("Failed to parse")
+	voucher, err := libfdo_data.ParseOwnershipVoucher(ctsB)
+	if err != nil {
+		fmt.Println(err)
 		return
 	}
-	defer C.fdo_ownershipvoucher_free(voucher)
+	defer voucher.Free()
 
-	fmt.Println("Protocol version:", C.fdo_ownershipvoucher_header_get_protocol_version(voucher))
+	protocol_version := voucher.GetProtocolVersion()
+	guid := voucher.GetGUID()
+	device_info := voucher.GetDeviceInfo()
 
-	guidS := C.fdo_ownershipvoucher_header_get_guid(voucher)
-	defer C.fdo_free_string(guidS)
-	guid := C.GoString(guidS)
+	fmt.Println("Protocol version:", protocol_version)
 	fmt.Println("Device GUID:", guid)
-
-	devinfoS := C.fdo_ownershipvoucher_header_get_device_info_string(voucher)
-	defer C.fdo_free_string(devinfoS)
-	devinfo := C.GoString(devinfoS)
-	fmt.Println("Device Info:", devinfo)
+	fmt.Println("Device Info:", device_info)
 }
