@@ -197,30 +197,22 @@ impl<N: ParsedArraySize> Serializable for ParsedArray<N> {
     where
         W: std::io::Write,
     {
-        let output = self.serialize_data()?;
-        writer.write_all(&output)?;
-        Ok(())
-    }
-
-    fn serialize_data(&self) -> Result<Vec<u8>, Error> {
-        let result_len: usize = self.contents.iter().map(|v| v.len()).sum::<usize>();
-
-        let mut result = Vec::new();
+        let mut header = Vec::new();
         if let Some(tag) = self.tag {
-            result.extend_from_slice(&encode_item_start(MajorType::Tag, tag));
+            header.extend_from_slice(&encode_item_start(MajorType::Tag, tag));
         }
-        result.extend_from_slice(&encode_item_start(
+        header.extend_from_slice(&encode_item_start(
             MajorType::Array,
             self.contents.len() as u64,
         ));
 
-        result.reserve_exact(result_len);
+        writer.write_all(&header)?;
 
         for item in &self.contents {
-            result.extend_from_slice(item);
+            writer.write_all(&item)?;
         }
 
-        Ok(result)
+        Ok(())
     }
 
     fn deserialize_data(data: &[u8]) -> Result<Self, Error> {
