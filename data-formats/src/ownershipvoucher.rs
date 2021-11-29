@@ -9,8 +9,9 @@ use crate::{
     constants::HashType,
     errors::Result,
     publickey::{PublicKey, X5Chain},
+    serializable::MaybeSerializable,
     types::{COSESign, Guid, HMac, Hash, RendezvousInfo, UnverifiedValue},
-    Error, Serializable,
+    DeserializableMany, Error, Serializable,
 };
 
 const VOUCHER_PEM_TAG: &str = "OWNERSHIP VOUCHER";
@@ -35,13 +36,8 @@ pub struct OwnershipVoucher {
     cached_entries: ParsedArray<ParsedArraySizeDynamic>,
 }
 
-impl Serializable for OwnershipVoucher {
-    fn deserialize_from_reader<R>(reader: R) -> Result<Self>
-    where
-        R: std::io::Read,
-    {
-        let contents = ParsedArray::deserialize_from_reader(reader)?;
-
+impl OwnershipVoucher {
+    fn from_parsed_array(contents: ParsedArray<ParsedArraySize4>) -> Result<Self> {
         let cached_header = contents.get(OwnershipVoucherIndex::Header as usize)?;
         let cached_header_hmac = contents.get(OwnershipVoucherIndex::HeaderHmac as usize)?;
         let cached_device_certificate_chain =
@@ -57,6 +53,16 @@ impl Serializable for OwnershipVoucher {
             cached_entries,
         })
     }
+}
+
+impl Serializable for OwnershipVoucher {
+    fn deserialize_from_reader<R>(reader: R) -> Result<Self>
+    where
+        R: std::io::Read,
+    {
+        let contents = ParsedArray::deserialize_from_reader(reader)?;
+        Self::from_parsed_array(contents)
+    }
 
     fn serialize_to_writer<W>(&self, writer: W) -> Result<()>
     where
@@ -65,6 +71,17 @@ impl Serializable for OwnershipVoucher {
         self.contents.serialize_to_writer(writer)
     }
 }
+
+impl MaybeSerializable for OwnershipVoucher {
+    fn is_nodata_error(err: &Error) -> bool {
+        matches!(
+            err,
+            Error::ArrayParseError(crate::cborparser::ArrayParseError::NoData)
+        )
+    }
+}
+
+impl DeserializableMany for OwnershipVoucher {}
 
 impl OwnershipVoucher {
     pub fn from_parts(
@@ -123,6 +140,19 @@ impl OwnershipVoucher {
             return Err(Error::InvalidPemTag(parsed.tag));
         }
         Self::deserialize_data(&parsed.contents)
+    }
+
+    pub fn many_from_pem(data: &[u8]) -> Result<Vec<Self>> {
+        pem::parse_many(data)?
+            .into_iter()
+            .map(|parsed| {
+                if parsed.tag == VOUCHER_PEM_TAG {
+                    Self::deserialize_from_reader(&*parsed.contents)
+                } else {
+                    Err(Error::InvalidPemTag(parsed.tag))
+                }
+            })
+            .collect()
     }
 
     pub fn from_pem_or_raw(data: &[u8]) -> Result<Self> {

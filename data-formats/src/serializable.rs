@@ -24,6 +24,43 @@ pub trait Serializable {
         W: std::io::Write;
 }
 
+pub trait MaybeSerializable: Serializable {
+    fn is_nodata_error(err: &Error) -> bool;
+
+    fn maybe_deserialize_from_reader<R>(reader: R) -> Result<Option<Self>, Error>
+    where
+        Self: Sized,
+        R: std::io::Read,
+    {
+        match Self::deserialize_from_reader(reader) {
+            Ok(value) => Ok(Some(value)),
+            Err(err) => {
+                if Self::is_nodata_error(&err) {
+                    Ok(None)
+                } else {
+                    Err(err)
+                }
+            }
+        }
+    }
+}
+
+pub trait DeserializableMany: MaybeSerializable {
+    fn deserialize_many_from_reader<R>(mut reader: R) -> Result<Vec<Self>, Error>
+    where
+        Self: Sized,
+        R: std::io::Read,
+    {
+        let mut output = Vec::new();
+
+        while let Some(item) = Self::maybe_deserialize_from_reader(&mut reader)? {
+            output.push(item);
+        }
+
+        Ok(output)
+    }
+}
+
 impl<T> Serializable for T
 where
     T: serde::Serialize,

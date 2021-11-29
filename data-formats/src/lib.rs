@@ -23,4 +23,5 @@ pub mod messages;
 pub mod cborparser;
 
 mod serializable;
+pub use serializable::DeserializableMany;
 pub use serializable::Serializable;

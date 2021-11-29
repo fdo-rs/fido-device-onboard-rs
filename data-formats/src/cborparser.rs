@@ -4,7 +4,12 @@ use thiserror::Error;
 
 use paste::paste;
 
-use crate::{constants::HashType, types::Hash, Error, Serializable};
+use crate::{
+    constants::HashType,
+    serializable::{DeserializableMany, MaybeSerializable},
+    types::Hash,
+    Error, Serializable,
+};
 
 mod private {
     pub trait Sealed {}
@@ -83,7 +88,7 @@ impl<N: ParsedArraySize> std::fmt::Debug for ParsedArray<N> {
 
 #[derive(Error, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ArrayParseError {
-    #[error("Invalid top level type encountered: must be array")]
+    #[error("Invalid top level type encountered: must be array (was {0:?})")]
     InvalidTopLevelType(MajorType),
     #[error("Invalid array length")]
     LengthParseFailure,
@@ -95,6 +100,8 @@ pub enum ArrayParseError {
     UnsupportedMajorType(u8),
     #[error("Invalid number of elements encountered: {0} received, {1} expected")]
     InvalidNumberOfElements(u64, u64),
+    #[error("No data to be deserialized")]
+    NoData,
 }
 
 const MASK_TYPE: u8 = 0b1110_0000;
@@ -173,6 +180,14 @@ where
     }
 }
 
+impl<N: ParsedArraySize> MaybeSerializable for ParsedArray<N> {
+    fn is_nodata_error(err: &Error) -> bool {
+        matches!(err, Error::ArrayParseError(ArrayParseError::NoData))
+    }
+}
+
+impl<N: ParsedArraySize> DeserializableMany for ParsedArray<N> {}
+
 impl<N: ParsedArraySize> Serializable for ParsedArray<N> {
     fn serialize_to_writer<W>(&self, mut writer: W) -> Result<(), Error>
     where
@@ -206,7 +221,13 @@ impl<N: ParsedArraySize> Serializable for ParsedArray<N> {
         let mut parsed_items = Vec::new();
 
         let mut singlebyte_buf = [0u8; 1];
-        reader.read_exact(&mut singlebyte_buf)?;
+        match reader.read_exact(&mut singlebyte_buf) {
+            Ok(_) => {}
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::UnexpectedEof => return Err(ArrayParseError::NoData.into()),
+                _ => return Err(e.into()),
+            },
+        }
         header_buf.extend_from_slice(&singlebyte_buf);
         let first_major_type = MajorType::maybe_from_u8(singlebyte_buf[0] & MASK_TYPE)?;
         let tag = match first_major_type {
@@ -461,7 +482,7 @@ mod test {
     use std::collections::HashMap;
 
     use super::ParsedArray;
-    use crate::Serializable;
+    use crate::{DeserializableMany, Serializable};
 
     #[test]
     fn test_empty_array_static() {
@@ -806,5 +827,33 @@ mod test {
         );
         let serialized = parsed.serialize_data().expect("Failed to serialize");
         assert_eq!(serialized, data);
+    }
+
+    #[test]
+    fn multiple_arrays() {
+        let data = hex::decode("8650CBF6CA589001016CAFA4E5C15FB6B2885045C751C1C96532C81CA670028D9903E16745434448333834674132353647434D790102736F6D652D737472696E672D77686963682D73686F756C642D62652D6C6F6E6765722D7468616E2D3235352D62797465732D737563682D746861742D69742D676F65732D6F6E2D666F722D6C6F6E6765722D7468616E2D666974732D696E2D612D75696E74385F743A20566573746962756C756D2061742073656D206E657175652E204E756C6C616D206120616C697175616D206E756C6C612C206120696163756C697320616E74652E20436C61737320617074656E742074616369746920736F63696F737175206164206C69746F726120746F727175656E742070657220636F6E75626961206E6F737472612C2070657220696E636570746F732070726F696E2E823822408650CBF6CA589001016CAFA4E5C15FB6B2885045C751C1C96532C81CA670028D9903E16745434448333834674132353647434DC6790102736F6D652D737472696E672D77686963682D73686F756C642D62652D6C6F6E6765722D7468616E2D3235352D62797465732D737563682D746861742D69742D676F65732D6F6E2D666F722D6C6F6E6765722D7468616E2D666974732D696E2D612D75696E74385F743A20566573746962756C756D2061742073656D206E657175652E204E756C6C616D206120616C697175616D206E756C6C612C206120696163756C697320616E74652E20436C61737320617074656E742074616369746920736F63696F737175206164206C69746F726120746F727175656E742070657220636F6E75626961206E6F737472612C2070657220696E636570746F732070726F696E2E82382240").unwrap();
+        let parsed: Vec<ParsedArray<super::ParsedArraySize6>> =
+            ParsedArray::deserialize_many_from_reader(&*data).expect("Failed to parse");
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(
+            parsed[0].raw_values(), vec![
+                hex::decode("50CBF6CA589001016CAFA4E5C15FB6B288").unwrap(),
+                hex::decode("5045C751C1C96532C81CA670028D9903E1").unwrap(),
+                hex::decode("6745434448333834").unwrap(),
+                hex::decode("674132353647434D").unwrap(),
+                hex::decode("790102736F6D652D737472696E672D77686963682D73686F756C642D62652D6C6F6E6765722D7468616E2D3235352D62797465732D737563682D746861742D69742D676F65732D6F6E2D666F722D6C6F6E6765722D7468616E2D666974732D696E2D612D75696E74385F743A20566573746962756C756D2061742073656D206E657175652E204E756C6C616D206120616C697175616D206E756C6C612C206120696163756C697320616E74652E20436C61737320617074656E742074616369746920736F63696F737175206164206C69746F726120746F727175656E742070657220636F6E75626961206E6F737472612C2070657220696E636570746F732070726F696E2E").unwrap(),
+                hex::decode("82382240").unwrap(),
+            ]
+        );
+        assert_eq!(
+            parsed[1].raw_values(), vec![
+                hex::decode("50CBF6CA589001016CAFA4E5C15FB6B288").unwrap(),
+                hex::decode("5045C751C1C96532C81CA670028D9903E1").unwrap(),
+                hex::decode("6745434448333834").unwrap(),
+                hex::decode("674132353647434D").unwrap(),
+                hex::decode("C6790102736F6D652D737472696E672D77686963682D73686F756C642D62652D6C6F6E6765722D7468616E2D3235352D62797465732D737563682D746861742D69742D676F65732D6F6E2D666F722D6C6F6E6765722D7468616E2D666974732D696E2D612D75696E74385F743A20566573746962756C756D2061742073656D206E657175652E204E756C6C616D206120616C697175616D206E756C6C612C206120696163756C697320616E74652E20436C61737320617074656E742074616369746920736F63696F737175206164206C69746F726120746F727175656E742070657220636F6E75626961206E6F737472612C2070657220696E636570746F732070726F696E2E").unwrap(),
+                hex::decode("82382240").unwrap(),
+            ]
+        );
     }
 }
