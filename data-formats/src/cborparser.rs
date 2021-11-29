@@ -184,6 +184,24 @@ impl<'a> SafeData<'a> {
 }
 
 impl<N: ParsedArraySize> Serializable for ParsedArray<N> {
+    fn deserialize_from_reader<R>(mut reader: R) -> Result<Self, Error>
+    where
+        R: std::io::Read,
+    {
+        let mut data = Vec::new();
+        reader.read_to_end(&mut data)?;
+        Self::deserialize_data(&data)
+    }
+
+    fn serialize_to_writer<W>(&self, mut writer: W) -> Result<(), Error>
+    where
+        W: std::io::Write,
+    {
+        let output = self.serialize_data()?;
+        writer.write_all(&output)?;
+        Ok(())
+    }
+
     fn serialize_data(&self) -> Result<Vec<u8>, Error> {
         let result_len: usize = self.contents.iter().map(|v| v.len()).sum::<usize>();
 

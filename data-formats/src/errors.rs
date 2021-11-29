@@ -23,6 +23,8 @@ pub enum Error {
     Kdf(#[from] openssl_kdf::KdfError),
     #[error("Serialization error: {0}")]
     SerdeCborError(#[from] serde_cbor::Error),
+    #[error("Deserialization error (ciborium): {0}")]
+    CiboriumDeError(#[from] ciborium::de::Error<std::io::Error>),
     #[error("Serialization error (ciborium): {0}")]
     CiboriumSerError(#[from] ciborium::ser::Error<std::io::Error>),
     #[error("COSE error: {0}")]

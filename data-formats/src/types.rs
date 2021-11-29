@@ -533,8 +533,11 @@ pub struct TO0Data {
 }
 
 impl Serializable for TO0Data {
-    fn deserialize_data(data: &[u8]) -> Result<Self, Error> {
-        let contents = ParsedArray::deserialize_data(data)?;
+    fn deserialize_from_reader<R>(reader: R) -> Result<Self, Error>
+    where
+        R: std::io::Read,
+    {
+        let contents = ParsedArray::deserialize_from_reader(reader)?;
 
         let ownership_voucher = contents.get(0)?;
         let wait_seconds = contents.get(1)?;
@@ -549,8 +552,11 @@ impl Serializable for TO0Data {
         })
     }
 
-    fn serialize_data(&self) -> Result<Vec<u8>, Error> {
-        self.contents.serialize_data()
+    fn serialize_to_writer<W>(&self, writer: W) -> Result<(), Error>
+    where
+        W: std::io::Write,
+    {
+        self.contents.serialize_to_writer(writer)
     }
 }
 
@@ -773,8 +779,11 @@ pub struct TO2ProveOVHdrPayload {
 }
 
 impl Serializable for TO2ProveOVHdrPayload {
-    fn deserialize_data(data: &[u8]) -> Result<Self, Error> {
-        let contents = ParsedArray::deserialize_data(data)?;
+    fn deserialize_from_reader<R>(reader: R) -> Result<Self, Error>
+    where
+        R: std::io::Read,
+    {
+        let contents = ParsedArray::deserialize_from_reader(reader)?;
 
         let cached_ov_header = contents.get(0)?;
         let cached_num_ov_entries = contents.get(1)?;
@@ -795,8 +804,11 @@ impl Serializable for TO2ProveOVHdrPayload {
         })
     }
 
-    fn serialize_data(&self) -> Result<Vec<u8>, Error> {
-        self.contents.serialize_data()
+    fn serialize_to_writer<W>(&self, writer: W) -> Result<(), Error>
+    where
+        W: std::io::Write,
+    {
+        self.contents.serialize_to_writer(writer)
     }
 }
 
@@ -1648,8 +1660,11 @@ pub struct COSESign {
 }
 
 impl Serializable for COSESign {
-    fn deserialize_data(data: &[u8]) -> Result<Self, Error> {
-        let array = ParsedArray::deserialize_data(data)?;
+    fn deserialize_from_reader<R>(reader: R) -> Result<Self, Error>
+    where
+        R: std::io::Read,
+    {
+        let array = ParsedArray::deserialize_from_reader(reader)?;
 
         if array.tag() != Some(COSESIGN_TAG) {
             if array.tag().is_none() {
@@ -1659,7 +1674,9 @@ impl Serializable for COSESign {
             }
         }
 
-        let inner = COSESignInner::from_bytes(data)?;
+        // TODO
+        let data = array.serialize_data()?;
+        let inner = COSESignInner::from_bytes(&data)?;
 
         Ok(COSESign {
             contents: array,
@@ -1668,7 +1685,10 @@ impl Serializable for COSESign {
         })
     }
 
-    fn serialize_data(&self) -> Result<Vec<u8>, Error> {
+    fn serialize_to_writer<W>(&self, writer: W) -> Result<(), Error>
+    where
+        W: std::io::Write,
+    {
         // There is no way this data structure should be able to be constructed without either
         // deserializing (which checks the tag) or us constructing it, where we set the tag.
         // Just make sure it's there before serializing.
@@ -1678,7 +1698,7 @@ impl Serializable for COSESign {
             ));
         }
 
-        self.contents.serialize_data()
+        self.contents.serialize_to_writer(writer)
     }
 }
 

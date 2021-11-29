@@ -36,8 +36,11 @@ pub struct OwnershipVoucher {
 }
 
 impl Serializable for OwnershipVoucher {
-    fn deserialize_data(data: &[u8]) -> Result<Self> {
-        let contents = ParsedArray::deserialize_data(data)?;
+    fn deserialize_from_reader<R>(reader: R) -> Result<Self>
+    where
+        R: std::io::Read,
+    {
+        let contents = ParsedArray::deserialize_from_reader(reader)?;
 
         let cached_header = contents.get(OwnershipVoucherIndex::Header as usize)?;
         let cached_header_hmac = contents.get(OwnershipVoucherIndex::HeaderHmac as usize)?;
@@ -55,8 +58,11 @@ impl Serializable for OwnershipVoucher {
         })
     }
 
-    fn serialize_data(&self) -> Result<Vec<u8>> {
-        self.contents.serialize_data()
+    fn serialize_to_writer<W>(&self, writer: W) -> Result<()>
+    where
+        W: std::io::Write,
+    {
+        self.contents.serialize_to_writer(writer)
     }
 }
 
@@ -470,8 +476,11 @@ fn test_check_device_info_supported_characters() {
 }
 
 impl Serializable for OwnershipVoucherHeader {
-    fn deserialize_data(data: &[u8]) -> Result<Self> {
-        let contents = ParsedArray::deserialize_data(data)?;
+    fn deserialize_from_reader<R>(reader: R) -> Result<Self>
+    where
+        R: std::io::Read,
+    {
+        let contents = ParsedArray::deserialize_from_reader(reader)?;
 
         let cached_protocol_version =
             contents.get(OwnershipVoucherHeaderIndex::ProtocolVersion as usize)?;
@@ -498,9 +507,12 @@ impl Serializable for OwnershipVoucherHeader {
         })
     }
 
-    fn serialize_data(&self) -> Result<Vec<u8>> {
+    fn serialize_to_writer<W>(&self, writer: W) -> Result<()>
+    where
+        W: std::io::Write,
+    {
         check_device_info(&self.cached_device_info)?;
-        self.contents.serialize_data()
+        self.contents.serialize_to_writer(writer)
     }
 }
 
@@ -508,12 +520,18 @@ impl Serializable for OwnershipVoucherHeader {
 pub struct OwnershipVoucherEntry(COSESign);
 
 impl Serializable for OwnershipVoucherEntry {
-    fn deserialize_data(data: &[u8]) -> Result<Self> {
-        COSESign::deserialize_data(data).map(OwnershipVoucherEntry)
+    fn deserialize_from_reader<R>(reader: R) -> Result<Self>
+    where
+        R: std::io::Read,
+    {
+        COSESign::deserialize_from_reader(reader).map(OwnershipVoucherEntry)
     }
 
-    fn serialize_data(&self) -> Result<Vec<u8>> {
-        self.0.serialize_data()
+    fn serialize_to_writer<W>(&self, writer: W) -> Result<()>
+    where
+        W: std::io::Write,
+    {
+        self.0.serialize_to_writer(writer)
     }
 }
 

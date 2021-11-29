@@ -63,12 +63,18 @@ pub trait Message: Send + Serializable + Sized {
 macro_rules! simple_message_serializable {
     ($name:ident, $inner_type:ident) => {
         impl crate::Serializable for $name {
-            fn serialize_data(&self) -> core::result::Result<Vec<u8>, crate::Error> {
-                self.0.serialize_data()
+            fn serialize_to_writer<W>(&self, writer: W) -> core::result::Result<(), crate::Error>
+            where
+                W: std::io::Write,
+            {
+                self.0.serialize_to_writer(writer)
             }
 
-            fn deserialize_data(data: &[u8]) -> core::result::Result<Self, crate::Error> {
-                Ok(Self($inner_type::deserialize_data(data)?))
+            fn deserialize_from_reader<R>(reader: R) -> core::result::Result<Self, crate::Error>
+            where
+                R: std::io::Read,
+            {
+                Ok(Self($inner_type::deserialize_from_reader(reader)?))
             }
         }
     };

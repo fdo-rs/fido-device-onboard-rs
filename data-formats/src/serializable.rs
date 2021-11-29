@@ -3,26 +3,25 @@ use crate::Error;
 pub trait Serializable {
     fn deserialize_data(data: &[u8]) -> Result<Self, Error>
     where
-        Self: Sized;
-    fn serialize_data(&self) -> Result<Vec<u8>, Error>;
+        Self: Sized,
+    {
+        Self::deserialize_from_reader(data)
+    }
 
-    fn deserialize_from_reader<R>(mut reader: R) -> Result<Self, Error>
+    fn serialize_data(&self) -> Result<Vec<u8>, Error> {
+        let mut output = Vec::new();
+        self.serialize_to_writer(&mut output)?;
+        Ok(output)
+    }
+
+    fn deserialize_from_reader<R>(reader: R) -> Result<Self, Error>
     where
         Self: Sized,
-        R: std::io::Read,
-    {
-        let mut buffer = Vec::new();
-        reader.read_to_end(&mut buffer)?;
-        Self::deserialize_data(&buffer)
-    }
+        R: std::io::Read;
 
-    fn serialize_to_writer<W>(&self, mut writer: W) -> Result<(), Error>
+    fn serialize_to_writer<W>(&self, writer: W) -> Result<(), Error>
     where
-        W: std::io::Write,
-    {
-        let serialized = self.serialize_data()?;
-        writer.write_all(&serialized).map_err(Error::from)
-    }
+        W: std::io::Write;
 }
 
 impl<T> Serializable for T
@@ -40,12 +39,6 @@ where
         R: std::io::Read,
     {
         serde_cbor::from_reader(&mut reader).map_err(Error::from)
-    }
-
-    fn serialize_data(&self) -> Result<Vec<u8>, Error> {
-        let mut output = Vec::new();
-        ciborium::ser::into_writer(self, &mut output)?;
-        Ok(output)
     }
 
     fn serialize_to_writer<W>(&self, mut writer: W) -> Result<(), Error>

@@ -87,9 +87,12 @@ pub struct OwnerSign {
 }
 
 impl Serializable for OwnerSign {
-    fn deserialize_data(data: &[u8]) -> Result<Self, Error> {
+    fn deserialize_from_reader<R>(reader: R) -> Result<Self, Error>
+    where
+        R: std::io::Read,
+    {
         let contents: ParsedArray<crate::cborparser::ParsedArraySize2> =
-            ParsedArray::deserialize_data(data)?;
+            ParsedArray::deserialize_from_reader(reader)?;
         let to0d = contents.get(0)?;
         let to1d = contents.get(1)?;
 
@@ -101,8 +104,11 @@ impl Serializable for OwnerSign {
         })
     }
 
-    fn serialize_data(&self) -> Result<Vec<u8>, Error> {
-        self.contents.serialize_data()
+    fn serialize_to_writer<W>(&self, writer: W) -> Result<(), Error>
+    where
+        W: std::io::Write,
+    {
+        self.contents.serialize_to_writer(writer)
     }
 }
 

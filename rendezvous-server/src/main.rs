@@ -28,9 +28,12 @@ struct StoredItem {
 }
 
 impl Serializable for StoredItem {
-    fn deserialize_data(data: &[u8]) -> Result<Self, fdo_data_formats::Error> {
+    fn deserialize_from_reader<R>(reader: R) -> Result<Self, fdo_data_formats::Error>
+    where
+        R: std::io::Read,
+    {
         let contents: ParsedArray<fdo_data_formats::cborparser::ParsedArraySize2> =
-            ParsedArray::deserialize_data(data)?;
+            ParsedArray::deserialize_from_reader(reader)?;
 
         let public_key = contents.get(0)?;
         let to1d = contents.get(1)?;
@@ -38,13 +41,16 @@ impl Serializable for StoredItem {
         Ok(StoredItem { public_key, to1d })
     }
 
-    fn serialize_data(&self) -> Result<Vec<u8>, fdo_data_formats::Error> {
+    fn serialize_to_writer<W>(&self, writer: W) -> Result<(), fdo_data_formats::Error>
+    where
+        W: std::io::Write,
+    {
         let mut contents: ParsedArray<fdo_data_formats::cborparser::ParsedArraySize2> =
             unsafe { ParsedArray::new() };
         contents.set(0, &self.public_key)?;
         contents.set(1, &self.to1d)?;
 
-        contents.serialize_data()
+        contents.serialize_to_writer(writer)
     }
 }
 
