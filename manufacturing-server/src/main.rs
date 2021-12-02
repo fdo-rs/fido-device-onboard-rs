@@ -21,7 +21,9 @@ use fdo_data_formats::{
     types::{Guid, RendezvousDirective, RendezvousInfo},
 };
 use fdo_store::{Store, StoreDriver};
-use fdo_util::servers::{settings_for, yaml_to_cbor, OwnershipVoucherStoreMetadataKey};
+use fdo_util::servers::{
+    settings_for, yaml_to_cbor, AbsolutePathBuf, OwnershipVoucherStoreMetadataKey,
+};
 
 const PERFORMED_DIUN_SES_KEY: &str = "mfg_global_diun_performed";
 const DEVICE_KEY_FROM_DIUN_SES_KEY: &str = "mfg_global_device_key_from_diun";
@@ -130,8 +132,8 @@ struct DiunSettings {
     key_type: PublicKeyTypeString,
     allowed_key_storage_types: Vec<KeyStorageTypeString>,
 
-    key_path: String,
-    cert_path: String,
+    key_path: AbsolutePathBuf,
+    cert_path: AbsolutePathBuf,
 }
 
 impl TryFrom<DiunSettings> for DiunConfiguration {
@@ -165,14 +167,8 @@ impl TryFrom<DiunSettings> for DiunConfiguration {
     }
 }
 
-fn load_rendezvous_info(path: &str) -> Result<RendezvousInfo> {
-    let contents = match fs::read(path) {
-        Ok(c) => c,
-        // backwards compatibility for tests...
-        Err(_) => return Ok(RendezvousInfo::new(Vec::new())),
-    };
-    let mut info: Vec<RendezvousDirective> = Vec::new();
-
+fn load_rendezvous_info(path: &AbsolutePathBuf) -> Result<RendezvousInfo> {
+    let contents = fs::read(path).context("Failed to read rendezvous info")?;
     let value: Value =
         serde_yaml::from_slice(&contents).context("Error parsing rendezvous info")?;
     let value = match value {
@@ -180,6 +176,7 @@ fn load_rendezvous_info(path: &str) -> Result<RendezvousInfo> {
         _ => bail!("Invalid yaml top type"),
     };
 
+    let mut info: Vec<RendezvousDirective> = Vec::new();
     for val in value {
         let mut entry = Vec::new();
 
@@ -212,12 +209,12 @@ fn load_rendezvous_info(path: &str) -> Result<RendezvousInfo> {
 
 #[derive(Debug, Deserialize)]
 struct ManufacturingSettings {
-    manufacturer_cert_path: String,
-    device_cert_ca_private_key: String,
-    device_cert_ca_chain: String,
+    manufacturer_cert_path: AbsolutePathBuf,
+    device_cert_ca_private_key: AbsolutePathBuf,
+    device_cert_ca_chain: AbsolutePathBuf,
 
-    owner_cert_path: Option<String>,
-    manufacturer_private_key: Option<String>,
+    owner_cert_path: Option<AbsolutePathBuf>,
+    manufacturer_private_key: Option<AbsolutePathBuf>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -245,7 +242,7 @@ struct Settings {
 
     protocols: ProtocolSetting,
 
-    rendezvous_info_path: String,
+    rendezvous_info_path: AbsolutePathBuf,
 
     manufacturing: ManufacturingSettings,
 }

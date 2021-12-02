@@ -30,7 +30,7 @@ use fdo_data_formats::{
     types::{Guid, TO2AddressEntry},
 };
 use fdo_store::{Store, StoreDriver};
-use fdo_util::servers::{settings_for, OwnershipVoucherStoreMetadataKey};
+use fdo_util::servers::{settings_for, AbsolutePathBuf, OwnershipVoucherStoreMetadataKey};
 
 mod handlers;
 mod serviceinfo;
@@ -78,11 +78,11 @@ struct Settings {
     session_store_config: Option<config::Value>,
 
     // Trusted keys
-    trusted_device_keys_path: String,
+    trusted_device_keys_path: AbsolutePathBuf,
 
     // Our private owner key
-    owner_private_key_path: String,
-    owner_public_key_path: String,
+    owner_private_key_path: AbsolutePathBuf,
+    owner_public_key_path: AbsolutePathBuf,
 
     // Bind information
     bind: String,
@@ -91,12 +91,12 @@ struct Settings {
     service_info: crate::serviceinfo::ServiceInfoSettings,
 
     // owner addresses path for report to rendezvous
-    owner_addresses_path: String,
+    owner_addresses_path: AbsolutePathBuf,
 
     report_to_rendezvous_endpoint_enabled: bool,
 }
 
-fn load_private_key(path: &str) -> Result<PKey<Private>> {
+fn load_private_key(path: &AbsolutePathBuf) -> Result<PKey<Private>> {
     let contents = fs::read(path)?;
     Ok(PKey::private_key_from_der(&contents)?)
 }

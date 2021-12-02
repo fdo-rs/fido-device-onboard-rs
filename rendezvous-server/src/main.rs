@@ -16,7 +16,7 @@ use fdo_data_formats::{
     Serializable,
 };
 use fdo_store::{Store, StoreDriver};
-use fdo_util::servers::settings_for;
+use fdo_util::servers::{settings_for, AbsolutePathBuf};
 
 mod handlers_to0;
 mod handlers_to1;
@@ -78,7 +78,7 @@ struct Settings {
     session_store_config: Option<config::Value>,
 
     // Trusted keys
-    trusted_manufacturer_keys_path: Option<String>,
+    trusted_manufacturer_keys_path: Option<AbsolutePathBuf>,
 
     // Other info
     max_wait_seconds: Option<u32>,
