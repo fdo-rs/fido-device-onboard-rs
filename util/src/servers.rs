@@ -1,11 +1,47 @@
 use glob::glob;
-use std::env;
+use serde::Deserialize;
 use std::path::Path;
+use std::{env, path::PathBuf};
 
 use anyhow::{bail, Context, Result};
 
 use serde_cbor::Value as CborValue;
 use serde_yaml::Value;
+
+#[derive(Debug)]
+pub struct AbsolutePathBuf(PathBuf);
+
+impl<'de> Deserialize<'de> for AbsolutePathBuf {
+    fn deserialize<D>(deserializer: D) -> Result<AbsolutePathBuf, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        if s.is_empty() {
+            return Err(serde::de::Error::custom("path is empty".to_string()));
+        }
+        let path = PathBuf::from(&s);
+        if !path.is_absolute() {
+            return Err(serde::de::Error::custom(format!(
+                "path {} is not absolute",
+                s
+            )));
+        }
+        Ok(AbsolutePathBuf(path))
+    }
+}
+
+impl std::fmt::Display for AbsolutePathBuf {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+impl AsRef<Path> for AbsolutePathBuf {
+    fn as_ref(&self) -> &Path {
+        &self.0
+    }
+}
 
 // TODO(runcom): find a better home for this as it's shared between
 // owner-onboarding-server and manufacturing-server...

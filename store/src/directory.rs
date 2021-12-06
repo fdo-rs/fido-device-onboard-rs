@@ -35,6 +35,11 @@ where
     .map_err(|_| StoreError::Configuration("Storage directory invalid type".to_string()))?;
 
     let dirpath = Path::new(&directory);
+    if !dirpath.is_absolute() {
+        return Err(StoreError::Configuration(
+            "Storage directory is not absolute".to_string(),
+        ));
+    }
     fs::create_dir_all(dirpath).map_err(|e| {
         StoreError::Configuration(format!(
             "Storage directory '{}' could not be created: {}",

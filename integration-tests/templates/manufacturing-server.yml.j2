@@ -1,10 +1,10 @@
 ---
 session_store_driver: Directory
-session_store_config: sessions/
+session_store_config: {{ config_dir }}/sessions/
 ownership_voucher_store_driver: Directory
-ownership_voucher_store_config: ownership_vouchers/
+ownership_voucher_store_config: {{ config_dir }}/ownership_vouchers/
 bind: {{ bind }}
-rendezvous_info_path: ""
+rendezvous_info_path: {{ config_dir }}/rendezvous-info.yml
 protocols:
   diun:
     key_path: {{ keys_path }}/diun_key.der

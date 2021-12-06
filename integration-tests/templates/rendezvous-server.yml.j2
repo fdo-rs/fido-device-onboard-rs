@@ -1,7 +1,7 @@
 ---
 storage_driver: Directory
-storage_config: rendezvous_registered/
+storage_config: {{ config_dir }}/rendezvous_registered/
 session_store_driver: Directory
-session_store_config: sessions/
+session_store_config: {{ config_dir }}/sessions/
 trusted_manufacturer_keys_path: {{ keys_path }}/manufacturer_cert.pem
 bind: {{ bind }}
