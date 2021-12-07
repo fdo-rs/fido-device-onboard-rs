@@ -30,9 +30,8 @@ impl OutputExt for Output {
 
 pub fn run_external(script: &str, args: &[&str]) -> Output {
     let descrip = format!("test script {}.go, with args {:?}", script, args);
-    let script_path = root_dir()
-        .join("test_scripts")
-        .join(format!("{}.go", script));
+    let script_path_location = root_dir().join("test_scripts");
+    let script_path = script_path_location.join(format!("{}.go", script));
 
     match std::fs::remove_file(format!(
         "{}/../target/debug/libfdo_data.so.{}",
@@ -59,8 +58,10 @@ pub fn run_external(script: &str, args: &[&str]) -> Output {
 
     let result = Command::new("go")
         .arg("run")
+        .args(&["-tags", "localbuild"])
         .arg(script_path)
         .args(args)
+        .current_dir(&script_path_location)
         .output()
         .expect(&format!("Failed to run {}", descrip,));
 

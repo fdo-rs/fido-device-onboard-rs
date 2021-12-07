@@ -1,10 +1,15 @@
-use std::slice::SliceIndex;
+use std::convert::TryInto;
 
 use thiserror::Error;
 
 use paste::paste;
 
-use crate::{constants::HashType, types::Hash, Error, Serializable};
+use crate::{
+    constants::HashType,
+    serializable::{DeserializableMany, MaybeSerializable},
+    types::Hash,
+    Error, Serializable,
+};
 
 mod private {
     pub trait Sealed {}
@@ -23,7 +28,7 @@ macro_rules! parsed_array_size {
             #[derive(Debug, Clone)]
             pub struct [<ParsedArraySize $size>] {}
             impl ParsedArraySize for [<ParsedArraySize $size>] {
-                const SIZE: Option<usize> = Some($size);
+                const SIZE: Option<u64> = Some($size);
             }
             impl ParsedArraySizeStatic for [<ParsedArraySize $size>] {}
         }
@@ -33,7 +38,7 @@ macro_rules! parsed_array_size {
 macro_rules! check_bounds {
     ($n:ident) => {
         if let Some(expected_len) = N::SIZE {
-            if $n > expected_len {
+            if ($n as u64) > expected_len {
                 panic!("Out of bounds");
             }
         }
@@ -41,14 +46,14 @@ macro_rules! check_bounds {
 }
 
 pub trait ParsedArraySize: private::Sealed {
-    const SIZE: Option<usize>;
+    const SIZE: Option<u64>;
 }
 pub trait ParsedArraySizeStatic: ParsedArraySize {}
 
 #[derive(Debug, Clone)]
 pub struct ParsedArraySizeDynamic {}
 impl ParsedArraySize for ParsedArraySizeDynamic {
-    const SIZE: Option<usize> = None;
+    const SIZE: Option<u64> = None;
 }
 
 parsed_array_size!(1);
@@ -61,6 +66,9 @@ parsed_array_size!(6);
 #[derive(Clone)]
 pub struct ParsedArray<N: ParsedArraySize> {
     tag: Option<u64>,
+
+    #[allow(unused)]
+    header: Option<Vec<u8>>,
     contents: Vec<Vec<u8>>,
 
     _marker: std::marker::PhantomData<N>,
@@ -80,8 +88,8 @@ impl<N: ParsedArraySize> std::fmt::Debug for ParsedArray<N> {
 
 #[derive(Error, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ArrayParseError {
-    #[error("Invalid top level type encountered: must be array")]
-    InvalidTopLevelType,
+    #[error("Invalid top level type encountered: must be array (was {0:?})")]
+    InvalidTopLevelType(MajorType),
     #[error("Invalid array length")]
     LengthParseFailure,
     #[error("Invalid major type encountered: {0}")]
@@ -91,9 +99,9 @@ pub enum ArrayParseError {
     #[error("Unsupported major type: {0}")]
     UnsupportedMajorType(u8),
     #[error("Invalid number of elements encountered: {0} received, {1} expected")]
-    InvalidNumberOfElements(usize, usize),
-    #[error("Insufficient data to decode")]
-    InsufficientData,
+    InvalidNumberOfElements(u64, u64),
+    #[error("No data to be deserialized")]
+    NoData,
 }
 
 const MASK_TYPE: u8 = 0b1110_0000;
@@ -101,7 +109,7 @@ const MASK_VAL: u8 = 0b0001_1111;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-enum MajorType {
+pub enum MajorType {
     Unsigned = 0,
     Negative = 1,
     ByteString = 2,
@@ -128,30 +136,6 @@ impl MajorType {
     }
 }
 
-fn length_size(minor: u8) -> Result<usize, ArrayParseError> {
-    match minor {
-        0..=23 => Ok(0),
-        24 => Ok(1), // uint8_t
-        25 => Ok(2), // uint16_t
-        26 => Ok(4), // uint32_t
-        27 => Ok(8), // uint64_t
-        _ => Err(ArrayParseError::LengthParseFailure),
-    }
-}
-
-fn parse_length(data: &[u8]) -> Result<usize, ArrayParseError> {
-    match data[0] & MASK_VAL {
-        0..=23 => Ok((data[0] & MASK_VAL) as usize),
-        24 => Ok(data[1] as usize),
-        25 => Ok(u16::from_be_bytes([data[1], data[2]]) as usize),
-        26 => Ok(u32::from_be_bytes([data[1], data[2], data[3], data[4]]) as usize),
-        27 => Ok(u64::from_be_bytes([
-            data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8],
-        ]) as usize),
-        _ => Err(ArrayParseError::LengthParseFailure),
-    }
-}
-
 fn encode_item_start(major_type: MajorType, val: u64) -> Vec<u8> {
     // We currently only support arrays that fit in a single byte
     // TODO: support arrays that are larger than 24
@@ -161,80 +145,115 @@ fn encode_item_start(major_type: MajorType, val: u64) -> Vec<u8> {
     vec![((major_type as u8) << 5) | ((val as u8) & MASK_VAL)]
 }
 
-#[derive(Debug)]
-struct SafeData<'a>(&'a [u8]);
+fn read_len<R>(mut reader: R, header: u8) -> Result<(u64, Vec<u8>), ArrayParseError>
+where
+    R: std::io::Read,
+{
+    let minor = header & MASK_VAL;
+    let length_size = match minor {
+        0..=23 => 0,
+        24 => 1, // uint8_t
+        25 => 2, // uint16_t
+        26 => 4, // uint32_t
+        27 => 8, // uint64_t
+        _ => return Err(ArrayParseError::LengthParseFailure),
+    };
+    if length_size == 0 {
+        Ok((minor as u64, vec![]))
+    } else {
+        let mut buf = vec![0; length_size as usize];
+        reader.read_exact(&mut buf).unwrap();
 
-impl<'a> SafeData<'a> {
-    fn new(data: &'a [u8]) -> Self {
-        Self(data)
-    }
-
-    fn get<I>(&self, index: I) -> Result<&<I as SliceIndex<[u8]>>::Output, Error>
-    where
-        I: SliceIndex<[u8]>,
-    {
-        self.0
-            .get(index)
-            .ok_or_else(|| Error::from(ArrayParseError::InsufficientData))
-    }
-
-    fn len(&self) -> usize {
-        self.0.len()
+        match length_size {
+            1 => Ok((buf[0] as u64, buf)),
+            2 => Ok((
+                u16::from_be_bytes(buf.clone().try_into().unwrap()) as u64,
+                buf,
+            )),
+            4 => Ok((
+                u32::from_be_bytes(buf.clone().try_into().unwrap()) as u64,
+                buf,
+            )),
+            8 => Ok((u64::from_be_bytes(buf.clone().try_into().unwrap()), buf)),
+            _ => unreachable!(),
+        }
     }
 }
 
-impl<N: ParsedArraySize> Serializable for ParsedArray<N> {
-    fn serialize_data(&self) -> Result<Vec<u8>, Error> {
-        let result_len: usize = self.contents.iter().map(|v| v.len()).sum::<usize>();
+impl<N: ParsedArraySize> MaybeSerializable for ParsedArray<N> {
+    fn is_nodata_error(err: &Error) -> bool {
+        matches!(err, Error::ArrayParseError(ArrayParseError::NoData))
+    }
+}
 
-        let mut result = Vec::new();
+impl<N: ParsedArraySize> DeserializableMany for ParsedArray<N> {}
+
+impl<N: ParsedArraySize> Serializable for ParsedArray<N> {
+    fn serialize_to_writer<W>(&self, mut writer: W) -> Result<(), Error>
+    where
+        W: std::io::Write,
+    {
+        let mut header = Vec::new();
         if let Some(tag) = self.tag {
-            result.extend_from_slice(&encode_item_start(MajorType::Tag, tag));
+            header.extend_from_slice(&encode_item_start(MajorType::Tag, tag));
         }
-        result.extend_from_slice(&encode_item_start(
+        header.extend_from_slice(&encode_item_start(
             MajorType::Array,
             self.contents.len() as u64,
         ));
 
-        result.reserve_exact(result_len);
+        writer.write_all(&header)?;
 
         for item in &self.contents {
-            result.extend_from_slice(item);
+            writer.write_all(item)?;
         }
 
-        Ok(result)
+        Ok(())
     }
 
-    fn deserialize_data(data: &[u8]) -> Result<Self, Error> {
-        let data = SafeData::new(data);
+    fn deserialize_from_reader<R>(mut reader: R) -> Result<Self, Error>
+    where
+        R: std::io::Read,
+    {
+        let mut header_buf = Vec::new();
 
         // Parse JUST the top-level array, leave everything else as raw binary things
         let mut parsed_items = Vec::new();
 
-        let first_major_type = MajorType::maybe_from_u8(data.get(0)? & MASK_TYPE)?;
-        let (data, tag) = match first_major_type {
+        let mut singlebyte_buf = [0u8; 1];
+        match reader.read_exact(&mut singlebyte_buf) {
+            Ok(_) => {}
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::UnexpectedEof => return Err(ArrayParseError::NoData.into()),
+                _ => return Err(e.into()),
+            },
+        }
+        header_buf.extend_from_slice(&singlebyte_buf);
+        let first_major_type = MajorType::maybe_from_u8(singlebyte_buf[0] & MASK_TYPE)?;
+        let tag = match first_major_type {
             MajorType::Tag => {
-                let tag_val_size = length_size(data.get(0)? & MASK_VAL)?;
-                let tag_val = parse_length(data.get(..=tag_val_size)?)?;
+                let (tag_val, mut tag_bytes) = read_len(&mut reader, singlebyte_buf[0])?;
+                header_buf.append(&mut tag_bytes);
 
-                (
-                    SafeData::new(data.get(1 + tag_val_size..)?),
-                    Some(tag_val as u64),
-                )
+                // Read the next byte, which should be the major type of the array
+                reader.read_exact(&mut singlebyte_buf)?;
+                header_buf.extend_from_slice(&singlebyte_buf);
+
+                Some(tag_val as u64)
             }
-            MajorType::Array => (data, None),
-            _ => return Err(Error::from(ArrayParseError::InvalidTopLevelType)),
+            MajorType::Array => None,
+            tp => return Err(Error::from(ArrayParseError::InvalidTopLevelType(tp))),
         };
 
-        let first_major_type = MajorType::maybe_from_u8(data.get(0)? & MASK_TYPE)?;
+        let first_major_type = MajorType::maybe_from_u8(singlebyte_buf[0] & MASK_TYPE)?;
         if first_major_type != MajorType::Array {
-            return Err(Error::from(ArrayParseError::InvalidTopLevelType));
+            return Err(Error::from(ArrayParseError::InvalidTopLevelType(
+                first_major_type,
+            )));
         }
 
-        let map_len_size = length_size(data.get(0)? & MASK_VAL)?;
-        let map_len = parse_length(data.get(0..=map_len_size)?)?;
-
-        let start_index = map_len_size + 1;
+        let (map_len, mut map_len_bytes) = read_len(&mut reader, singlebyte_buf[0])?;
+        header_buf.append(&mut map_len_bytes);
 
         if let Some(expected_len) = N::SIZE {
             if map_len != expected_len {
@@ -244,6 +263,7 @@ impl<N: ParsedArraySize> Serializable for ParsedArray<N> {
         } else if map_len == 0 {
             return Ok(ParsedArray {
                 tag,
+                header: None,
                 contents: Vec::new(),
 
                 _marker: std::marker::PhantomData,
@@ -251,51 +271,51 @@ impl<N: ParsedArraySize> Serializable for ParsedArray<N> {
         }
 
         let mut left_at_depth = vec![map_len];
-        let mut current_top_level_index = start_index;
-        let mut index = 1;
-        while index < data.len() {
+        let mut toplevel_buf = Vec::new();
+        loop {
             if left_at_depth.is_empty() {
-                return Err(ArrayParseError::ParseFailure("Too many items in array").into());
+                // Got to the end of the array
+                break;
             }
 
-            let major_type = MajorType::maybe_from_u8(data.get(index)? & MASK_TYPE)?;
-            let minor = data.get(index)? & MASK_VAL;
+            reader.read_exact(&mut singlebyte_buf)?;
+            toplevel_buf.extend_from_slice(&singlebyte_buf);
 
-            let (tag_len, major_type, minor) = if major_type == MajorType::Tag {
-                let tag_val_size = length_size(minor)?;
-                let major_type =
-                    MajorType::maybe_from_u8(data.get(index + tag_val_size + 1)? & MASK_TYPE)?;
-                let minor = data.get(index + tag_val_size + 1)? & MASK_VAL;
-                (tag_val_size + 1, major_type, minor)
-            } else {
-                (0, major_type, minor)
-            };
-            index += tag_len;
+            let major_type = MajorType::maybe_from_u8(singlebyte_buf[0] & MASK_TYPE)?;
+            let minor = singlebyte_buf[0] & MASK_VAL;
 
-            let value_len: usize;
+            if major_type == MajorType::Tag {
+                let (_, mut tag_bytes) = read_len(&mut reader, minor)?;
+                toplevel_buf.append(&mut tag_bytes);
+
+                continue;
+            }
 
             match major_type {
                 MajorType::Unsigned | MajorType::Negative => {
-                    let len_size = length_size(minor)?;
-                    value_len = 1 + len_size;
+                    let (_, mut val_bytes) = read_len(&mut reader, minor)?;
+                    toplevel_buf.append(&mut val_bytes);
                 }
                 MajorType::ByteString | MajorType::TextString => {
-                    let len_size = length_size(minor)?;
-                    let length = parse_length(data.get(index..=index + len_size)?)?;
-                    value_len = 1 + len_size + length;
+                    let (length, mut len_bytes) = read_len(&mut reader, minor)?;
+                    toplevel_buf.append(&mut len_bytes);
+
+                    let mut buf = vec![0; length as usize];
+                    reader.read_exact(&mut buf)?;
+                    toplevel_buf.append(&mut buf);
                 }
                 MajorType::Array => {
-                    let len_size = length_size(minor)?;
-                    let length = parse_length(data.get(index..=index + len_size)?)?;
-                    value_len = 1 + len_size;
+                    let (length, mut len_bytes) = read_len(&mut reader, minor)?;
+                    toplevel_buf.append(&mut len_bytes);
+
                     if length != 0 {
                         left_at_depth.insert(0, length);
                     }
                 }
                 MajorType::Map => {
-                    let len_size = length_size(minor)?;
-                    let length = parse_length(data.get(index..=index + len_size)?)?;
-                    value_len = 1 + len_size;
+                    let (length, mut len_bytes) = read_len(&mut reader, minor)?;
+                    toplevel_buf.append(&mut len_bytes);
+
                     if length != 0 {
                         // With a map, "length" is the number of key-value pairs, so there are 2 * length items.
                         // We do not actually need to parse the values in the Map, as long as we determine the correct
@@ -306,12 +326,10 @@ impl<N: ParsedArraySize> Serializable for ParsedArray<N> {
                 n => return Err(ArrayParseError::UnsupportedMajorType(n as u8).into()),
             }
 
-            let index_end = index + value_len;
-
             if left_at_depth.len() == 1 {
                 // This was the end of an item at the top level
-                parsed_items.push(data.get(current_top_level_index..index_end)?.to_vec());
-                current_top_level_index = index_end;
+                parsed_items.push(toplevel_buf);
+                toplevel_buf = Vec::new();
             }
             if left_at_depth[0] == 1 {
                 // This was the last item, we're now back in the higher level array
@@ -324,21 +342,25 @@ impl<N: ParsedArraySize> Serializable for ParsedArray<N> {
             } else {
                 left_at_depth[0] -= 1;
             }
-
-            index = index_end;
         }
 
         if !left_at_depth.is_empty() {
             return Err(ArrayParseError::ParseFailure("Too few items in array").into());
         }
         if let Some(expected_size) = N::SIZE {
-            if parsed_items.len() != expected_size {
+            if (parsed_items.len() as u64) != expected_size {
                 return Err(ArrayParseError::ParseFailure("Too many items in array").into());
             }
         }
 
         Ok(ParsedArray {
             tag,
+
+            header: if N::SIZE.is_some() {
+                Some(header_buf)
+            } else {
+                None
+            },
             contents: parsed_items,
 
             _marker: std::marker::PhantomData,
@@ -350,6 +372,7 @@ impl ParsedArray<ParsedArraySizeDynamic> {
     pub fn new_empty() -> Self {
         Self {
             tag: None,
+            header: None,
             contents: Vec::new(),
 
             _marker: std::marker::PhantomData,
@@ -386,9 +409,11 @@ where
     /// state of the contents of this array is undefined.
     // TODO: Turn this into a builder perhaps?
     pub unsafe fn new() -> Self {
-        let new = vec![vec![]; N::SIZE.unwrap()];
+        let new = vec![vec![]; N::SIZE.unwrap() as usize];
         Self {
             tag: None,
+
+            header: None,
             contents: new,
 
             _marker: std::marker::PhantomData,
@@ -457,7 +482,7 @@ mod test {
     use std::collections::HashMap;
 
     use super::ParsedArray;
-    use crate::Serializable;
+    use crate::{DeserializableMany, Serializable};
 
     #[test]
     fn test_empty_array_static() {
@@ -802,5 +827,33 @@ mod test {
         );
         let serialized = parsed.serialize_data().expect("Failed to serialize");
         assert_eq!(serialized, data);
+    }
+
+    #[test]
+    fn multiple_arrays() {
+        let data = hex::decode("8650CBF6CA589001016CAFA4E5C15FB6B2885045C751C1C96532C81CA670028D9903E16745434448333834674132353647434D790102736F6D652D737472696E672D77686963682D73686F756C642D62652D6C6F6E6765722D7468616E2D3235352D62797465732D737563682D746861742D69742D676F65732D6F6E2D666F722D6C6F6E6765722D7468616E2D666974732D696E2D612D75696E74385F743A20566573746962756C756D2061742073656D206E657175652E204E756C6C616D206120616C697175616D206E756C6C612C206120696163756C697320616E74652E20436C61737320617074656E742074616369746920736F63696F737175206164206C69746F726120746F727175656E742070657220636F6E75626961206E6F737472612C2070657220696E636570746F732070726F696E2E823822408650CBF6CA589001016CAFA4E5C15FB6B2885045C751C1C96532C81CA670028D9903E16745434448333834674132353647434DC6790102736F6D652D737472696E672D77686963682D73686F756C642D62652D6C6F6E6765722D7468616E2D3235352D62797465732D737563682D746861742D69742D676F65732D6F6E2D666F722D6C6F6E6765722D7468616E2D666974732D696E2D612D75696E74385F743A20566573746962756C756D2061742073656D206E657175652E204E756C6C616D206120616C697175616D206E756C6C612C206120696163756C697320616E74652E20436C61737320617074656E742074616369746920736F63696F737175206164206C69746F726120746F727175656E742070657220636F6E75626961206E6F737472612C2070657220696E636570746F732070726F696E2E82382240").unwrap();
+        let parsed: Vec<ParsedArray<super::ParsedArraySize6>> =
+            ParsedArray::deserialize_many_from_reader(&*data).expect("Failed to parse");
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(
+            parsed[0].raw_values(), vec![
+                hex::decode("50CBF6CA589001016CAFA4E5C15FB6B288").unwrap(),
+                hex::decode("5045C751C1C96532C81CA670028D9903E1").unwrap(),
+                hex::decode("6745434448333834").unwrap(),
+                hex::decode("674132353647434D").unwrap(),
+                hex::decode("790102736F6D652D737472696E672D77686963682D73686F756C642D62652D6C6F6E6765722D7468616E2D3235352D62797465732D737563682D746861742D69742D676F65732D6F6E2D666F722D6C6F6E6765722D7468616E2D666974732D696E2D612D75696E74385F743A20566573746962756C756D2061742073656D206E657175652E204E756C6C616D206120616C697175616D206E756C6C612C206120696163756C697320616E74652E20436C61737320617074656E742074616369746920736F63696F737175206164206C69746F726120746F727175656E742070657220636F6E75626961206E6F737472612C2070657220696E636570746F732070726F696E2E").unwrap(),
+                hex::decode("82382240").unwrap(),
+            ]
+        );
+        assert_eq!(
+            parsed[1].raw_values(), vec![
+                hex::decode("50CBF6CA589001016CAFA4E5C15FB6B288").unwrap(),
+                hex::decode("5045C751C1C96532C81CA670028D9903E1").unwrap(),
+                hex::decode("6745434448333834").unwrap(),
+                hex::decode("674132353647434D").unwrap(),
+                hex::decode("C6790102736F6D652D737472696E672D77686963682D73686F756C642D62652D6C6F6E6765722D7468616E2D3235352D62797465732D737563682D746861742D69742D676F65732D6F6E2D666F722D6C6F6E6765722D7468616E2D666974732D696E2D612D75696E74385F743A20566573746962756C756D2061742073656D206E657175652E204E756C6C616D206120616C697175616D206E756C6C612C206120696163756C697320616E74652E20436C61737320617074656E742074616369746920736F63696F737175206164206C69746F726120746F727175656E742070657220636F6E75626961206E6F737472612C2070657220696E636570746F732070726F696E2E").unwrap(),
+                hex::decode("82382240").unwrap(),
+            ]
+        );
     }
 }

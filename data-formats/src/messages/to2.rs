@@ -147,22 +147,28 @@ pub struct OVNextEntry {
 }
 
 impl Serializable for OVNextEntry {
-    fn deserialize_data(data: &[u8]) -> Result<Self, crate::Error> {
+    fn deserialize_from_reader<R>(reader: R) -> Result<Self, crate::Error>
+    where
+        R: std::io::Read,
+    {
         let contents: ParsedArray<crate::cborparser::ParsedArraySize2> =
-            ParsedArray::deserialize_data(data)?;
+            ParsedArray::deserialize_from_reader(reader)?;
         let entry_num = contents.get(0)?;
         let entry = contents.get(1)?;
 
         Ok(OVNextEntry { entry_num, entry })
     }
 
-    fn serialize_data(&self) -> Result<Vec<u8>, crate::Error> {
+    fn serialize_to_writer<W>(&self, writer: W) -> Result<(), crate::Error>
+    where
+        W: std::io::Write,
+    {
         let mut contents: ParsedArray<crate::cborparser::ParsedArraySize2> =
             unsafe { ParsedArray::new() };
         contents.set(0, &self.entry_num)?;
         contents.set(1, &self.entry)?;
 
-        contents.serialize_data()
+        contents.serialize_to_writer(writer)
     }
 }
 
