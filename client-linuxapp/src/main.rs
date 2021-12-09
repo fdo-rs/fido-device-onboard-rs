@@ -460,6 +460,10 @@ fn sleep_between_retries(rv_entry_delay: u32) {
 async fn main() -> Result<()> {
     fdo_http_wrapper::init_logging();
 
+    if !fdo_data_formats::INTEROPERABLE_KDF && std::env::var("ALLOW_NONINTEROPABLE_KDF").is_err() {
+        bail!("Provide environment ALLOW_NONINTEROPERABLE_KDF=1 to enable interoperable KDF");
+    }
+
     let marker_file = marker_file_location();
     if marker_file.exists() {
         log::info!(

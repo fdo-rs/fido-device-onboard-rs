@@ -25,3 +25,8 @@ pub mod cborparser;
 mod serializable;
 pub use serializable::DeserializableMany;
 pub use serializable::Serializable;
+
+#[cfg(feature = "use_noninteroperable_kdf")]
+pub const INTEROPERABLE_KDF: bool = false;
+#[cfg(not(feature = "use_noninteroperable_kdf"))]
+pub const INTEROPERABLE_KDF: bool = true;

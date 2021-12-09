@@ -1099,13 +1099,18 @@ impl KeyExchange {
         salt.extend_from_slice(&context_rand);
         salt.extend_from_slice(&(cipher.required_keylen() as u16).to_be_bytes());
 
+        #[cfg(not(feature = "use_noninteroperable_kdf"))]
+        log::warn!("Using non-interoperable key derivation");
+
         let kdf_args = [
             &KdfArgument::KbMode(KdfKbMode::Counter),
             &KdfArgument::Mac(KdfMacType::Hmac(cipher.kdf_digest())),
             &KdfArgument::Salt(KEY_DERIVE_LABEL),
             &KdfArgument::KbInfo(&salt),
             &KdfArgument::Key(&shared_secret),
+            #[cfg(not(feature = "use_noninteroperable_kdf"))]
             &KdfArgument::UseL(false),
+            #[cfg(not(feature = "use_noninteroperable_kdf"))]
             &KdfArgument::R(8),
         ];
         let key_out = perform_kdf(KdfType::KeyBased, &kdf_args, cipher.required_keylen())?;

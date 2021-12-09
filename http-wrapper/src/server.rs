@@ -306,6 +306,9 @@ where
             builder = builder.header("Authorization", token);
         }
     }
+    if !fdo_data_formats::INTEROPERABLE_KDF {
+        builder = builder.header("X-Non-Interoperable-KDF", "true");
+    }
 
     builder.body(val.into()).unwrap()
 }
