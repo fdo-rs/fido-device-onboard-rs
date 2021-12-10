@@ -179,7 +179,7 @@ enum DiunPublicKeyVerificationMode {
 impl DiunPublicKeyVerificationMode {
     fn get_from_env() -> Result<Self> {
         if let Ok(_rootcerts) = env::var("DIUN_PUB_KEY_ROOTCERTS") {
-            todo!()
+            bail!("DIUN_PUB_KEY_ROOTCERTS is not yet implemented");
         } else if let Ok(hash) = env::var("DIUN_PUB_KEY_HASH") {
             Ok(DiunPublicKeyVerificationMode::Hash(
                 Hash::from_str(&hash).context("Error parsing DIUN_PUB_KEY_HASH as hash")?,
@@ -305,6 +305,7 @@ impl KeyReference {
                 let curve_name = match keytype {
                     PublicKeyType::SECP256R1 => Nid::X9_62_PRIME256V1,
                     PublicKeyType::SECP384R1 => Nid::SECP384R1,
+                    // This is already filtered above
                     _ => unreachable!(),
                 };
                 let group =

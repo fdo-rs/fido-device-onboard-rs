@@ -47,6 +47,7 @@ impl EncryptionKeys {
         }
     }
 
+    #[allow(clippy::panic)]
     fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>, CoseError> {
         if self.cipher_suite.is_none() {
             Ok(plaintext.to_vec())
@@ -60,6 +61,7 @@ impl EncryptionKeys {
         }
     }
 
+    #[allow(clippy::panic)]
     fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>, CoseError> {
         if self.cipher_suite.is_none() {
             Ok(ciphertext.to_vec())

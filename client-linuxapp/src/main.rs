@@ -4,7 +4,7 @@ use anyhow::{anyhow, bail, Context, Result};
 
 use fdo_data_formats::{
     cborparser::ParsedArray,
-    constants::{DeviceSigType, HeaderKeys, TransportProtocol},
+    constants::{DeviceSigType, HeaderKeys, RendezvousProtocolValue, TransportProtocol},
     enhanced_types::{RendezvousInterpretedDirective, RendezvousInterpreterSide},
     messages,
     ownershipvoucher::OwnershipVoucher,
@@ -81,13 +81,18 @@ async fn get_client_list(rv_entry: &RendezvousInterpretedDirective) -> Result<Ve
         log::trace!("No URLs found");
     }
     if rv_entry.bypass {
-        todo!();
+        bail!("Rendezvous Bypass is not yet implemented");
     }
     if rv_entry.wifi_ssid.is_some() {
-        todo!();
+        bail!("Rendezvous WiFi configuration is not yet implemented");
     }
     if rv_entry.user_input {
-        todo!();
+        bail!("Rendezvous User Input is not yet implemented");
+    }
+    if rv_entry.protocol != RendezvousProtocolValue::Http
+        && rv_entry.protocol != RendezvousProtocolValue::Https
+    {
+        bail!("Non-HTTP(S) protocol is not implemented");
     }
     for url in &urls {
         service_client_list.push(fdo_http_wrapper::client::ServiceClient::new(url));

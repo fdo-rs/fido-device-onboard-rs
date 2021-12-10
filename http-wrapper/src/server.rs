@@ -19,12 +19,13 @@ pub struct SessionWithStore {
 
 type SessionStoreT = Arc<SessionStore>;
 
+#[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
 pub enum SessionStoreMetadataKey {}
 
 impl MetadataLocalKey for SessionStoreMetadataKey {
     fn to_key(&self) -> &'static str {
-        todo!()
+        match *self {}
     }
 }
 
@@ -373,11 +374,14 @@ where
 {
     if !OM::is_valid_previous_message(Some(IM::message_type())) {
         // This is a programming error, let's just check this on start
-        panic!(
-            "Programming error: IM {:?} is not valid for OM {:?}",
-            IM::message_type(),
-            OM::message_type()
-        );
+        #[allow(clippy::panic)]
+        {
+            panic!(
+                "Programming error: IM {:?} is not valid for OM {:?}",
+                IM::message_type(),
+                OM::message_type()
+            );
+        }
     }
 
     warp::post()

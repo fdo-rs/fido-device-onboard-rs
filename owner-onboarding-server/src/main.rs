@@ -473,6 +473,8 @@ async fn main() -> Result<()> {
         })
         .1;
     let server = tokio::spawn(server);
+
+    #[allow(clippy::panic)]
     let _ = tokio::select!(
     _ = server => {
         log::info!("Server terminated");
