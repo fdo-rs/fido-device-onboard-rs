@@ -458,6 +458,7 @@ fn sleep_between_retries(rv_entry_delay: u32) {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    fdo_util::add_version!();
     fdo_http_wrapper::init_logging();
 
     if !fdo_data_formats::INTEROPERABLE_KDF && std::env::var("ALLOW_NONINTEROPABLE_KDF").is_err() {

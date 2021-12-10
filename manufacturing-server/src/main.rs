@@ -277,6 +277,7 @@ async fn perform_maintenance(
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    fdo_util::add_version!();
     fdo_http_wrapper::init_logging();
 
     let settings: Settings = settings_for("manufacturing-server")?

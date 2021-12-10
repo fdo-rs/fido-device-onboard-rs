@@ -15,6 +15,7 @@ serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.8"
 tokio = { version = "1", features = ["full"] }
 
+fdo-util = { path = "../util", version = "0.2.0" }
 fdo-data-formats = { path = "../data-formats", version = "0.2.0" }
 fdo-http-wrapper = { path = "../http-wrapper", version = "0.2.0", features = ["client"] }
 

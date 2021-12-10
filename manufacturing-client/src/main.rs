@@ -194,6 +194,7 @@ impl DiunPublicKeyVerificationMode {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    fdo_util::add_version!();
     fdo_http_wrapper::init_logging();
 
     match device_credential_locations::find() {
