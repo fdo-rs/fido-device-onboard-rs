@@ -283,7 +283,7 @@ impl FromStr for RendezvousVariable {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr)]
+#[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, PartialEq, Eq)]
 #[repr(u8)]
 #[non_exhaustive]
 pub enum RendezvousProtocolValue {
