@@ -290,6 +290,7 @@ fn generate_owner2_keys() -> Result<(PKey<Private>, PublicKey)> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    fdo_util::add_version!();
     fdo_http_wrapper::init_logging();
 
     if !fdo_data_formats::INTEROPERABLE_KDF && std::env::var("ALLOW_NONINTEROPABLE_KDF").is_err() {

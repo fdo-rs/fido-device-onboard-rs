@@ -122,6 +122,7 @@ const DEFAULT_MAX_WAIT_SECONDS: u32 = 2592000;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    fdo_util::add_version!();
     fdo_http_wrapper::init_logging();
 
     let settings: Settings = settings_for("rendezvous-server")?

@@ -27,6 +27,7 @@ use fdo_data_formats::{
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    fdo_util::add_version!();
     fdo_http_wrapper::init_logging();
 
     let matches = App::new("owner_tool")
