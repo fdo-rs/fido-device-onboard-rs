@@ -54,12 +54,13 @@ impl Serializable for StoredItem {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
 enum RendezvousStoreMetadataKey {}
 
 impl fdo_store::MetadataLocalKey for RendezvousStoreMetadataKey {
     fn to_key(&self) -> &'static str {
-        todo!()
+        match *self {}
     }
 }
 
@@ -227,6 +228,8 @@ async fn main() -> Result<()> {
         })
         .1;
     let server = tokio::spawn(server);
+
+    #[allow(clippy::panic)]
     let _ = tokio::select!(
     _ = server => {
         log::info!("Server terminated");

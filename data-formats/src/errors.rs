@@ -37,6 +37,8 @@ pub enum Error {
     UnsupportedAlgorithm,
     #[error("Non-owner key attempted to sign")]
     NonOwnerKey,
+    #[error("Feature not implemented yet: {0}")]
+    NotImplemented(&'static str),
     #[error("Inconsistent values were used for '{0}'")]
     InconsistentValue(&'static str),
     #[error("An invalid state machine transition was attempted")]

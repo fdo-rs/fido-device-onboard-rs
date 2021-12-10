@@ -250,9 +250,11 @@ impl RendezvousVariable {
             },
 
             // TODO
-            RendezvousVariable::ServerCertHash => todo!(),
-            RendezvousVariable::CaCertHash => todo!(),
-            RendezvousVariable::Medium => todo!(),
+            RendezvousVariable::ServerCertHash => {
+                return Err(Error::NotImplemented("ServerCertHash"))
+            }
+            RendezvousVariable::CaCertHash => return Err(Error::NotImplemented("CaCertHash")),
+            RendezvousVariable::Medium => return Err(Error::NotImplemented("Medium")),
         })
     }
 }
@@ -314,11 +316,11 @@ impl FromStr for RendezvousProtocolValue {
 }
 
 impl RendezvousProtocolValue {
-    pub(crate) fn default_port(&self) -> u32 {
+    pub(crate) fn default_port(&self) -> Option<u32> {
         match self {
-            RendezvousProtocolValue::Http => 80,
-            RendezvousProtocolValue::Https => 443,
-            _ => todo!(),
+            RendezvousProtocolValue::Http => Some(80),
+            RendezvousProtocolValue::Https => Some(443),
+            _ => None,
         }
     }
 }

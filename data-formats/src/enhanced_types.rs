@@ -163,7 +163,14 @@ impl RendezvousInterpretedDirective {
             dns_name,
             port: match port {
                 Some(v) => v,
-                None => protocol.default_port(),
+                None => match protocol.default_port() {
+                    Some(v) => v,
+                    None => {
+                        return Err(<serde_cbor::Error as serde::de::Error>::missing_field(
+                            "No default port",
+                        ))
+                    }
+                },
             },
             server_certificate_hash,
             ca_certificate_hash,

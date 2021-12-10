@@ -39,7 +39,13 @@ macro_rules! check_bounds {
     ($n:ident) => {
         if let Some(expected_len) = N::SIZE {
             if ($n as u64) > expected_len {
-                panic!("Out of bounds");
+                // This is okay, because it is only used on Sized parsed arrays,
+                // where the implementation is aware of what is at each of the
+                // parsed locations.
+                #[allow(clippy::panic)]
+                {
+                    panic!("Out of bounds");
+                }
             }
         }
     };
@@ -175,6 +181,7 @@ where
                 buf,
             )),
             8 => Ok((u64::from_be_bytes(buf.clone().try_into().unwrap()), buf)),
+            // The above cases are exhaustive
             _ => unreachable!(),
         }
     }

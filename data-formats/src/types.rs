@@ -1014,7 +1014,8 @@ impl KeyExchange {
 
             Ok((key.compute_key(&other)?, vec![]))
         } else {
-            panic!("Invalid derive_key_dh call");
+            // Only DH suites call into here
+            unreachable!()
         }
     }
 
@@ -1077,7 +1078,8 @@ impl KeyExchange {
 
             Ok((shared_secret, vec![]))
         } else {
-            panic!("Invalid derive_key_ecdh call");
+            // Only ECDH suites call into here
+            unreachable!()
         }
     }
 
@@ -1220,7 +1222,8 @@ impl KexSuite {
         match self {
             KexSuite::Ecdh256 => 16,
             KexSuite::Ecdh384 => 48,
-            _ => panic!("Invalid get_ecdh_random_size call"),
+            // Only ECDH suites call into here
+            _ => unreachable!(),
         }
     }
 
@@ -1228,7 +1231,8 @@ impl KexSuite {
         let curve_name = match self {
             KexSuite::Ecdh256 => Nid::X9_62_PRIME256V1,
             KexSuite::Ecdh384 => Nid::SECP384R1,
-            _ => panic!("Invalid get_ecdh_group call"),
+            // Only ECDH suites call into here
+            _ => unreachable!(),
         };
         Ok(EcGroup::from_curve_name(curve_name)?)
     }
@@ -1278,7 +1282,8 @@ impl KexSuite {
                 let generator = BigNum::from_u32(2)?;
                 Ok(Dh::from_pqg(prime, None, generator)?)
             }
-            _ => panic!("Invalid get_dh_params call"),
+            // Only DH suites call into here
+            _ => unreachable!(),
         }
     }
 }
@@ -1300,7 +1305,8 @@ impl CipherSuite {
     fn split_key_split_pos(&self) -> usize {
         match self {
             CipherSuite::A128Gcm | CipherSuite::A256Gcm => {
-                panic!("Invalid call to split_key_split_pos")
+                // Gcm ciphers should never call into the split_key
+                unreachable!()
             }
         }
     }
