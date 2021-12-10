@@ -54,14 +54,14 @@ impl MetadataValue for bool {
     }
 }
 
-impl MetadataValue for chrono::Duration {
+impl MetadataValue for time::Duration {
     fn to_stored(&self) -> Result<Vec<u8>, StoreError> {
-        let ttl = chrono::Local::now() + *self;
-        Ok(i64::to_le_bytes(ttl.timestamp()).into())
+        let ttl = time::OffsetDateTime::now_utc() + *self;
+        Ok(i64::to_le_bytes(ttl.unix_timestamp()).into())
     }
     fn to_text(&self) -> String {
-        let ttl = chrono::Local::now() + *self;
-        ttl.timestamp().to_string()
+        let ttl = time::OffsetDateTime::now_utc() + *self;
+        ttl.unix_timestamp().to_string()
     }
 }
 

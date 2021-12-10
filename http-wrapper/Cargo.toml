@@ -26,7 +26,7 @@ aws-nitro-enclaves-cose = "0.4.0"
 uuid = { version = "0.8", features = ["v4"], optional = true }
 warp = { version = "0.3", optional = true }
 warp-sessions = { version = "1.0", optional = true }
-chrono = "0.4"
+time = "0.3"
 
 # Client-side
 reqwest = { version = "0.11", optional = true }
