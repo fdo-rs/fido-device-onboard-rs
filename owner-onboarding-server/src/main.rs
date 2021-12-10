@@ -109,7 +109,7 @@ async fn report_to_rendezvous(udt: OwnerServiceUDT) -> Result<()> {
     );
     ft.lt(
         &fdo_store::MetadataKey::Local(OwnershipVoucherStoreMetadataKey::To0AcceptOwnerWaitSeconds),
-        chrono::Local::now().timestamp(),
+        time::OffsetDateTime::now_utc().unix_timestamp(),
     );
 
     let ov_iter = ft.query().await?;
@@ -123,10 +123,7 @@ async fn report_to_rendezvous(udt: OwnerServiceUDT) -> Result<()> {
                             &fdo_store::MetadataKey::Local(
                                 OwnershipVoucherStoreMetadataKey::To0AcceptOwnerWaitSeconds,
                             ),
-                            // we don't use chrono::Duration::seconds as that panics and can DOS the service (?)
-                            &chrono::Duration::from_std(std::time::Duration::from_secs(
-                                wait_seconds.into(),
-                            ))?,
+                            &time::Duration::new(wait_seconds.into(), 0),
                         )
                         .await?;
                 }

@@ -1,6 +1,5 @@
 use std::convert::Infallible;
 use std::sync::Arc;
-use std::time::Duration;
 
 use super::EncryptionKeys;
 use fdo_data_formats::{
@@ -58,9 +57,7 @@ impl SessionStore {
             .store_metadata(
                 &session.id().to_string(),
                 &fdo_store::MetadataKey::Ttl,
-                &chrono::Duration::from_std(Duration::from_secs(SESSION_TTL_SECS)).map_err(
-                    |_| SessionError::Unspecified("Couldn't convert duration".to_string()),
-                )?,
+                &time::Duration::new(SESSION_TTL_SECS as i64, 0),
             )
             .await?;
         session.reset_data_changed();
