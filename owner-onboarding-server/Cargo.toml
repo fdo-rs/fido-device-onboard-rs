@@ -1,6 +1,6 @@
 [package]
 name = "fdo-owner-onboarding-server"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Patrick Uiterwijk <patrick@puiterwijk.org>"]
 edition = "2018"
 
@@ -19,7 +19,7 @@ log = "0.4"
 serde_yaml = "0.8"
 time = "0.3"
 
-fdo-data-formats = { path = "../data-formats", version = "0.1.0" }
-fdo-http-wrapper = { path = "../http-wrapper", version = "0.1.0", features = ["server"] }
-fdo-store = { path = "../store", version = "0.1.0", features = ["directory"] }
-fdo-util = { path = "../util", version = "0.1.0" }
+fdo-data-formats = { path = "../data-formats", version = "0.2.0" }
+fdo-http-wrapper = { path = "../http-wrapper", version = "0.2.0", features = ["server"] }
+fdo-store = { path = "../store", version = "0.2.0", features = ["directory"] }
+fdo-util = { path = "../util", version = "0.2.0" }
