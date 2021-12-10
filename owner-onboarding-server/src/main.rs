@@ -292,6 +292,10 @@ fn generate_owner2_keys() -> Result<(PKey<Private>, PublicKey)> {
 async fn main() -> Result<()> {
     fdo_http_wrapper::init_logging();
 
+    if !fdo_data_formats::INTEROPERABLE_KDF && std::env::var("ALLOW_NONINTEROPABLE_KDF").is_err() {
+        bail!("Provide environment ALLOW_NONINTEROPERABLE_KDF=1 to enable interoperable KDF");
+    }
+
     let settings: Settings = settings_for("owner-onboarding-server")?
         .try_into()
         .context("Error parsing configuration")?;

@@ -124,6 +124,10 @@ impl ServiceClient {
             req = req.header("Authorization", authorization_token);
         }
 
+        if !fdo_data_formats::INTEROPERABLE_KDF {
+            req = req.header("X-Non-Interoperable-KDF", "true");
+        }
+
         if let Some(new_keys) = new_keys {
             self.encryption_keys = new_keys;
         }

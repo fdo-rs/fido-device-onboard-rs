@@ -26,7 +26,10 @@ async fn test_to() -> Result<()> {
                 cfg.prepare_config_file(Some("owner-addresses.yml"), |_| Ok(()))?;
                 Ok(cfg.prepare_config_file(None, |_| Ok(()))?)
             },
-            |_| Ok(()),
+            |cmd| {
+                cmd.env("ALLOW_NONINTEROPABLE_KDF", &"1");
+                Ok(())
+            },
         )
         .context("Error creating owner server")?;
     ctx.wait_until_servers_ready()
@@ -163,7 +166,8 @@ async fn test_to() -> Result<()> {
                     .env(
                         "DEVICE_ONBOARDING_EXECUTED_MARKER_FILE_PATH",
                         &marker_file_path.to_str().unwrap(),
-                    );
+                    )
+                    .env("ALLOW_NONINTEROPABLE_KDF", &"1");
                 Ok(())
             },
             Duration::from_secs(5),
