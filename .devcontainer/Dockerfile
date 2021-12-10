@@ -1,9 +1,5 @@
-FROM fedora:latest
+ARG VARIANT
+FROM mcr.microsoft.com/vscode/devcontainers/rust:0-${VARIANT}
 
-RUN bash -c "$(curl -fsSL "https://raw.githubusercontent.com/microsoft/vscode-dev-containers/main/script-library/common-redhat.sh")" -- "true" "vscode" "1000" "1000" "true"
-
-RUN dnf install -y \
-    sudo git cargo rust rust-src openssl-devel clippy rustfmt golang \
-    && dnf clean all
-
-USER vscode
+RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
+    && apt-get -y install --no-install-recommends golang

@@ -1,7 +1,10 @@
 {
 	"name": "fido-device-onboard-rs",
 	"build": {
-		"dockerfile": "Dockerfile"
+		"dockerfile": "Dockerfile",
+		"args": {
+			"VARIANT": "bullseye"
+		}
 	},
 	"runArgs": [
 		"--cap-add=SYS_PTRACE",
@@ -9,12 +12,14 @@
 		"seccomp=unconfined"
 	],
 	"settings": {
+		"lldb.executable": "/usr/bin/lldb",
 		"files.watcherExclude": {
 			"**/target/**": true
 		},
 		"rust-analyzer.checkOnSave.command": "clippy"
 	},
 	"extensions": [
+		"vadimcn.vscode-lldb",
 		"mutantdino.resourcemonitor",
 		"matklad.rust-analyzer",
 		"tamasfe.even-better-toml",
