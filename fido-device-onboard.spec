@@ -7,7 +7,7 @@
 %forgemeta
 
 Name:           fido-device-onboard
-Version:        0.1.0
+Version:        0.2.0
 Release:        1%{?dist}
 Summary:        An implementation of the FIDO Device Onboard Specification written in rust
 
@@ -164,5 +164,8 @@ Summary: FDO Owner tools implementation
 %{_docdir}/fdo/owner-addresses.yml
 
 %changelog
+* Fri Dec 10 2021 Patrick Uiterwijk <puiterwijk@redhat.com> - 0.2.0-1
+- Rebase to 0.2.0
+
 * Tue Oct 5 2021 Antonio Murdaca <amurdaca@redhat.com> - 0.1.0-1
 - initial release
