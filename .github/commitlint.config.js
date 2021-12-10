@@ -7,7 +7,7 @@ const validateBodyMaxLengthIgnoringDeps = (parsedCommit) => {
   const { type, scope, body } = parsedCommit
   const isDepsCommit =
       type === 'chore'
-      && body.includes('Signed-off-by: dependabot[bot] <support@github.com>');
+      && body.includes('Updates the requirements on');
 
   return [
     isDepsCommit || !body || maxLineLength(body, bodyMaxLineLength),
