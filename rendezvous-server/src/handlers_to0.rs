@@ -1,4 +1,3 @@
-use core::time::Duration;
 use std::convert::TryInto;
 
 use fdo_data_formats::messages;
@@ -184,7 +183,7 @@ pub(super) async fn ownersign(
     let device_guid = msg.to0d().ownership_voucher().header().guid().clone();
 
     // Actually store the data here
-    let ttl = Duration::from_secs(wait_seconds as u64);
+    let ttl = time::Duration::new(wait_seconds as i64, 0);
     log::info!(
         "Storing TO1D for device with GUID {:?} for {:?}",
         device_guid,
@@ -204,12 +203,7 @@ pub(super) async fn ownersign(
 
     user_data
         .store
-        .store_metadata(
-            &device_guid,
-            &fdo_store::MetadataKey::Ttl,
-            &chrono::Duration::from_std(ttl)
-                .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?,
-        )
+        .store_metadata(&device_guid, &fdo_store::MetadataKey::Ttl, &ttl)
         .await
         .map_err(Error::from_error::<messages::to0::OwnerSign, _>)?;
 

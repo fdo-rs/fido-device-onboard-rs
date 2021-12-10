@@ -79,7 +79,7 @@ where
     }
 }
 
-// TODO(runcom): fix this to use chrono::Duration and time
+// TODO(runcom): fix this to use time::Duration and time
 fn ttl_from_disk(ttl: &[u8]) -> Result<SystemTime, StoreError> {
     if ttl.len() != 8 {
         return Err(StoreError::Unspecified(format!(
