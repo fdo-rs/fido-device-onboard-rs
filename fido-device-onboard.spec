@@ -4,10 +4,11 @@
 %global __cargo_is_lib() false
 %global forgeurl https://github.com/fedora-iot/fido-device-onboard-rs
 
+Version:        0.2.0
+
 %forgemeta
 
 Name:           fido-device-onboard
-Version:        0.2.0
 Release:        1%{?dist}
 Summary:        An implementation of the FIDO Device Onboard Specification written in rust
 
