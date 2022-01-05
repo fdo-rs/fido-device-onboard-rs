@@ -440,7 +440,7 @@ impl KeyReference {
                 let hmac = hmac_signer
                     .sign_to_vec()
                     .context("Error finalizing hmac computation")?;
-                Ok(HMac::from_digest(HashType::HmacSha384, hmac))
+                Ok(HMac::from_digest(HashType::HmacSha384, hmac)?)
             }
         }
     }

@@ -10,8 +10,14 @@ owner_addresses_path: {{ config_dir }}/owner-addresses.yml
 report_to_rendezvous_endpoint_enabled: true
 bind: {{ bind }}
 service_info:
-  rhsm_organization_id: 6454383
+  rhsm_organization_id: 123456
   rhsm_activation_key: SDOkey
   rhsm_run_insights: true
   sshkey_user: {{ user }}
   sshkey_key: "testkey"
+  files:
+  - path: hosts
+    permissions: 644
+    source_path: /etc/hosts
+  - path: resolv.conf
+    source_path: /etc/resolv.conf

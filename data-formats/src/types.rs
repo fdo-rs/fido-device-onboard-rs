@@ -66,13 +66,7 @@ impl FromStr for Hash {
         let val = &val[1..];
         let alg = HashType::from_str(alg)?;
         let val = hex::decode(val)?;
-        if val.len() != alg.digest_size() {
-            return Err(Error::InconsistentValue("Digest string is invalid length"));
-        }
-        Ok(Hash {
-            hash_type: alg,
-            value: val,
-        })
+        Hash::from_digest(alg, val)
     }
 }
 
@@ -84,8 +78,11 @@ impl Hash {
         })
     }
 
-    pub fn from_digest(hash_type: HashType, value: Vec<u8>) -> Self {
-        Hash { hash_type, value }
+    pub fn from_digest(hash_type: HashType, value: Vec<u8>) -> Result<Self, Error> {
+        if value.len() != hash_type.digest_size() {
+            return Err(Error::InconsistentValue("Digest string is invalid length"));
+        }
+        Ok(Hash { hash_type, value })
     }
 
     pub fn get_type(&self) -> HashType {
@@ -94,6 +91,10 @@ impl Hash {
 
     pub fn value(&self) -> &[u8] {
         &self.value
+    }
+
+    pub fn value_bytes(&self) -> &serde_bytes::Bytes {
+        serde_bytes::Bytes::new(&self.value)
     }
 
     pub fn compare_data(&self, other: &[u8]) -> Result<(), Error> {
@@ -440,6 +441,8 @@ pub type CborSimpleType = serde_cbor::Value;
 
 pub trait CborSimpleTypeExt {
     fn as_bool(&self) -> Option<bool>;
+    fn as_bytes(&self) -> Option<&[u8]>;
+    fn as_u32(&self) -> Option<u32>;
     fn as_i64(&self) -> Option<i64>;
     fn as_u64(&self) -> Option<u64>;
     fn as_f64(&self) -> Option<f64>;
@@ -450,6 +453,20 @@ impl CborSimpleTypeExt for CborSimpleType {
     fn as_bool(&self) -> Option<bool> {
         match self {
             serde_cbor::Value::Bool(b) => Some(*b),
+            _ => None,
+        }
+    }
+
+    fn as_bytes(&self) -> Option<&[u8]> {
+        match self {
+            serde_cbor::Value::Bytes(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn as_u32(&self) -> Option<u32> {
+        match self {
+            serde_cbor::Value::Integer(u) => Some(*u as u32),
             _ => None,
         }
     }

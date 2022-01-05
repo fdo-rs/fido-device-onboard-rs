@@ -457,7 +457,7 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
     let ov_hmac = hmac_signer
         .sign_to_vec()
         .context("Error computing hmac signature")?;
-    let ov_hmac = HMac::from_digest(HashType::HmacSha384, ov_hmac);
+    let ov_hmac = HMac::from_digest(HashType::HmacSha384, ov_hmac)?;
 
     // Build the Ownership Voucher
     let ov = OwnershipVoucher::new(ov_header, ov_hmac, Some(device_cert_chain))
