@@ -20,6 +20,8 @@ pub struct ServiceInfoSettings {
     sshkey_key: Option<String>,
 
     files: Option<Vec<ServiceInfoFile>>,
+
+    commands: Option<Vec<ServiceInfoCommand>>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -29,6 +31,18 @@ pub struct ServiceInfoFile {
     #[serde(skip)]
     parsed_permissions: Option<u32>,
     source_path: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ServiceInfoCommand {
+    command: String,
+    args: Vec<String>,
+    #[serde(default)]
+    may_fail: bool,
+    #[serde(default)]
+    return_stdout: bool,
+    #[serde(default)]
+    return_stderr: bool,
 }
 
 #[derive(Debug)]
@@ -48,7 +62,7 @@ impl ServiceInfoConfiguration {
                 let path = &file.path;
 
                 file.parsed_permissions = if let Some(permissions) = &file.permissions {
-                    Some(u32::from_str_radix(&permissions, 8).with_context(|| {
+                    Some(u32::from_str_radix(permissions, 8).with_context(|| {
                         format!(
                             "Invalid permission string for file {}: {} (invalid octal)",
                             path, permissions
@@ -169,33 +183,39 @@ pub(crate) async fn perform_service_info(
                 )?;
             }
 
-            if modlist.contains("binaryfile")
-                && user_data
-                    .service_info_configuration
-                    .settings
-                    .files
-                    .is_some()
-            {
-                log::trace!("Found binaryfile module, sending files");
+            if modlist.contains("binaryfile") {
+                if let Some(files) = &user_data.service_info_configuration.settings.files {
+                    log::trace!("Found binaryfile module, sending files");
 
-                out_si.add("binaryfile", "active", &true)?;
-                for file in user_data
-                    .service_info_configuration
-                    .settings
-                    .files
-                    .as_ref()
-                    .unwrap()
-                {
-                    let contents = std::fs::read(&file.source_path)?;
-                    let hash = Hash::from_data(HashType::Sha384, &contents)?;
+                    out_si.add("binaryfile", "active", &true)?;
+                    for file in files {
+                        let contents = std::fs::read(&file.source_path)?;
+                        let hash = Hash::from_data(HashType::Sha384, &contents)?;
 
-                    out_si.add("binaryfile", "name", &file.path)?;
-                    out_si.add("binaryfile", "length", &contents.len())?;
-                    if let Some(parsed_permissions) = file.parsed_permissions {
-                        out_si.add("binaryfile", "mode", &parsed_permissions)?;
+                        out_si.add("binaryfile", "name", &file.path)?;
+                        out_si.add("binaryfile", "length", &contents.len())?;
+                        if let Some(parsed_permissions) = file.parsed_permissions {
+                            out_si.add("binaryfile", "mode", &parsed_permissions)?;
+                        }
+                        out_si.add("binaryfile", "data001", &serde_bytes::Bytes::new(&contents))?;
+                        out_si.add("binaryfile", "sha-384", &hash.value_bytes())?;
                     }
-                    out_si.add("binaryfile", "data001", &serde_bytes::Bytes::new(&contents))?;
-                    out_si.add("binaryfile", "sha-384", &hash.value_bytes())?;
+                }
+            }
+
+            if modlist.contains("command") {
+                if let Some(commands) = &user_data.service_info_configuration.settings.commands {
+                    log::trace!("Found command module, sending commands");
+
+                    out_si.add("command", "active", &true)?;
+                    for command in commands {
+                        out_si.add("command", "command", &command.command)?;
+                        out_si.add("command", "args", &command.args)?;
+                        out_si.add("command", "may_fail", &command.may_fail)?;
+                        out_si.add("command", "return_stdout", &command.return_stdout)?;
+                        out_si.add("command", "return_stderr", &command.return_stderr)?;
+                        out_si.add("command", "execute", &true)?;
+                    }
                 }
             }
         }

@@ -210,6 +210,8 @@ testkey
         .context("Error reading hosts file")?;
     assert_eq!(hosts_metadata.permissions().mode() & 0o777, 0o644);
 
+    assert!(key_path.join("command-testfile").exists());
+
     Ok(())
 }
 

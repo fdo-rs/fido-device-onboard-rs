@@ -25,6 +25,7 @@ fn find_available_modules() -> Result<Vec<String>> {
         "devmod".to_string(),
         "sshkey".to_string(),
         "binaryfile".to_string(),
+        "command".to_string(),
     ];
 
     // See if we add RHSM
@@ -120,38 +121,6 @@ fn perform_rhsm(organization_id: &str, activation_key: &str, perform_insights: b
     Ok(())
 }
 
-fn deploy_binaryfile(file: BinaryFileInProgress) -> Result<()> {
-    let path = file.path.as_ref().unwrap();
-
-    let path = if let Ok(val) = env::var("BINARYFILE_PATH_PREFIX") {
-        PathBuf::from(&val).join(path)
-    } else {
-        PathBuf::from(path)
-    };
-
-    if !path.is_absolute() {
-        bail!("Binaryfile path must be absolute");
-    }
-
-    let contents = file.contents.as_ref().unwrap();
-    let mode = file.mode.unwrap_or(0o600);
-
-    log::info!(
-        "Creating file {:?} with {} bytes (mode {:?})",
-        path,
-        file.length.unwrap(),
-        mode
-    );
-
-    let mut file = File::create(path).context("Error creating file")?;
-    file.write_all(contents).context("Error writing file")?;
-    file.set_permissions(Permissions::from_mode(mode))
-        .context("Error setting file permissions")?;
-    file.sync_all().context("Error syncing file")?;
-
-    Ok(())
-}
-
 #[derive(Debug)]
 struct BinaryFileInProgress {
     path: Option<String>,
@@ -171,9 +140,101 @@ impl BinaryFileInProgress {
             digest: None,
         }
     }
+
+    fn deploy(self) -> Result<()> {
+        let path = self.path.as_ref().unwrap();
+
+        let path = if let Ok(val) = env::var("BINARYFILE_PATH_PREFIX") {
+            PathBuf::from(&val).join(path)
+        } else {
+            PathBuf::from(path)
+        };
+
+        if !path.is_absolute() {
+            bail!("Binary file path must be absolute");
+        }
+
+        let contents = self.contents.as_ref().unwrap();
+        let mode = self.mode.unwrap_or(0o600);
+
+        log::info!(
+            "Creating file {:?} with {} bytes (mode {:?})",
+            path,
+            self.length.unwrap(),
+            mode
+        );
+
+        let mut file = File::create(path).context("Error creating file")?;
+        file.write_all(contents).context("Error writing file")?;
+        file.set_permissions(Permissions::from_mode(mode))
+            .context("Error setting file permissions")?;
+        file.sync_all().context("Error syncing file")?;
+
+        Ok(())
+    }
 }
 
-async fn process_serviceinfo_in(si_in: &ServiceInfo) -> Result<()> {
+#[derive(Debug)]
+struct CommandInProgress {
+    command: Option<String>,
+    args: Vec<String>,
+    may_fail: bool,
+    return_stdout: bool,
+    return_stderr: bool,
+}
+
+impl CommandInProgress {
+    fn new() -> Self {
+        CommandInProgress {
+            command: None,
+            args: Vec::new(),
+            may_fail: false,
+            return_stdout: false,
+            return_stderr: false,
+        }
+    }
+
+    fn execute(self, si_out: &mut ServiceInfo) -> Result<()> {
+        si_out.add("command", "command", self.command.as_ref().unwrap())?;
+        si_out.add("args", "args", &self.args)?;
+
+        let mut cmd = Command::new(self.command.as_ref().unwrap());
+        cmd.args(&self.args);
+
+        if !self.return_stdout {
+            cmd.stdout(std::process::Stdio::null());
+        }
+        if !self.return_stderr {
+            cmd.stderr(std::process::Stdio::null());
+        }
+
+        let output = cmd.output().context("Error running command")?;
+
+        if self.return_stdout {
+            si_out.add(
+                "command",
+                "stdout",
+                &serde_bytes::Bytes::new(&output.stdout),
+            )?;
+        }
+        if self.return_stderr {
+            si_out.add(
+                "command",
+                "stderr",
+                &serde_bytes::Bytes::new(&output.stderr),
+            )?;
+        }
+        si_out.add("command", "exit_code", &output.status.code())?;
+
+        if self.may_fail || output.status.success() {
+            Ok(())
+        } else {
+            bail!("Command failed")
+        }
+    }
+}
+
+async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -> Result<()> {
     let mut active_modules: HashSet<String> = HashSet::new();
 
     let mut sshkey_user: Option<String> = None;
@@ -184,6 +245,7 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo) -> Result<()> {
     let mut rhsm_perform_insights: Option<bool> = None;
 
     let mut binary_file_in_progress = BinaryFileInProgress::new();
+    let mut command_in_progress = CommandInProgress::new();
 
     for (module, key, value) in si_in.iter() {
         log::trace!("Got module {}, command {}, value {:?}", module, key, value);
@@ -230,7 +292,7 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo) -> Result<()> {
             if key == "name" {
                 if binary_file_in_progress.path.is_some() {
                     bail!(
-                        "Got binaryfile path {:?} after path {:?}",
+                        "Got binary file path {:?} after path {:?}",
                         value,
                         binary_file_in_progress.path
                     );
@@ -238,46 +300,46 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo) -> Result<()> {
                 binary_file_in_progress.path = Some(
                     value
                         .as_str()
-                        .context("Error parsing binaryfile name")?
+                        .context("Error parsing binary file name")?
                         .to_string(),
                 );
             } else if key == "length" {
                 if binary_file_in_progress.length.is_some() {
                     bail!(
-                        "Got binaryfile length {:?} after length {:?}",
+                        "Got binary file length {:?} after length {:?}",
                         value,
                         binary_file_in_progress.length
                     );
                 }
                 binary_file_in_progress.length =
-                    Some(value.as_u64().context("Error parsing binaryfile length")?);
+                    Some(value.as_u64().context("Error parsing binary file length")?);
                 binary_file_in_progress.contents = Some(Vec::with_capacity(
                     binary_file_in_progress.length.unwrap() as usize,
                 ));
             } else if key.starts_with("data") {
                 if binary_file_in_progress.contents.is_none() {
-                    bail!("Got binaryfile data before length {:?}", value);
+                    bail!("Got binary file data before length {:?}", value);
                 }
                 binary_file_in_progress
                     .contents
                     .as_mut()
                     .unwrap()
-                    .extend_from_slice(value.as_bytes().context("Error parsing binaryfile data")?);
+                    .extend_from_slice(value.as_bytes().context("Error parsing binary file data")?);
             } else if key == "mode" {
                 if binary_file_in_progress.mode.is_some() {
                     bail!(
-                        "Got binaryfile mode {:?} after mode {:?}",
+                        "Got binary file mode {:?} after mode {:?}",
                         value,
                         binary_file_in_progress.mode
                     );
                 }
                 binary_file_in_progress.mode =
-                    Some(value.as_u32().context("Error parsing binaryfile mode")?);
+                    Some(value.as_u32().context("Error parsing binary file mode")?);
             } else if key.starts_with("sha-") {
                 let sha_type = key.split('-').nth(1).unwrap();
                 let sha_value = value
                     .as_bytes()
-                    .with_context(|| format!("Error parsing binaryfile sha-{} value", sha_type))?;
+                    .with_context(|| format!("Error parsing binary file sha-{} value", sha_type))?;
                 let hasher = match sha_type {
                     "256" => HashType::Sha256,
                     "384" => HashType::Sha384,
@@ -290,15 +352,15 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo) -> Result<()> {
 
                 // We got the full file, check it and add it to the files to get deployed
                 if binary_file_in_progress.path.is_none() {
-                    bail!("Got binaryfile sha-{} before name", sha_type);
+                    bail!("Got binary file sha-{} before name", sha_type);
                 }
                 if binary_file_in_progress.length.is_none() {
-                    bail!("Got binaryfile sha-{} before length", sha_type);
+                    bail!("Got binary file sha-{} before length", sha_type);
                 }
                 let read_bytes = binary_file_in_progress.contents.as_ref().unwrap().len();
                 if read_bytes != binary_file_in_progress.length.unwrap() as usize {
                     bail!(
-                        "Got binaryfile (path {}) with length {} but only {} bytes of data",
+                        "Got binary file (path {}) with length {} but only {} bytes of data",
                         binary_file_in_progress.path.as_ref().unwrap(),
                         binary_file_in_progress.length.unwrap(),
                         read_bytes
@@ -308,17 +370,50 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo) -> Result<()> {
                     .digest
                     .as_ref()
                     .unwrap()
-                    .compare_data(&binary_file_in_progress.contents.as_ref().unwrap())
+                    .compare_data(binary_file_in_progress.contents.as_ref().unwrap())
                 {
                     bail!(
-                        "Got binaryfile (path {}) with invalid digest: {:?}",
+                        "Got binary file (path {}) with invalid digest: {:?}",
                         binary_file_in_progress.path.as_ref().unwrap(),
                         e
                     );
                 }
 
-                deploy_binaryfile(binary_file_in_progress).context("Error deploying binaryfile")?;
+                binary_file_in_progress
+                    .deploy()
+                    .context("Error deploying binary file")?;
                 binary_file_in_progress = BinaryFileInProgress::new();
+            }
+        } else if module == "command" {
+            if key == "command" {
+                if command_in_progress.command.is_some() {
+                    bail!(
+                        "Got command {:?} after command {:?}",
+                        value,
+                        command_in_progress.command
+                    );
+                }
+                command_in_progress.command =
+                    Some(value.as_str().context("Error parsing command")?.to_string());
+            } else if key == "args" {
+                command_in_progress.args =
+                    value.as_str_array().context("Error parsing command args")?;
+            } else if key == "may_fail" {
+                command_in_progress.may_fail =
+                    value.as_bool().context("Error parsing command may_fail")?;
+            } else if key == "return_stdout" {
+                command_in_progress.return_stdout = value
+                    .as_bool()
+                    .context("Error parsing command return_stdout")?;
+            } else if key == "return_stderr" {
+                command_in_progress.return_stderr = value
+                    .as_bool()
+                    .context("Error parsing command return_stderr")?;
+            } else if key == "execute" {
+                command_in_progress
+                    .execute(si_out)
+                    .context("Error executing command")?;
+                command_in_progress = CommandInProgress::new();
             }
         }
     }
@@ -355,9 +450,9 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo) -> Result<()> {
 
 pub(crate) async fn perform_to2_serviceinfos(client: &mut ServiceClient) -> Result<()> {
     let mut loop_num = 0;
-    while loop_num < MAX_SERVICE_INFO_LOOPS {
-        let mut out_si = ServiceInfo::new();
+    let mut out_si = ServiceInfo::new();
 
+    while loop_num < MAX_SERVICE_INFO_LOOPS {
         if loop_num == 0 {
             let modules = find_available_modules().context("Error getting list of modules")?;
             let sysinfo = sys_info::linux_os_release()
@@ -374,10 +469,11 @@ pub(crate) async fn perform_to2_serviceinfos(client: &mut ServiceClient) -> Resu
             out_si.add_modules(&modules)?;
         }
 
-        let out_si = DeviceServiceInfo::new(false, out_si);
-        log::trace!("Sending ServiceInfo loop {}: {:?}", loop_num, out_si);
+        let send_si = DeviceServiceInfo::new(false, out_si);
+        out_si = ServiceInfo::new();
+        log::trace!("Sending ServiceInfo loop {}: {:?}", loop_num, send_si);
 
-        let return_si: RequestResult<OwnerServiceInfo> = client.send_request(out_si, None).await;
+        let return_si: RequestResult<OwnerServiceInfo> = client.send_request(send_si, None).await;
         let return_si =
             return_si.with_context(|| format!("Error during ServiceInfo loop {}", loop_num))?;
         log::trace!("Got ServiceInfo loop {}: {:?}", loop_num, return_si);
@@ -392,7 +488,7 @@ pub(crate) async fn perform_to2_serviceinfos(client: &mut ServiceClient) -> Resu
         }
 
         // Process
-        process_serviceinfo_in(return_si.service_info())
+        process_serviceinfo_in(return_si.service_info(), &mut out_si)
             .await
             .context("Error processing returned serviceinfo")?;
 

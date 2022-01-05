@@ -447,6 +447,7 @@ pub trait CborSimpleTypeExt {
     fn as_u64(&self) -> Option<u64>;
     fn as_f64(&self) -> Option<f64>;
     fn as_str(&self) -> Option<&str>;
+    fn as_str_array(&self) -> Option<Vec<String>>;
 }
 
 impl CborSimpleTypeExt for CborSimpleType {
@@ -495,6 +496,24 @@ impl CborSimpleTypeExt for CborSimpleType {
     fn as_str(&self) -> Option<&str> {
         match self {
             serde_cbor::Value::Text(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    fn as_str_array(&self) -> Option<Vec<String>> {
+        match self {
+            serde_cbor::Value::Array(a) => {
+                let mut out = Vec::new();
+
+                for item in a {
+                    match item {
+                        serde_cbor::Value::Text(s) => out.push(s.to_string()),
+                        _ => return None,
+                    }
+                }
+
+                Some(out)
+            }
             _ => None,
         }
     }
