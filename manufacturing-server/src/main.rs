@@ -19,6 +19,7 @@ use fdo_data_formats::{
     ownershipvoucher::OwnershipVoucher,
     publickey::{PublicKey, X5Chain},
     types::{Guid, RendezvousDirective, RendezvousInfo},
+    ProtocolVersion,
 };
 use fdo_store::{Store, StoreDriver};
 use fdo_util::servers::{
@@ -383,11 +384,13 @@ async fn main() -> Result<()> {
 
     // DI
     let handler_di_app_start = fdo_http_wrapper::server::fdo_request_filter(
+        ProtocolVersion::Version1_0,
         user_data.clone(),
         session_store.clone(),
         handlers::di::app_start,
     );
     let handler_di_set_hmac = fdo_http_wrapper::server::fdo_request_filter(
+        ProtocolVersion::Version1_0,
         user_data.clone(),
         session_store.clone(),
         handlers::di::set_hmac,
@@ -395,16 +398,19 @@ async fn main() -> Result<()> {
 
     // DIUN
     let handler_diun_connect = fdo_http_wrapper::server::fdo_request_filter(
+        ProtocolVersion::Version1_0,
         user_data.clone(),
         session_store.clone(),
         handlers::diun::connect,
     );
     let handler_diun_request_key_parameters = fdo_http_wrapper::server::fdo_request_filter(
+        ProtocolVersion::Version1_0,
         user_data.clone(),
         session_store.clone(),
         handlers::diun::request_key_parameters,
     );
     let handler_diun_provide_key = fdo_http_wrapper::server::fdo_request_filter(
+        ProtocolVersion::Version1_0,
         user_data.clone(),
         session_store.clone(),
         handlers::diun::provide_key,

@@ -91,7 +91,6 @@ async fn test_diun() -> Result<()> {
     owner_output
         .expect_success()
         .context("Dump-ownership-voucher failed")?;
-    owner_output.expect_stdout_line("Protocol Version: 100")?;
     owner_output.expect_stdout_line("Device Info: \"testdevice\"")?;
     owner_output.expect_stdout_line("commonName = \"testdevice\"")?;
     // It should have been extended to the "owner" time by the manufacturer

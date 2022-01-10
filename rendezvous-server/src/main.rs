@@ -13,7 +13,7 @@ use fdo_data_formats::{
     enhanced_types::X5Bag,
     publickey::PublicKey,
     types::{COSESign, Guid},
-    Serializable,
+    ProtocolVersion, Serializable,
 };
 use fdo_store::{Store, StoreDriver};
 use fdo_util::servers::{settings_for, AbsolutePathBuf};
@@ -180,11 +180,13 @@ async fn main() -> Result<()> {
 
     // TO0
     let handler_to0_hello = fdo_http_wrapper::server::fdo_request_filter(
+        ProtocolVersion::Version1_0,
         user_data.clone(),
         session_store.clone(),
         handlers_to0::hello,
     );
     let handler_to0_ownersign = fdo_http_wrapper::server::fdo_request_filter(
+        ProtocolVersion::Version1_0,
         user_data.clone(),
         session_store.clone(),
         handlers_to0::ownersign,
@@ -192,11 +194,13 @@ async fn main() -> Result<()> {
 
     // TO1
     let handler_to1_hello_rv = fdo_http_wrapper::server::fdo_request_filter(
+        ProtocolVersion::Version1_0,
         user_data.clone(),
         session_store.clone(),
         handlers_to1::hello_rv,
     );
     let handler_to1_prove_to_rv = fdo_http_wrapper::server::fdo_request_filter(
+        ProtocolVersion::Version1_0,
         user_data.clone(),
         session_store.clone(),
         handlers_to1::prove_to_rv,

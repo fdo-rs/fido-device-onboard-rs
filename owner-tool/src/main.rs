@@ -22,7 +22,7 @@ use fdo_data_formats::{
     ownershipvoucher::{OwnershipVoucher, OwnershipVoucherHeader},
     publickey::{PublicKey, X5Chain},
     types::{CborSimpleType, Guid, HMac, Hash, RendezvousDirective, RendezvousInfo},
-    Serializable, PROTOCOL_VERSION,
+    ProtocolVersion, Serializable,
 };
 
 #[tokio::main]
@@ -422,7 +422,7 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
 
     // Construct Ownership Voucher Header
     let ov_header = OwnershipVoucherHeader::new(
-        PROTOCOL_VERSION,
+        ProtocolVersion::Version1_0,
         device_guid.clone(),
         rendezvous_info.clone(),
         device_id.to_string(),
@@ -437,7 +437,7 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
     // Build device credential
     let devcred = FileDeviceCredential {
         active: true,
-        protver: PROTOCOL_VERSION,
+        protver: ProtocolVersion::Version1_0,
         hmac_secret: hmac_key_buf.to_vec(),
         device_info: device_id.to_string(),
         guid: device_guid.clone(),
@@ -508,11 +508,11 @@ fn dump_voucher(matches: &ArgMatches) -> Result<(), Error> {
     }
 
     let ov_header = ov.header();
-    if ov_header.protocol_version() != PROTOCOL_VERSION {
+    if ov_header.protocol_version() != ProtocolVersion::Version1_0 {
         bail!(
             "Protocol version in OV ({}) not supported ({})",
             ov_header.protocol_version(),
-            PROTOCOL_VERSION
+            ProtocolVersion::Version1_0,
         );
     }
 
@@ -569,11 +569,11 @@ fn dump_devcred(matches: &ArgMatches) -> Result<(), Error> {
             .context("Error deserializing device credential")?
     };
 
-    if dc.protver != PROTOCOL_VERSION {
+    if dc.protver != ProtocolVersion::Version1_0 {
         bail!(
             "Protocol version in OV ({}) not supported ({})",
             dc.protver,
-            PROTOCOL_VERSION
+            ProtocolVersion::Version1_0
         );
     }
 
@@ -605,11 +605,11 @@ fn extend_voucher(matches: &ArgMatches) -> Result<(), Error> {
     };
 
     let ov_header = ov.header();
-    if ov_header.protocol_version() != PROTOCOL_VERSION {
+    if ov_header.protocol_version() != ProtocolVersion::Version1_0 {
         bail!(
             "Protocol version in OV ({}) not supported ({})",
             ov_header.protocol_version(),
-            PROTOCOL_VERSION
+            ProtocolVersion::Version1_0,
         );
     }
 

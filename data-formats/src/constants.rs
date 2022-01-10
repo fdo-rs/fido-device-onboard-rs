@@ -9,6 +9,19 @@ use openssl::hash::MessageDigest;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, PartialEq, Eq)]
+#[repr(u16)]
+#[non_exhaustive]
+pub enum ProtocolVersion {
+    Version1_0 = 100,
+}
+
+impl std::fmt::Display for ProtocolVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u16)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, PartialEq, Eq)]
 #[repr(i8)]
 #[non_exhaustive]
 pub enum HashType {

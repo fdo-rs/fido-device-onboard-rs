@@ -5,8 +5,8 @@ use thiserror::Error;
 use aws_nitro_enclaves_cose::error::CoseError;
 use fdo_data_formats::{
     constants::MessageType,
-    messages::{ClientMessage, EncryptionRequirement, ErrorMessage, Message, ServerMessage},
-    Serializable,
+    messages::{v10::ErrorMessage, ClientMessage, EncryptionRequirement, Message, ServerMessage},
+    ProtocolVersion, Serializable,
 };
 
 use crate::EncryptionKeys;
@@ -43,6 +43,7 @@ pub type RequestResult<MT> = Result<MT, Error>;
 
 #[derive(Debug)]
 pub struct ServiceClient {
+    protocol_version: ProtocolVersion,
     base_url: String,
     client: reqwest::Client,
     authorization_token: Option<String>,
@@ -51,8 +52,9 @@ pub struct ServiceClient {
 }
 
 impl ServiceClient {
-    pub fn new(base_url: &str) -> Self {
+    pub fn new(protocol_version: ProtocolVersion, base_url: &str) -> Self {
         ServiceClient {
+            protocol_version,
             base_url: base_url.trim_end_matches('/').to_string(),
             client: reqwest::Client::new(),
             authorization_token: None,
@@ -109,8 +111,9 @@ impl ServiceClient {
         log::trace!("Sending message: {:?}", hex::encode(&to_send));
 
         let url = format!(
-            "{}/fdo/100/msg/{}",
+            "{}/fdo/{}/msg/{}",
             &self.base_url,
+            self.protocol_version,
             OM::message_type() as u8
         );
 

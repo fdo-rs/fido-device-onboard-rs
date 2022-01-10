@@ -11,7 +11,7 @@ use crate::{
     publickey::{PublicKey, X5Chain},
     serializable::MaybeSerializable,
     types::{COSESign, Guid, HMac, Hash, RendezvousInfo, UnverifiedValue},
-    DeserializableMany, Error, Serializable,
+    DeserializableMany, Error, ProtocolVersion, Serializable,
 };
 
 const VOUCHER_PEM_TAG: &str = "OWNERSHIP VOUCHER";
@@ -377,7 +377,7 @@ enum OwnershipVoucherHeaderIndex {
 pub struct OwnershipVoucherHeader {
     contents: ParsedArray<ParsedArraySize6>,
 
-    cached_protocol_version: u16,
+    cached_protocol_version: ProtocolVersion,
     cached_guid: Guid,
     cached_rendezvous_info: RendezvousInfo,
     cached_device_info: String,
@@ -387,7 +387,7 @@ pub struct OwnershipVoucherHeader {
 
 impl OwnershipVoucherHeader {
     pub fn new(
-        protocol_version: u16,
+        protocol_version: ProtocolVersion,
         guid: Guid,
         rendezvous_info: RendezvousInfo,
         device_info: String,
@@ -430,7 +430,7 @@ impl OwnershipVoucherHeader {
         })
     }
 
-    pub fn protocol_version(&self) -> u16 {
+    pub fn protocol_version(&self) -> ProtocolVersion {
         self.cached_protocol_version
     }
 

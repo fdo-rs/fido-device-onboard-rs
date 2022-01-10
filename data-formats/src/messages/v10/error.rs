@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use super::{ClientMessage, EncryptionRequirement, Message, ServerMessage};
-
-use crate::constants::{ErrorCode, MessageType};
+use crate::{
+    constants::{ErrorCode, MessageType},
+    messages::{ClientMessage, EncryptionRequirement, Message, ServerMessage},
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ErrorMessage {
@@ -65,6 +66,10 @@ impl Message for ErrorMessage {
 
     fn status_code() -> http::StatusCode {
         http::StatusCode::INTERNAL_SERVER_ERROR
+    }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
     }
 }
 

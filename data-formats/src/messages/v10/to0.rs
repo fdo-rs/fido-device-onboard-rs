@@ -1,11 +1,10 @@
 use serde::{Deserialize, Serialize};
 use serde_tuple::Serialize_tuple;
 
-use super::{ClientMessage, EncryptionRequirement, Message, ServerMessage};
-
 use crate::{
     cborparser::ParsedArray,
     constants::{HashType, MessageType},
+    messages::{ClientMessage, EncryptionRequirement, Message, ServerMessage},
     types::{COSESign, Hash, Nonce, TO0Data},
     Error, Serializable,
 };
@@ -31,6 +30,10 @@ impl Message for Hello {
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustNotBeEncrypted)
+    }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
     }
 }
 
@@ -73,6 +76,10 @@ impl Message for HelloAck {
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustNotBeEncrypted)
+    }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
     }
 }
 
@@ -151,6 +158,10 @@ impl Message for OwnerSign {
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustNotBeEncrypted)
     }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
+    }
 }
 
 impl ClientMessage for OwnerSign {}
@@ -181,6 +192,10 @@ impl Message for AcceptOwner {
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustNotBeEncrypted)
+    }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
     }
 }
 

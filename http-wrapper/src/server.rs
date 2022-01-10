@@ -4,7 +4,10 @@ use std::sync::Arc;
 use super::EncryptionKeys;
 use fdo_data_formats::{
     constants::{ErrorCode, MessageType},
-    messages::{self, ClientMessage, EncryptionRequirement, Message, ServerMessage},
+    messages::{
+        self, v10::ErrorMessage, ClientMessage, EncryptionRequirement, Message, ServerMessage,
+    },
+    ProtocolVersion,
 };
 use fdo_store::{MetadataLocalKey, Store};
 
@@ -85,7 +88,7 @@ pub enum SessionError {
 }
 
 #[derive(Debug)]
-pub struct Error(messages::ErrorMessage);
+pub struct Error(ErrorMessage);
 
 impl Error {
     pub fn new(
@@ -95,7 +98,7 @@ impl Error {
     ) -> Self {
         let new_uuid = uuid::Uuid::new_v4();
 
-        Error(messages::ErrorMessage::new(
+        Error(ErrorMessage::new(
             error_code,
             previous_message_type,
             error_string.to_string(),
@@ -153,10 +156,7 @@ pub async fn handle_rejection(err: Rejection) -> Result<warp::reply::Response, I
         &local_err
     };
 
-    Ok(to_response::<messages::ErrorMessage>(
-        err.0.to_response(),
-        None,
-    ))
+    Ok(to_response::<ErrorMessage>(err.0.to_response(), None))
 }
 
 #[derive(Debug)]
@@ -364,6 +364,7 @@ pub fn ping_handler() -> warp::filters::BoxedFilter<(warp::reply::Response,)> {
 }
 
 pub fn fdo_request_filter<UDT, IM, OM, F, FR>(
+    protocol_version: ProtocolVersion,
     user_data: UDT,
     session_store: SessionStoreT,
     handler: F,
@@ -386,11 +387,33 @@ where
             );
         }
     }
+    if protocol_version != IM::protocol_version() {
+        // This is a programming error, let's just check this on start
+        #[allow(clippy::panic)]
+        {
+            panic!(
+                "Programming error: IM {:?} is not of the selected protocol version {:?}",
+                IM::protocol_version(),
+                protocol_version
+            );
+        }
+    }
+    if OM::protocol_version() != IM::protocol_version() {
+        // This is a programming error, let's just check this on start
+        #[allow(clippy::panic)]
+        {
+            panic!(
+                "Programming error: IM {:?} is not same version as OM {:?}",
+                IM::protocol_version(),
+                OM::protocol_version()
+            );
+        }
+    }
 
     warp::post()
         // Construct expected HTTP path
         .and(warp::path("fdo"))
-        .and(warp::path("100"))
+        .and(warp::path(IM::protocol_version().to_string()))
         .and(warp::path("msg"))
         .and(warp::path((IM::message_type() as u8).to_string()))
         // Parse the request

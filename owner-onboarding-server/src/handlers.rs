@@ -22,8 +22,8 @@ use crate::serviceinfo::perform_service_info;
 pub(super) async fn hello_device(
     user_data: super::OwnerServiceUDT,
     mut ses_with_store: SessionWithStore,
-    msg: messages::to2::HelloDevice,
-) -> Result<(messages::to2::ProveOVHdr, SessionWithStore), warp::Rejection> {
+    msg: messages::v10::to2::HelloDevice,
+) -> Result<(messages::v10::to2::ProveOVHdr, SessionWithStore), warp::Rejection> {
     let mut session = ses_with_store.session;
 
     // Check if we manage this device
@@ -31,12 +31,12 @@ pub(super) async fn hello_device(
         .ownership_voucher_store
         .load_data(msg.guid())
         .await
-        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?
+        .map_err(Error::from_error::<messages::v10::to2::HelloDevice, _>)?
     {
         None => {
             return Err(Error::new(
                 ErrorCode::ResourceNotFound,
-                messages::to2::HelloDevice::message_type(),
+                messages::v10::to2::HelloDevice::message_type(),
                 "Device not found",
             )
             .into())
@@ -45,7 +45,7 @@ pub(super) async fn hello_device(
     };
     session
         .insert("device_guid", msg.guid().to_string())
-        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
+        .map_err(Error::from_error::<messages::v10::to2::HelloDevice, _>)?;
 
     // Check whether we support the specific siginfo
     match msg.a_signature_info().sig_type() {
@@ -53,7 +53,7 @@ pub(super) async fn hello_device(
         _ => {
             return Err(Error::new(
                 ErrorCode::MessageBodyError,
-                messages::to2::HelloDevice::message_type(),
+                messages::v10::to2::HelloDevice::message_type(),
                 "Invcalid signature info",
             )
             .into())
@@ -62,7 +62,7 @@ pub(super) async fn hello_device(
     if !msg.a_signature_info().info().is_empty() {
         return Err(Error::new(
             ErrorCode::MessageBodyError,
-            messages::to2::HelloDevice::message_type(),
+            messages::v10::to2::HelloDevice::message_type(),
             "Invcalid signature info",
         )
         .into());
@@ -70,11 +70,11 @@ pub(super) async fn hello_device(
 
     // Build kex a
     let a_key_exchange = KeyExchange::new(msg.kex_suite())
-        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
-    let nonce6 = Nonce::new().map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
+        .map_err(Error::from_error::<messages::v10::to2::HelloDevice, _>)?;
+    let nonce6 = Nonce::new().map_err(Error::from_error::<messages::v10::to2::HelloDevice, _>)?;
     let a_key_exchange_public = a_key_exchange
         .get_public()
-        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
+        .map_err(Error::from_error::<messages::v10::to2::HelloDevice, _>)?;
 
     // Now produce the result
     let ov_hdr = ownership_voucher.header();
@@ -87,31 +87,31 @@ pub(super) async fn hello_device(
         SigInfo::new(msg.a_signature_info().sig_type(), vec![]),
         a_key_exchange_public,
     )
-    .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
+    .map_err(Error::from_error::<messages::v10::to2::HelloDevice, _>)?;
 
     // Store data
     session
         .insert("nonce6", nonce6.clone())
-        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
+        .map_err(Error::from_error::<messages::v10::to2::HelloDevice, _>)?;
     session
         .insert("ciphersuite", msg.cipher_suite())
-        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
+        .map_err(Error::from_error::<messages::v10::to2::HelloDevice, _>)?;
     session
         .insert("a_key_exchange", a_key_exchange)
-        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
+        .map_err(Error::from_error::<messages::v10::to2::HelloDevice, _>)?;
 
     // Continue result production
     let mut res_header = COSEHeaderMap::new();
     res_header
         .insert(HeaderKeys::CUPHNonce, &nonce6)
-        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
+        .map_err(Error::from_error::<messages::v10::to2::HelloDevice, _>)?;
     res_header
         .insert(HeaderKeys::CUPHOwnerPubKey, &user_data.owner_pubkey)
-        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
+        .map_err(Error::from_error::<messages::v10::to2::HelloDevice, _>)?;
 
     let res = COSESign::new(&res_payload, Some(res_header), &user_data.owner_key)
-        .map_err(Error::from_error::<messages::to2::HelloDevice, _>)?;
-    let res = messages::to2::ProveOVHdr::new(res);
+        .map_err(Error::from_error::<messages::v10::to2::HelloDevice, _>)?;
+    let res = messages::v10::to2::ProveOVHdr::new(res);
 
     ses_with_store.session = session;
 
@@ -121,14 +121,14 @@ pub(super) async fn hello_device(
 pub(super) async fn get_ov_next_entry(
     user_data: super::OwnerServiceUDT,
     ses_with_store: SessionWithStore,
-    msg: messages::to2::GetOVNextEntry,
-) -> Result<(messages::to2::OVNextEntry, SessionWithStore), warp::Rejection> {
+    msg: messages::v10::to2::GetOVNextEntry,
+) -> Result<(messages::v10::to2::OVNextEntry, SessionWithStore), warp::Rejection> {
     let device_guid: String = match ses_with_store.session.get("device_guid") {
         Some(v) => v,
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::to2::GetOVNextEntry::message_type(),
+                messages::v10::to2::GetOVNextEntry::message_type(),
                 "Request sequence failure",
             )
             .into())
@@ -140,12 +140,12 @@ pub(super) async fn get_ov_next_entry(
         .ownership_voucher_store
         .load_data(&device_guid)
         .await
-        .map_err(Error::from_error::<messages::to2::GetOVNextEntry, _>)?
+        .map_err(Error::from_error::<messages::v10::to2::GetOVNextEntry, _>)?
     {
         None => {
             return Err(Error::new(
                 ErrorCode::ResourceNotFound,
-                messages::to2::GetOVNextEntry::message_type(),
+                messages::v10::to2::GetOVNextEntry::message_type(),
                 "Device not found",
             )
             .into())
@@ -156,7 +156,7 @@ pub(super) async fn get_ov_next_entry(
     let entry = ownership_voucher.entry(msg.entry_num() as usize).unwrap();
 
     Ok((
-        messages::to2::OVNextEntry::new(msg.entry_num() as u16, entry),
+        messages::v10::to2::OVNextEntry::new(msg.entry_num() as u16, entry),
         ses_with_store,
     ))
 }
@@ -164,8 +164,8 @@ pub(super) async fn get_ov_next_entry(
 pub(super) async fn prove_device(
     user_data: super::OwnerServiceUDT,
     mut ses_with_store: SessionWithStore,
-    msg: messages::to2::ProveDevice,
-) -> Result<(messages::to2::SetupDevice, SessionWithStore), warp::Rejection> {
+    msg: messages::v10::to2::ProveDevice,
+) -> Result<(messages::v10::to2::SetupDevice, SessionWithStore), warp::Rejection> {
     let mut session = ses_with_store.session;
 
     let device_guid: String = match session.get("device_guid") {
@@ -173,7 +173,7 @@ pub(super) async fn prove_device(
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::to2::ProveDevice::message_type(),
+                messages::v10::to2::ProveDevice::message_type(),
                 "Request sequence failure",
             )
             .into())
@@ -186,7 +186,7 @@ pub(super) async fn prove_device(
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::to2::ProveDevice::message_type(),
+                messages::v10::to2::ProveDevice::message_type(),
                 "Request sequence failure",
             )
             .into())
@@ -198,7 +198,7 @@ pub(super) async fn prove_device(
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::to2::ProveDevice::message_type(),
+                messages::v10::to2::ProveDevice::message_type(),
                 "Request sequence failure",
             )
             .into())
@@ -211,7 +211,7 @@ pub(super) async fn prove_device(
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::to2::GetOVNextEntry::message_type(),
+                messages::v10::to2::GetOVNextEntry::message_type(),
                 "Request sequence failure",
             )
             .into())
@@ -223,12 +223,12 @@ pub(super) async fn prove_device(
         .ownership_voucher_store
         .load_data(&device_guid)
         .await
-        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?
+        .map_err(Error::from_error::<messages::v10::to2::ProveDevice, _>)?
     {
         None => {
             return Err(Error::new(
                 ErrorCode::ResourceNotFound,
-                messages::to2::ProveDevice::message_type(),
+                messages::v10::to2::ProveDevice::message_type(),
                 "Device not found",
             )
             .into())
@@ -241,7 +241,7 @@ pub(super) async fn prove_device(
             None => {
                 return Err(Error::new(
                     ErrorCode::InvalidMessageError,
-                    messages::to2::ProveDevice::message_type(),
+                    messages::v10::to2::ProveDevice::message_type(),
                     "Device certificate not supported",
                 )
                 .into())
@@ -250,7 +250,7 @@ pub(super) async fn prove_device(
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::to2::ProveDevice::message_type(),
+                messages::v10::to2::ProveDevice::message_type(),
                 "Device certificate chain not supported",
             )
             .into())
@@ -258,19 +258,19 @@ pub(super) async fn prove_device(
     };
     let dev_pubkey = &device_certificate
         .public_key()
-        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?;
+        .map_err(Error::from_error::<messages::v10::to2::ProveDevice, _>)?;
 
     // Get device EAT
     let token = msg.into_token();
     let nonce7: Nonce = match token
         .get_unprotected_value(HeaderKeys::EUPHNonce)
-        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?
+        .map_err(Error::from_error::<messages::v10::to2::ProveDevice, _>)?
     {
         Some(n) => n,
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::to2::ProveDevice::message_type(),
+                messages::v10::to2::ProveDevice::message_type(),
                 "Missing nonce7",
             )
             .into())
@@ -279,17 +279,17 @@ pub(super) async fn prove_device(
 
     let eat = token
         .get_eat(dev_pubkey.as_ref())
-        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?;
+        .map_err(Error::from_error::<messages::v10::to2::ProveDevice, _>)?;
 
     let eat_payload: TO2ProveDevicePayload = match eat
         .payload()
-        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?
+        .map_err(Error::from_error::<messages::v10::to2::ProveDevice, _>)?
     {
         Some(v) => v,
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::to2::ProveDevice::message_type(),
+                messages::v10::to2::ProveDevice::message_type(),
                 "Missing payload",
             )
             .into())
@@ -300,14 +300,14 @@ pub(super) async fn prove_device(
     if eat.nonce() != &nonce6 {
         return Err(Error::new(
             ErrorCode::InvalidMessageError,
-            messages::to2::ProveDevice::message_type(),
+            messages::v10::to2::ProveDevice::message_type(),
             "Nonce invalid",
         )
         .into());
     }
     session
         .insert("nonce7", nonce7.clone())
-        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?;
+        .map_err(Error::from_error::<messages::v10::to2::ProveDevice, _>)?;
 
     // Derive and set the keys
     let new_keys = a_key_exchange
@@ -316,10 +316,10 @@ pub(super) async fn prove_device(
             ciphersuite,
             eat_payload.b_key_exchange(),
         )
-        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?;
+        .map_err(Error::from_error::<messages::v10::to2::ProveDevice, _>)?;
     let new_keys = EncryptionKeys::from_derived(ciphersuite, new_keys);
     log::trace!("Got new keys, setting: {:?}", new_keys);
-    fdo_http_wrapper::server::set_encryption_keys::<messages::to2::ProveDevice>(
+    fdo_http_wrapper::server::set_encryption_keys::<messages::v10::to2::ProveDevice>(
         &mut session,
         new_keys,
     )?;
@@ -332,12 +332,12 @@ pub(super) async fn prove_device(
         user_data.owner2_pub.clone(),
     );
     let new_token = COSESign::new(&new_payload, None, &user_data.owner2_key)
-        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?;
-    let resp = messages::to2::SetupDevice::new(new_token);
+        .map_err(Error::from_error::<messages::v10::to2::ProveDevice, _>)?;
+    let resp = messages::v10::to2::SetupDevice::new(new_token);
 
     session
         .insert("proven_device", true)
-        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?;
+        .map_err(Error::from_error::<messages::v10::to2::ProveDevice, _>)?;
 
     ses_with_store.session = session;
 
@@ -347,15 +347,15 @@ pub(super) async fn prove_device(
 pub(super) async fn device_service_info_ready(
     _user_data: super::OwnerServiceUDT,
     ses_with_store: SessionWithStore,
-    _msg: messages::to2::DeviceServiceInfoReady,
-) -> Result<(messages::to2::OwnerServiceInfoReady, SessionWithStore), warp::Rejection> {
+    _msg: messages::v10::to2::DeviceServiceInfoReady,
+) -> Result<(messages::v10::to2::OwnerServiceInfoReady, SessionWithStore), warp::Rejection> {
     match ses_with_store.session.get::<bool>("proven_device") {
         Some(_) => {}
         None => {
             log::error!("Device attempted to skip the proving");
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::to2::GetOVNextEntry::message_type(),
+                messages::v10::to2::GetOVNextEntry::message_type(),
                 "Request sequence failure",
             )
             .into());
@@ -363,7 +363,7 @@ pub(super) async fn device_service_info_ready(
     };
 
     Ok((
-        messages::to2::OwnerServiceInfoReady::new(None),
+        messages::v10::to2::OwnerServiceInfoReady::new(None),
         ses_with_store,
     ))
 }
@@ -373,15 +373,15 @@ const MAX_SERVICE_INFO_LOOPS: u32 = 1000;
 pub(super) async fn device_service_info(
     user_data: super::OwnerServiceUDT,
     mut ses_with_store: SessionWithStore,
-    msg: messages::to2::DeviceServiceInfo,
-) -> Result<(messages::to2::OwnerServiceInfo, SessionWithStore), warp::Rejection> {
+    msg: messages::v10::to2::DeviceServiceInfo,
+) -> Result<(messages::v10::to2::OwnerServiceInfo, SessionWithStore), warp::Rejection> {
     match ses_with_store.session.get::<bool>("proven_device") {
         Some(_) => {}
         None => {
             log::error!("Device attempted to skip the proving");
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::to2::DeviceServiceInfo::message_type(),
+                messages::v10::to2::DeviceServiceInfo::message_type(),
                 "Request sequence failure",
             )
             .into());
@@ -392,7 +392,7 @@ pub(super) async fn device_service_info(
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::to2::GetOVNextEntry::message_type(),
+                messages::v10::to2::GetOVNextEntry::message_type(),
                 "Request sequence failure",
             )
             .into())
@@ -406,7 +406,7 @@ pub(super) async fn device_service_info(
             ses_with_store
                 .session
                 .insert("num_service_info_loops", 1)
-                .map_err(Error::from_error::<messages::to2::DeviceServiceInfo, _>)?;
+                .map_err(Error::from_error::<messages::v10::to2::DeviceServiceInfo, _>)?;
             0
         }
     };
@@ -417,7 +417,7 @@ pub(super) async fn device_service_info(
         );
         return Err(Error::new(
             ErrorCode::InvalidMessageError,
-            messages::to2::DeviceServiceInfo::message_type(),
+            messages::v10::to2::DeviceServiceInfo::message_type(),
             "Too many serviceinfo loops performed",
         )
         .into());
@@ -425,7 +425,7 @@ pub(super) async fn device_service_info(
     ses_with_store
         .session
         .insert("num_service_info_loops", num_loops + 1)
-        .map_err(Error::from_error::<messages::to2::DeviceServiceInfo, _>)?;
+        .map_err(Error::from_error::<messages::v10::to2::DeviceServiceInfo, _>)?;
 
     log::trace!(
         "Device {:?} is now starting ServiceInfo loop {}",
@@ -440,7 +440,7 @@ pub(super) async fn device_service_info(
                 log::warn!("Error during performing service info: {:?}", e);
                 return Err(Error::new(
                     ErrorCode::InternalServerError,
-                    messages::to2::DeviceServiceInfo::message_type(),
+                    messages::v10::to2::DeviceServiceInfo::message_type(),
                     "Error handling serviceinfo",
                 )
                 .into());
@@ -453,15 +453,15 @@ pub(super) async fn device_service_info(
 pub(super) async fn done(
     user_data: super::OwnerServiceUDT,
     mut ses_with_store: SessionWithStore,
-    msg: messages::to2::Done,
-) -> Result<(messages::to2::Done2, SessionWithStore), warp::Rejection> {
+    msg: messages::v10::to2::Done,
+) -> Result<(messages::v10::to2::Done2, SessionWithStore), warp::Rejection> {
     match ses_with_store.session.get::<bool>("proven_device") {
         Some(_) => {}
         None => {
             log::error!("Device attempted to skip the proving");
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::to2::GetOVNextEntry::message_type(),
+                messages::v10::to2::GetOVNextEntry::message_type(),
                 "Request sequence failure",
             )
             .into());
@@ -473,7 +473,7 @@ pub(super) async fn done(
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::to2::ProveDevice::message_type(),
+                messages::v10::to2::ProveDevice::message_type(),
                 "Request sequence failure",
             )
             .into())
@@ -482,7 +482,7 @@ pub(super) async fn done(
     if &nonce6 != msg.nonce6() {
         return Err(Error::new(
             ErrorCode::InvalidMessageError,
-            messages::to2::ProveDevice::message_type(),
+            messages::v10::to2::ProveDevice::message_type(),
             "Nonce6 invalid",
         )
         .into());
@@ -493,7 +493,7 @@ pub(super) async fn done(
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::to2::GetOVNextEntry::message_type(),
+                messages::v10::to2::GetOVNextEntry::message_type(),
                 "Request sequence failure",
             )
             .into())
@@ -507,7 +507,7 @@ pub(super) async fn done(
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::to2::ProveDevice::message_type(),
+                messages::v10::to2::ProveDevice::message_type(),
                 "Request sequence failure",
             )
             .into())
@@ -522,12 +522,12 @@ pub(super) async fn done(
             &true,
         )
         .await
-        .map_err(Error::from_error::<messages::to2::ProveDevice, _>)?;
+        .map_err(Error::from_error::<messages::v10::to2::ProveDevice, _>)?;
 
     ses_with_store.session.remove("nonce7");
     ses_with_store.session.destroy();
 
-    Ok((messages::to2::Done2::new(nonce7), ses_with_store))
+    Ok((messages::v10::to2::Done2::new(nonce7), ses_with_store))
 }
 
 #[derive(Debug)]
