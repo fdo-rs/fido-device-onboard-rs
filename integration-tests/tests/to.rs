@@ -1,5 +1,5 @@
 mod common;
-use std::{fs, path::Path, time::Duration};
+use std::{fs, os::unix::prelude::PermissionsExt, path::Path, time::Duration};
 
 use common::{Binary, LogSide, TestContext};
 
@@ -156,6 +156,10 @@ async fn test_to() -> Result<()> {
 
     let ssh_authorized_keys_path = ctx.testpath().join("authorized_keys");
     let marker_file_path = ctx.testpath().join("marker");
+    let binary_file_path_prefix = ctx.testpath().join("binary_files");
+
+    std::fs::create_dir(&binary_file_path_prefix).context("Error creating binary_files dir")?;
+
     let output = ctx
         .run_client(
             Binary::ClientLinuxapp,
@@ -163,6 +167,10 @@ async fn test_to() -> Result<()> {
             |cfg| {
                 cfg.env("DEVICE_CREDENTIAL", dc_path.to_str().unwrap())
                     .env("SSH_KEY_PATH", &ssh_authorized_keys_path.to_str().unwrap())
+                    .env(
+                        "BINARYFILE_PATH_PREFIX",
+                        binary_file_path_prefix.to_str().unwrap(),
+                    )
                     .env(
                         "DEVICE_ONBOARDING_EXECUTED_MARKER_FILE_PATH",
                         &marker_file_path.to_str().unwrap(),
@@ -188,6 +196,21 @@ testkey
 # End of FIDO Device Onboarding keys
 "
     );
+
+    assert!(binary_file_path_prefix.join("resolv.conf").exists());
+    let resolv_conf_metadata = binary_file_path_prefix
+        .join("resolv.conf")
+        .metadata()
+        .context("Error reading hosts file")?;
+    assert_eq!(resolv_conf_metadata.permissions().mode() & 0o777, 0o600);
+    assert!(binary_file_path_prefix.join("hosts").exists());
+    let hosts_metadata = binary_file_path_prefix
+        .join("hosts")
+        .metadata()
+        .context("Error reading hosts file")?;
+    assert_eq!(hosts_metadata.permissions().mode() & 0o777, 0o644);
+
+    assert!(key_path.join("command-testfile").exists());
 
     Ok(())
 }

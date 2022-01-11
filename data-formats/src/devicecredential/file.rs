@@ -39,7 +39,7 @@ impl DeviceCredential for FileDeviceCredential {
         let mut hmac_signer = Signer::new(hmac_type.get_md(), &hmac_key)?;
         hmac_signer.update(data)?;
         let ov_hmac = hmac_signer.sign_to_vec()?;
-        let ov_hmac = HMac::from_digest(hmac_type, ov_hmac);
+        let ov_hmac = HMac::from_digest(hmac_type, ov_hmac)?;
 
         if &ov_hmac != hmac {
             Err(Error::IncorrectHash)

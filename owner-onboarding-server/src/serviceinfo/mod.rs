@@ -1,7 +1,13 @@
-use anyhow::{Error, Result};
+use std::collections::HashSet;
+
+use anyhow::{Context, Error, Result};
 use serde::Deserialize;
 
-use fdo_data_formats::{messages, types::ServiceInfo};
+use fdo_data_formats::{
+    constants::HashType,
+    messages,
+    types::{Hash, ServiceInfo},
+};
 use fdo_http_wrapper::server::Session;
 
 #[derive(Debug, Deserialize, Clone)]
@@ -12,6 +18,31 @@ pub struct ServiceInfoSettings {
 
     sshkey_user: Option<String>,
     sshkey_key: Option<String>,
+
+    files: Option<Vec<ServiceInfoFile>>,
+
+    commands: Option<Vec<ServiceInfoCommand>>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ServiceInfoFile {
+    path: String,
+    permissions: Option<String>,
+    #[serde(skip)]
+    parsed_permissions: Option<u32>,
+    source_path: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ServiceInfoCommand {
+    command: String,
+    args: Vec<String>,
+    #[serde(default)]
+    may_fail: bool,
+    #[serde(default)]
+    return_stdout: bool,
+    #[serde(default)]
+    return_stderr: bool,
 }
 
 #[derive(Debug)]
@@ -20,7 +51,35 @@ pub struct ServiceInfoConfiguration {
 }
 
 impl ServiceInfoConfiguration {
-    pub(crate) fn from_settings(settings: ServiceInfoSettings) -> Result<Self> {
+    pub(crate) fn from_settings(mut settings: ServiceInfoSettings) -> Result<Self> {
+        // Perform checks on the configuration
+
+        // Check permissions for files are valid
+        settings.files = if let Some(files) = settings.files {
+            let mut new_files = Vec::new();
+
+            for mut file in files {
+                let path = &file.path;
+
+                file.parsed_permissions = if let Some(permissions) = &file.permissions {
+                    Some(u32::from_str_radix(permissions, 8).with_context(|| {
+                        format!(
+                            "Invalid permission string for file {}: {} (invalid octal)",
+                            path, permissions
+                        )
+                    })?)
+                } else {
+                    None
+                };
+
+                new_files.push(file);
+            }
+
+            Some(new_files)
+        } else {
+            None
+        };
+
         Ok(ServiceInfoConfiguration { settings })
     }
 }
@@ -44,13 +103,13 @@ pub(crate) async fn perform_service_info(
             log::trace!("Received module list: {:?}", rawmodlist);
 
             // Skip the first two items.... They are integers :()
-            let mut modlist: Vec<String> = Vec::new();
+            let mut modlist: HashSet<String> = HashSet::new();
             for rawmod in rawmodlist.drain(..).skip(2) {
-                modlist.push(serde_cbor::value::from_value(rawmod)?);
+                modlist.insert(serde_cbor::value::from_value(rawmod)?);
             }
             log::trace!("Module list: {:?}", modlist);
 
-            if modlist.iter().any(|name| name == "sshkey")
+            if modlist.contains("sshkey")
                 && user_data
                     .service_info_configuration
                     .settings
@@ -82,7 +141,7 @@ pub(crate) async fn perform_service_info(
                 )?;
             }
 
-            if modlist.iter().any(|name| name == "rhsm")
+            if modlist.contains("rhsm")
                 && user_data
                     .service_info_configuration
                     .settings
@@ -122,6 +181,42 @@ pub(crate) async fn perform_service_info(
                         .as_ref()
                         .unwrap(),
                 )?;
+            }
+
+            if modlist.contains("binaryfile") {
+                if let Some(files) = &user_data.service_info_configuration.settings.files {
+                    log::trace!("Found binaryfile module, sending files");
+
+                    out_si.add("binaryfile", "active", &true)?;
+                    for file in files {
+                        let contents = std::fs::read(&file.source_path)?;
+                        let hash = Hash::from_data(HashType::Sha384, &contents)?;
+
+                        out_si.add("binaryfile", "name", &file.path)?;
+                        out_si.add("binaryfile", "length", &contents.len())?;
+                        if let Some(parsed_permissions) = file.parsed_permissions {
+                            out_si.add("binaryfile", "mode", &parsed_permissions)?;
+                        }
+                        out_si.add("binaryfile", "data001", &serde_bytes::Bytes::new(&contents))?;
+                        out_si.add("binaryfile", "sha-384", &hash.value_bytes())?;
+                    }
+                }
+            }
+
+            if modlist.contains("command") {
+                if let Some(commands) = &user_data.service_info_configuration.settings.commands {
+                    log::trace!("Found command module, sending commands");
+
+                    out_si.add("command", "active", &true)?;
+                    for command in commands {
+                        out_si.add("command", "command", &command.command)?;
+                        out_si.add("command", "args", &command.args)?;
+                        out_si.add("command", "may_fail", &command.may_fail)?;
+                        out_si.add("command", "return_stdout", &command.return_stdout)?;
+                        out_si.add("command", "return_stderr", &command.return_stderr)?;
+                        out_si.add("command", "execute", &true)?;
+                    }
+                }
             }
         }
     }
