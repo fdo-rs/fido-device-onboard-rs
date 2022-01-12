@@ -1,11 +1,10 @@
 [Unit]
 Description=FDO client
-ConditionPathExists=/boot/device-credentials
 After=network-online.target
 
 [Service]
 Type=oneshot
-Environment=DEVICE_CREDENTIAL=/boot/device-credentials
+EnvironmentFile=-/boot/fdo-client-env
 Environment=LOG_LEVEL=info
 ExecStart=/usr/libexec/fdo/fdo-client-linuxapp
 ExecStartPost=/usr/bin/mv /boot/device-credentials /etc/device-credentials
