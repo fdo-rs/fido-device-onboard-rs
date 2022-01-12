@@ -4,7 +4,7 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-EnvironmentFile=/boot/fdo-client-env
+EnvironmentFile=-/boot/fdo-client-env
 Environment=LOG_LEVEL=info
 ExecStart=/usr/libexec/fdo/fdo-client-linuxapp
 ExecStartPost=/usr/bin/mv /boot/device-credentials /etc/device-credentials
