@@ -27,7 +27,7 @@ async fn test_to() -> Result<()> {
                 Ok(cfg.prepare_config_file(None, |_| Ok(()))?)
             },
             |cmd| {
-                cmd.env("ALLOW_NONINTEROPABLE_KDF", &"1");
+                cmd.env("ALLOW_NONINTEROPERABLE_KDF", &"1");
                 Ok(())
             },
         )
@@ -175,7 +175,7 @@ async fn test_to() -> Result<()> {
                         "DEVICE_ONBOARDING_EXECUTED_MARKER_FILE_PATH",
                         &marker_file_path.to_str().unwrap(),
                     )
-                    .env("ALLOW_NONINTEROPABLE_KDF", &"1");
+                    .env("ALLOW_NONINTEROPERABLE_KDF", &"1");
                 Ok(())
             },
             Duration::from_secs(5),
