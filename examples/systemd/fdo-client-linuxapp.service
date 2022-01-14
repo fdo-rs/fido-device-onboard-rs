@@ -7,7 +7,7 @@ Type=oneshot
 EnvironmentFile=-/boot/fdo-client-env
 Environment=LOG_LEVEL=info
 ExecStart=/usr/libexec/fdo/fdo-client-linuxapp
-ExecStartPost=/usr/bin/mv /boot/device-credentials /etc/device-credentials
+ExecStartPost=-/usr/bin/mv /boot/device-credentials /etc/device-credentials
 
 [Install]
 WantedBy=multi-user.target
