@@ -229,7 +229,7 @@ where
             Err(e) => {
                 return Err(StoreError::Unspecified(format!(
                     "Error opening file: {}",
-                    e.to_string()
+                    e,
                 )))
             }
             Ok(f) => f,
@@ -273,7 +273,7 @@ where
             Err(e) => {
                 return Err(StoreError::Unspecified(format!(
                     "Error opening file: {}",
-                    e.to_string()
+                    e,
                 )))
             }
             Ok(f) => f,
@@ -306,7 +306,7 @@ where
             Err(e) => {
                 return Err(StoreError::Unspecified(format!(
                     "Error opening file: {}",
-                    e.to_string()
+                    e,
                 )))
             }
             Ok(f) => f,
