@@ -87,9 +87,9 @@ impl ServiceInfoConfiguration {
 pub(crate) async fn perform_service_info(
     user_data: super::OwnerServiceUDT,
     _session: &mut Session,
-    msg: messages::v10::to2::DeviceServiceInfo,
+    msg: messages::v11::to2::DeviceServiceInfo,
     loop_num: u32,
-) -> Result<messages::v10::to2::OwnerServiceInfo, Error> {
+) -> Result<messages::v11::to2::OwnerServiceInfo, Error> {
     let in_si = msg.service_info();
     let mut out_si = ServiceInfo::new();
     let is_done = loop_num != 0;
@@ -222,7 +222,7 @@ pub(crate) async fn perform_service_info(
     }
 
     log::trace!("Sending ServiceInfo loop {}: {:?}", loop_num, out_si);
-    Ok(messages::v10::to2::OwnerServiceInfo::new(
+    Ok(messages::v11::to2::OwnerServiceInfo::new(
         false, is_done, out_si,
     ))
 }

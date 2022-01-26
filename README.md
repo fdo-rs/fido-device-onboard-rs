@@ -1,7 +1,7 @@
 # fido-device-onboard-rs
 An implementation of the FIDO Device Onboard Specification written in rust.
 
-The current implementation targets specification version: [v1.0 20210323a](https://fidoalliance.org/specs/FDO/fido-device-onboard-v1.0-ps-20210323/fido-device-onboard-v1.0-ps-20210323.html).
+The current implementation targets specification version: [1.1 20211214](https://fidoalliance.org/specs/FDO/FIDO-Device-Onboard-RD-v1.1-20211214/FIDO-device-onboard-spec-v1.1-rd-20211214.html).
 
 ## Components
 The fido-fdo-rs implements all core components of the FIDO Device Onboard Specification including:

@@ -8,25 +8,25 @@ use fdo_data_formats::{
 };
 
 use fdo_http_wrapper::server::Error;
-use fdo_http_wrapper::server::SessionWithStore;
+use fdo_http_wrapper::server::RequestInformation;
 
 use super::StoredItem;
 
 pub(super) async fn hello(
     _user_data: super::RendezvousUDT,
-    mut ses_with_store: SessionWithStore,
-    _msg: messages::v10::to0::Hello,
-) -> Result<(messages::v10::to0::HelloAck, SessionWithStore), warp::Rejection> {
+    mut ses_with_store: RequestInformation,
+    _msg: messages::v11::to0::Hello,
+) -> Result<(messages::v11::to0::HelloAck, RequestInformation), warp::Rejection> {
     let mut session = ses_with_store.session;
 
-    let nonce3 = Nonce::new().map_err(Error::from_error::<messages::v10::to0::Hello, _>)?;
+    let nonce3 = Nonce::new().map_err(Error::from_error::<messages::v11::to0::Hello, _>)?;
     let nonce3_encoded = nonce3.to_string();
 
     session
         .insert("nonce3", nonce3_encoded)
-        .map_err(Error::from_error::<messages::v10::to0::Hello, _>)?;
+        .map_err(Error::from_error::<messages::v11::to0::Hello, _>)?;
 
-    let res = messages::v10::to0::HelloAck::new(nonce3);
+    let res = messages::v11::to0::HelloAck::new(nonce3);
 
     ses_with_store.session = session;
 
@@ -35,9 +35,9 @@ pub(super) async fn hello(
 
 pub(super) async fn ownersign(
     user_data: super::RendezvousUDT,
-    mut ses_with_store: SessionWithStore,
-    msg: messages::v10::to0::OwnerSign,
-) -> Result<(messages::v10::to0::AcceptOwner, SessionWithStore), warp::Rejection> {
+    mut ses_with_store: RequestInformation,
+    msg: messages::v11::to0::OwnerSign,
+) -> Result<(messages::v11::to0::AcceptOwner, RequestInformation), warp::Rejection> {
     let session = ses_with_store.session;
 
     // First check the easy things: whether the nonce in to0d is correct
@@ -46,30 +46,32 @@ pub(super) async fn ownersign(
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::v10::to0::OwnerSign::message_type(),
+                messages::v11::to0::OwnerSign::message_type(),
                 "Request sequence failure",
             )
             .into())
         }
     };
+    let to0d = msg
+        .to0d()
+        .map_err(Error::from_error::<messages::v11::to0::OwnerSign, _>)?;
     let correct_nonce: Nonce = correct_nonce.parse().unwrap();
     log::trace!(
         "Matching correct nonce {:?} to received {:?}",
         correct_nonce,
-        msg.to0d().nonce()
+        to0d.nonce()
     );
-    if &correct_nonce != msg.to0d().nonce() {
+    if &correct_nonce != to0d.nonce() {
         return Err(Error::new(
             ErrorCode::InvalidMessageError,
-            messages::v10::to0::OwnerSign::message_type(),
+            messages::v11::to0::OwnerSign::message_type(),
             "Invalid nonce3",
         )
         .into());
     }
 
     // Now check the OV first public key: is it one we trust?
-    let manufacturer_pubkey = msg
-        .to0d()
+    let manufacturer_pubkey = to0d
         .ownership_voucher()
         .header()
         .manufacturer_public_key()
@@ -82,7 +84,7 @@ pub(super) async fn ownersign(
         if !trusted_manufacturer_keys.contains_publickey(&manufacturer_pubkey) {
             return Err(Error::new(
                 ErrorCode::InvalidOwnershipVoucher,
-                messages::v10::to0::OwnerSign::message_type(),
+                messages::v11::to0::OwnerSign::message_type(),
                 "Ownership voucher manufacturer not trusted",
             )
             .into());
@@ -90,17 +92,16 @@ pub(super) async fn ownersign(
     }
 
     // Now, get the final owner key
-    let ov_iter = msg
-        .to0d()
+    let ov_iter = to0d
         .ownership_voucher()
         .iter_entries()
-        .map_err(Error::from_error::<messages::v10::to0::OwnerSign, _>)?;
+        .map_err(Error::from_error::<messages::v11::to0::OwnerSign, _>)?;
     let owner = match ov_iter.last() {
         None => {
             log::error!("No OV entries encountered");
             return Err(Error::new(
                 ErrorCode::InvalidOwnershipVoucher,
-                messages::v10::to0::OwnerSign::message_type(),
+                messages::v11::to0::OwnerSign::message_type(),
                 "Invalid OV",
             )
             .into());
@@ -109,7 +110,7 @@ pub(super) async fn ownersign(
             log::error!("Invalid OV entry encountered: {:?}", e);
             return Err(Error::new(
                 ErrorCode::InvalidOwnershipVoucher,
-                messages::v10::to0::OwnerSign::message_type(),
+                messages::v11::to0::OwnerSign::message_type(),
                 "Invalid OV",
             )
             .into());
@@ -127,7 +128,7 @@ pub(super) async fn ownersign(
             log::error!("Error verifying to1d: {:?}", e);
             return Err(Error::new(
                 ErrorCode::InvalidOwnershipVoucher,
-                messages::v10::to0::OwnerSign::message_type(),
+                messages::v11::to0::OwnerSign::message_type(),
                 "Invalid TO1D",
             )
             .into());
@@ -139,18 +140,18 @@ pub(super) async fn ownersign(
     let to1d_to_to0d_hash = to1d_payload.to1d_to_to0d_hash();
     let to0d_hash = msg
         .to0d_hash(to1d_to_to0d_hash.get_type())
-        .map_err(Error::from_error::<messages::v10::to0::OwnerSign, _>)?;
+        .map_err(Error::from_error::<messages::v11::to0::OwnerSign, _>)?;
     to1d_to_to0d_hash
         .compare(&to0d_hash)
-        .map_err(Error::from_error::<messages::v10::to0::OwnerSign, _>)?;
+        .map_err(Error::from_error::<messages::v11::to0::OwnerSign, _>)?;
 
     // Okay, wew! We can now trust the to1d payload, and the other data!
     // First, verify the device certificate chain
-    let device_cert_chain = match msg.to0d().ownership_voucher().device_certificate_chain() {
+    let device_cert_chain = match to0d.ownership_voucher().device_certificate_chain() {
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidOwnershipVoucher,
-                messages::v10::to0::OwnerSign::message_type(),
+                messages::v11::to0::OwnerSign::message_type(),
                 "No device certificate",
             )
             .into());
@@ -163,7 +164,7 @@ pub(super) async fn ownersign(
             log::debug!("Error verifying device certificate: {:?}", cert_chain_err);
             return Err(Error::new(
                 ErrorCode::InvalidOwnershipVoucher,
-                messages::v10::to0::OwnerSign::message_type(),
+                messages::v11::to0::OwnerSign::message_type(),
                 "Device certificate not trusted",
             )
             .into());
@@ -171,16 +172,16 @@ pub(super) async fn ownersign(
         Ok(v) => v
             .clone()
             .try_into()
-            .map_err(Error::from_error::<messages::v10::to0::OwnerSign, _>)?,
+            .map_err(Error::from_error::<messages::v11::to0::OwnerSign, _>)?,
     };
 
     // Now compute the new wait_seconds and stuff to store
-    let mut wait_seconds = msg.to0d().wait_seconds();
+    let mut wait_seconds = to0d.wait_seconds();
     if wait_seconds > user_data.max_wait_seconds {
         wait_seconds = user_data.max_wait_seconds;
     }
     let wait_seconds = wait_seconds;
-    let device_guid = msg.to0d().ownership_voucher().header().guid().clone();
+    let device_guid = to0d.ownership_voucher().header().guid().clone();
 
     // Actually store the data here
     let ttl = time::Duration::new(wait_seconds as i64, 0);
@@ -199,17 +200,17 @@ pub(super) async fn ownersign(
             },
         )
         .await
-        .map_err(Error::from_error::<messages::v10::to0::OwnerSign, _>)?;
+        .map_err(Error::from_error::<messages::v11::to0::OwnerSign, _>)?;
 
     user_data
         .store
         .store_metadata(&device_guid, &fdo_store::MetadataKey::Ttl, &ttl)
         .await
-        .map_err(Error::from_error::<messages::v10::to0::OwnerSign, _>)?;
+        .map_err(Error::from_error::<messages::v11::to0::OwnerSign, _>)?;
 
     ses_with_store.session = session;
     Ok((
-        messages::v10::to0::AcceptOwner::new(wait_seconds),
+        messages::v11::to0::AcceptOwner::new(wait_seconds),
         ses_with_store,
     ))
 }

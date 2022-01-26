@@ -5,13 +5,13 @@ use fdo_data_formats::{
 };
 
 use fdo_http_wrapper::server::Error;
-use fdo_http_wrapper::server::SessionWithStore;
+use fdo_http_wrapper::server::RequestInformation;
 
 pub(super) async fn hello_rv(
     user_data: super::RendezvousUDT,
-    mut ses_with_store: SessionWithStore,
-    msg: messages::v10::to1::HelloRV,
-) -> Result<(messages::v10::to1::HelloRVAck, SessionWithStore), warp::Rejection> {
+    mut ses_with_store: RequestInformation,
+    msg: messages::v11::to1::HelloRV,
+) -> Result<(messages::v11::to1::HelloRVAck, RequestInformation), warp::Rejection> {
     let mut session = ses_with_store.session;
 
     // Check the signature info
@@ -21,7 +21,7 @@ pub(super) async fn hello_rv(
         _ => {
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::v10::to1::HelloRV::message_type(),
+                messages::v11::to1::HelloRV::message_type(),
                 "Unsupported signature scheme",
             )
             .into())
@@ -30,7 +30,7 @@ pub(super) async fn hello_rv(
     if !a_sig_info.info().is_empty() {
         return Err(Error::new(
             ErrorCode::InvalidMessageError,
-            messages::v10::to1::HelloRV::message_type(),
+            messages::v11::to1::HelloRV::message_type(),
             "Unsupported signature info",
         )
         .into());
@@ -42,13 +42,13 @@ pub(super) async fn hello_rv(
         .store
         .load_data(msg.guid())
         .await
-        .map_err(Error::from_error::<messages::v10::to1::HelloRV, _>)?;
+        .map_err(Error::from_error::<messages::v11::to1::HelloRV, _>)?;
     match dev_to1d {
         Some(_) => {}
         None => {
             return Err(Error::new(
                 ErrorCode::ResourceNotFound,
-                messages::v10::to1::HelloRV::message_type(),
+                messages::v11::to1::HelloRV::message_type(),
                 "Device GUID not found",
             )
             .into())
@@ -56,20 +56,20 @@ pub(super) async fn hello_rv(
     }
 
     // Create new nonce
-    let nonce4 = Nonce::new().map_err(Error::from_error::<messages::v10::to1::HelloRV, _>)?;
+    let nonce4 = Nonce::new().map_err(Error::from_error::<messages::v11::to1::HelloRV, _>)?;
     let nonce4_encoded = nonce4.to_string();
 
     session
         .insert("nonce4", nonce4_encoded)
-        .map_err(Error::from_error::<messages::v10::to1::HelloRV, _>)?;
+        .map_err(Error::from_error::<messages::v11::to1::HelloRV, _>)?;
     session
         .insert("device_guid", msg.guid().to_string())
-        .map_err(Error::from_error::<messages::v10::to1::HelloRV, _>)?;
+        .map_err(Error::from_error::<messages::v11::to1::HelloRV, _>)?;
 
     // Build return message
     let b_sig_info = SigInfo::new(a_sig_info.sig_type(), vec![]);
 
-    let res = messages::v10::to1::HelloRVAck::new(nonce4, b_sig_info);
+    let res = messages::v11::to1::HelloRVAck::new(nonce4, b_sig_info);
 
     // Return message
     ses_with_store.session = session;
@@ -78,9 +78,9 @@ pub(super) async fn hello_rv(
 
 pub(super) async fn prove_to_rv(
     user_data: super::RendezvousUDT,
-    mut ses_with_store: SessionWithStore,
-    msg: messages::v10::to1::ProveToRV,
-) -> Result<(messages::v10::to1::RVRedirect, SessionWithStore), warp::Rejection> {
+    mut ses_with_store: RequestInformation,
+    msg: messages::v11::to1::ProveToRV,
+) -> Result<(messages::v11::to1::RVRedirect, RequestInformation), warp::Rejection> {
     let session = ses_with_store.session;
 
     let nonce4: String = match session.get("nonce4") {
@@ -88,7 +88,7 @@ pub(super) async fn prove_to_rv(
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::v10::to0::OwnerSign::message_type(),
+                messages::v11::to0::OwnerSign::message_type(),
                 "Request sequence failure",
             )
             .into())
@@ -101,7 +101,7 @@ pub(super) async fn prove_to_rv(
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::v10::to1::ProveToRV::message_type(),
+                messages::v11::to1::ProveToRV::message_type(),
                 "Request sequence failure",
             )
             .into())
@@ -115,7 +115,7 @@ pub(super) async fn prove_to_rv(
             log::trace!("Error getting device entry: {:?}", e);
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::v10::to1::ProveToRV::message_type(),
+                messages::v11::to1::ProveToRV::message_type(),
                 "Request sequence failure",
             )
             .into());
@@ -123,7 +123,7 @@ pub(super) async fn prove_to_rv(
         Ok(None) => {
             return Err(Error::new(
                 ErrorCode::ResourceNotFound,
-                messages::v10::to1::ProveToRV::message_type(),
+                messages::v11::to1::ProveToRV::message_type(),
                 "Device not found",
             )
             .into());
@@ -135,7 +135,7 @@ pub(super) async fn prove_to_rv(
         log::debug!("Error parsing EAToken: {:?}", e);
         Error::new(
             ErrorCode::InvalidMessageError,
-            messages::v10::to1::ProveToRV::message_type(),
+            messages::v11::to1::ProveToRV::message_type(),
             "Token invaid",
         )
     })?;
@@ -145,14 +145,14 @@ pub(super) async fn prove_to_rv(
     if &nonce4 != signed_nonce {
         return Err(Error::new(
             ErrorCode::InvalidMessageError,
-            messages::v10::to1::ProveToRV::message_type(),
+            messages::v11::to1::ProveToRV::message_type(),
             "Nonce invaid",
         )
         .into());
     }
 
     // Okay, device is trusted! Now return their owner information
-    let rv_redirect = messages::v10::to1::RVRedirect::new(to1d);
+    let rv_redirect = messages::v11::to1::RVRedirect::new(to1d);
 
     ses_with_store.session = session;
     Ok((rv_redirect, ses_with_store))

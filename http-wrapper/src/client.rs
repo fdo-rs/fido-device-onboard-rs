@@ -5,7 +5,7 @@ use thiserror::Error;
 use aws_nitro_enclaves_cose::error::CoseError;
 use fdo_data_formats::{
     constants::MessageType,
-    messages::{v10::ErrorMessage, ClientMessage, EncryptionRequirement, Message, ServerMessage},
+    messages::{v11::ErrorMessage, ClientMessage, EncryptionRequirement, Message, ServerMessage},
     ProtocolVersion, Serializable,
 };
 

@@ -10,7 +10,7 @@ use fdo_data_formats::{
 };
 
 use fdo_http_wrapper::{
-    server::{Error, SessionWithStore},
+    server::{Error, RequestInformation},
     EncryptionKeys,
 };
 
@@ -33,15 +33,15 @@ where
 
 pub(crate) async fn connect(
     user_data: ManufacturingServiceUDT,
-    mut ses_with_store: SessionWithStore,
-    msg: messages::v10::diun::Connect,
-) -> Result<(messages::v10::diun::Accept, SessionWithStore), warp::Rejection> {
-    fail_if_no_diun::<messages::v10::diun::Connect>(&user_data)?;
+    mut ses_with_store: RequestInformation,
+    msg: messages::v11::diun::Connect,
+) -> Result<(messages::v11::diun::Accept, RequestInformation), warp::Rejection> {
+    fail_if_no_diun::<messages::v11::diun::Connect>(&user_data)?;
 
     let mut session = ses_with_store.session;
 
     let b_key_exchange = KeyExchange::new(*msg.kex_suite())
-        .map_err(Error::from_error::<messages::v10::diun::Connect, _>)?;
+        .map_err(Error::from_error::<messages::v11::diun::Connect, _>)?;
 
     let new_keys = b_key_exchange
         .derive_key(
@@ -49,17 +49,17 @@ pub(crate) async fn connect(
             *msg.cipher_suite(),
             msg.key_exchange(),
         )
-        .map_err(Error::from_error::<messages::v10::diun::Connect, _>)?;
+        .map_err(Error::from_error::<messages::v11::diun::Connect, _>)?;
     let new_keys = EncryptionKeys::from_derived(*msg.cipher_suite(), new_keys);
     log::debug!("Got new keys, setting {:?}", new_keys);
     session
         .insert(DIUN_KEYS_SES_KEY, new_keys)
-        .map_err(Error::from_error::<messages::v10::diun::Connect, _>)?;
+        .map_err(Error::from_error::<messages::v11::diun::Connect, _>)?;
 
-    let accept_payload = messages::v10::diun::AcceptPayload::new(
+    let accept_payload = messages::v11::diun::AcceptPayload::new(
         b_key_exchange
             .get_public()
-            .map_err(Error::from_error::<messages::v10::diun::Connect, _>)?,
+            .map_err(Error::from_error::<messages::v11::diun::Connect, _>)?,
     );
 
     let mut accept_protected_header = COSEHeaderMap::new();
@@ -80,22 +80,28 @@ pub(crate) async fn connect(
         Some(accept_unprotected_header),
         &user_data.diun_configuration.as_ref().unwrap().key,
     )
-    .map_err(Error::from_error::<messages::v10::diun::Connect, _>)?;
+    .map_err(Error::from_error::<messages::v11::diun::Connect, _>)?;
 
     ses_with_store.session = session;
 
     Ok((
-        messages::v10::diun::Accept::new(accept_payload),
+        messages::v11::diun::Accept::new(accept_payload),
         ses_with_store,
     ))
 }
 
 pub(crate) async fn request_key_parameters(
     user_data: ManufacturingServiceUDT,
-    mut ses_with_store: SessionWithStore,
-    _msg: messages::v10::diun::RequestKeyParameters,
-) -> Result<(messages::v10::diun::ProvideKeyParameters, SessionWithStore), warp::Rejection> {
-    fail_if_no_diun::<messages::v10::diun::RequestKeyParameters>(&user_data)?;
+    mut ses_with_store: RequestInformation,
+    _msg: messages::v11::diun::RequestKeyParameters,
+) -> Result<
+    (
+        messages::v11::diun::ProvideKeyParameters,
+        RequestInformation,
+    ),
+    warp::Rejection,
+> {
+    fail_if_no_diun::<messages::v11::diun::RequestKeyParameters>(&user_data)?;
 
     let mut session = ses_with_store.session;
 
@@ -103,18 +109,18 @@ pub(crate) async fn request_key_parameters(
     if new_keys.is_none() {
         return Err(Error::new(
             ErrorCode::InvalidMessageError,
-            messages::v10::diun::RequestKeyParameters::message_type(),
+            messages::v11::diun::RequestKeyParameters::message_type(),
             "Sequence error: no diun_keys",
         )
         .into());
     }
     session.remove(DIUN_KEYS_SES_KEY);
-    fdo_http_wrapper::server::set_encryption_keys::<messages::v10::diun::RequestKeyParameters>(
+    fdo_http_wrapper::server::set_encryption_keys::<messages::v11::diun::RequestKeyParameters>(
         &mut session,
         new_keys.unwrap(),
     )?;
 
-    let params = messages::v10::diun::ProvideKeyParameters::new(
+    let params = messages::v11::diun::ProvideKeyParameters::new(
         user_data.diun_configuration.as_ref().unwrap().key_type,
         if user_data
             .diun_configuration
@@ -143,26 +149,26 @@ pub(crate) async fn request_key_parameters(
 
 pub(crate) async fn provide_key(
     user_data: ManufacturingServiceUDT,
-    mut ses_with_store: SessionWithStore,
-    msg: messages::v10::diun::ProvideKey,
-) -> Result<(messages::v10::diun::Done, SessionWithStore), warp::Rejection> {
-    fail_if_no_diun::<messages::v10::diun::ProvideKey>(&user_data)?;
+    mut ses_with_store: RequestInformation,
+    msg: messages::v11::diun::ProvideKey,
+) -> Result<(messages::v11::diun::Done, RequestInformation), warp::Rejection> {
+    fail_if_no_diun::<messages::v11::diun::ProvideKey>(&user_data)?;
 
     let mut session = ses_with_store.session;
 
     // Let's store the key in the session for DI
     session
         .insert(DEVICE_KEY_FROM_DIUN_SES_KEY, msg.public_key())
-        .map_err(Error::from_error::<messages::v10::diun::ProvideKey, _>)?;
+        .map_err(Error::from_error::<messages::v11::diun::ProvideKey, _>)?;
 
     // Let's tell DI the user came from DIUN
     session
         .insert(PERFORMED_DIUN_SES_KEY, true)
-        .map_err(Error::from_error::<messages::v10::diun::ProvideKey, _>)?;
+        .map_err(Error::from_error::<messages::v11::diun::ProvideKey, _>)?;
 
     ses_with_store.session = session;
     Ok((
-        messages::v10::diun::Done::new(
+        messages::v11::diun::Done::new(
             user_data
                 .diun_configuration
                 .as_ref()

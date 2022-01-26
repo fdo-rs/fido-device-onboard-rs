@@ -5,7 +5,7 @@ use crate::{
     ProtocolVersion, Serializable,
 };
 
-pub mod v10;
+pub mod v11;
 
 pub trait ClientMessage: Message {}
 pub trait ServerMessage: Message {}
@@ -44,7 +44,13 @@ pub trait Message: Send + Serializable + Sized {
                 eprintln!("Error serializing response: {:?}", e);
 
                 let errmsg = match Self::protocol_version() {
-                    ProtocolVersion::Version1_0 => v10::ErrorMessage::new(
+                    ProtocolVersion::Version1_0 => v11::ErrorMessage::new(
+                        ErrorCode::InternalServerError,
+                        Self::message_type(),
+                        "Error serializing response".to_string(),
+                        0,
+                    ),
+                    ProtocolVersion::Version1_1 => v11::ErrorMessage::new(
                         ErrorCode::InternalServerError,
                         Self::message_type(),
                         "Error serializing response".to_string(),

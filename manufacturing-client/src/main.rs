@@ -42,9 +42,9 @@ async fn perform_diun(
     let key_exchange = KeyExchange::new(kexsuite).context("Error initializing key exchange")?;
 
     // Send: Connect, Receive: Accept
-    let accept: RequestResult<messages::v10::diun::Accept> = client
+    let accept: RequestResult<messages::v11::diun::Accept> = client
         .send_request(
-            messages::v10::diun::Connect::new(
+            messages::v11::diun::Connect::new(
                 nonce_diun_1.clone(),
                 kexsuite,
                 ciphersuite,
@@ -85,7 +85,7 @@ async fn perform_diun(
     if nonce_diun_1 != nonce_diun_1_from_server {
         bail!("Nonce from server did not match challenge");
     }
-    let accept_payload: messages::v10::diun::AcceptPayload = accept
+    let accept_payload: messages::v11::diun::AcceptPayload = accept
         .get_payload(&diun_pubkey)
         .context("Error parsing Accept payload")?;
     log::debug!("Accept payload: {:?}", accept_payload);
@@ -99,9 +99,9 @@ async fn perform_diun(
     let new_keys = EncryptionKeys::from_derived(ciphersuite, new_keys);
     log::debug!("Derived new keys: {:?}", new_keys);
 
-    let key_parameters: RequestResult<messages::v10::diun::ProvideKeyParameters> = client
+    let key_parameters: RequestResult<messages::v11::diun::ProvideKeyParameters> = client
         .send_request(
-            messages::v10::diun::RequestKeyParameters::new(None),
+            messages::v11::diun::RequestKeyParameters::new(None),
             Some(new_keys),
         )
         .await;
@@ -115,9 +115,9 @@ async fn perform_diun(
     .await
     .context("Error getting new key")?;
 
-    let done: RequestResult<messages::v10::diun::Done> = client
+    let done: RequestResult<messages::v11::diun::Done> = client
         .send_request(
-            messages::v10::diun::ProvideKey::new(
+            messages::v11::diun::ProvideKey::new(
                 key_ref
                     .get_public_key()
                     .context("Error getting public key from key reference")?,
@@ -138,8 +138,8 @@ async fn perform_di(
     let mfg_info = get_mfg_info(mfg_string_type)
         .await
         .context("Error building MFG string")?;
-    let set_credentials: RequestResult<messages::v10::di::SetCredentials> = client
-        .send_request(messages::v10::di::AppStart::new(mfg_info), None)
+    let set_credentials: RequestResult<messages::v11::di::SetCredentials> = client
+        .send_request(messages::v11::di::AppStart::new(mfg_info)?, None)
         .await;
     let set_credentials = set_credentials.context("Error sending AppStart")?;
     let ov_header = set_credentials.into_ov_header();
@@ -162,8 +162,8 @@ async fn perform_di(
         )
         .context("Error saving key reference to credential")?;
 
-    let done: RequestResult<messages::v10::di::Done> = client
-        .send_request(messages::v10::di::SetHMAC::new(ov_header_hmac), None)
+    let done: RequestResult<messages::v11::di::Done> = client
+        .send_request(messages::v11::di::SetHMAC::new(ov_header_hmac), None)
         .await;
     done.context("Error sending SetHmac")?;
 
@@ -238,7 +238,7 @@ async fn main() -> Result<()> {
         diun_pub_key_verification
     );
 
-    let mut client = ServiceClient::new(ProtocolVersion::Version1_0, &url);
+    let mut client = ServiceClient::new(ProtocolVersion::Version1_1, &url);
 
     let (keyref, mfg_string_type) = if use_plain_di {
         let mfg_string_type =
@@ -404,7 +404,7 @@ impl KeyReference {
 
                 let cred = FileDeviceCredential {
                     active: true,
-                    protver: ProtocolVersion::Version1_0,
+                    protver: ProtocolVersion::Version1_1,
                     hmac_secret: hmac_key,
                     device_info,
                     guid,

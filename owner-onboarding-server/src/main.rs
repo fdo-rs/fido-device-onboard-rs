@@ -20,6 +20,7 @@ use openssl::{
     x509::{X509Builder, X509NameBuilder, X509},
 };
 use serde::Deserialize;
+use serde_bytes::ByteBuf;
 use tokio::signal::unix::{signal, SignalKind};
 use warp::Filter;
 
@@ -146,11 +147,11 @@ async fn report_ov_to_rendezvous(
     owner_key: &PKey<Private>,
 ) -> Result<u32> {
     let ov_header = ov.header();
-    if ov_header.protocol_version() != ProtocolVersion::Version1_0 {
+    if ov_header.protocol_version() != ProtocolVersion::Version1_1 {
         bail!(
             "Protocol version in OV ({}) not supported ({})",
             ov_header.protocol_version(),
-            ProtocolVersion::Version1_0
+            ProtocolVersion::Version1_1
         );
     }
     // Determine the RV IP
@@ -179,11 +180,11 @@ async fn report_ov_to_rendezvous(
             );
 
             let mut rv_client =
-                fdo_http_wrapper::client::ServiceClient::new(ProtocolVersion::Version1_0, &rv_url);
+                fdo_http_wrapper::client::ServiceClient::new(ProtocolVersion::Version1_1, &rv_url);
 
             // Send: Hello, Receive: HelloAck
-            let hello_ack: RequestResult<messages::v10::to0::HelloAck> = rv_client
-                .send_request(messages::v10::to0::Hello::new(), None)
+            let hello_ack: RequestResult<messages::v11::to0::HelloAck> = rv_client
+                .send_request(messages::v11::to0::Hello::new(), None)
                 .await;
 
             let hello_ack = match hello_ack {
@@ -201,13 +202,14 @@ async fn report_ov_to_rendezvous(
             let to0d_vec = to0d.serialize_data().context("Error serializing TO0Data")?;
             let to0d_hash =
                 Hash::from_data(HashType::Sha384, &to0d_vec).context("Error hashing to0d")?;
+            let to0d = ByteBuf::from(to0d_vec);
             let to1d_payload = TO1DataPayload::new(Vec::from(owner_addresses), to0d_hash);
             let to1d =
                 COSESign::new(&to1d_payload, None, owner_key).context("Error signing to1d")?;
             // Send: OwnerSign, Receive: AcceptOwner
-            let msg = messages::v10::to0::OwnerSign::new(to0d, to1d)
+            let msg = messages::v11::to0::OwnerSign::new(to0d, to1d)
                 .context("Error creating OwnerSign message")?;
-            let accept_owner: RequestResult<messages::v10::to0::AcceptOwner> =
+            let accept_owner: RequestResult<messages::v11::to0::AcceptOwner> =
                 rv_client.send_request(msg, None).await;
             let accept_owner =
                 accept_owner.context("Error registering self to rendezvous server")?;
@@ -413,37 +415,37 @@ async fn main() -> Result<()> {
 
     // TO2
     let handler_to2_hello_device = fdo_http_wrapper::server::fdo_request_filter(
-        ProtocolVersion::Version1_0,
+        ProtocolVersion::Version1_1,
         user_data.clone(),
         session_store.clone(),
         handlers::hello_device,
     );
     let handler_to2_get_ov_next_entry = fdo_http_wrapper::server::fdo_request_filter(
-        ProtocolVersion::Version1_0,
+        ProtocolVersion::Version1_1,
         user_data.clone(),
         session_store.clone(),
         handlers::get_ov_next_entry,
     );
     let handler_to2_prove_device = fdo_http_wrapper::server::fdo_request_filter(
-        ProtocolVersion::Version1_0,
+        ProtocolVersion::Version1_1,
         user_data.clone(),
         session_store.clone(),
         handlers::prove_device,
     );
     let handler_to2_device_service_info_ready = fdo_http_wrapper::server::fdo_request_filter(
-        ProtocolVersion::Version1_0,
+        ProtocolVersion::Version1_1,
         user_data.clone(),
         session_store.clone(),
         handlers::device_service_info_ready,
     );
     let handler_to2_device_service_info = fdo_http_wrapper::server::fdo_request_filter(
-        ProtocolVersion::Version1_0,
+        ProtocolVersion::Version1_1,
         user_data.clone(),
         session_store.clone(),
         handlers::device_service_info,
     );
     let handler_to2_done = fdo_http_wrapper::server::fdo_request_filter(
-        ProtocolVersion::Version1_0,
+        ProtocolVersion::Version1_1,
         user_data.clone(),
         session_store.clone(),
         handlers::done,

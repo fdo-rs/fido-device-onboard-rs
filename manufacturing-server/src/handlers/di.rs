@@ -14,7 +14,7 @@ use fdo_data_formats::{
     ProtocolVersion, Serializable,
 };
 
-use fdo_http_wrapper::server::{Error, Session, SessionWithStore};
+use fdo_http_wrapper::server::{Error, RequestInformation, Session};
 use openssl::{
     asn1::{Asn1Integer, Asn1Time},
     bn::BigNum,
@@ -50,18 +50,22 @@ const DEVICE_CERTIFICATE_SES_KEY: &str = "mfg_di_device_certificate";
 
 pub(crate) async fn app_start(
     user_data: ManufacturingServiceUDT,
-    mut ses_with_store: SessionWithStore,
-    msg: messages::v10::di::AppStart,
-) -> Result<(messages::v10::di::SetCredentials, SessionWithStore), warp::Rejection> {
+    mut ses_with_store: RequestInformation,
+    msg: messages::v11::di::AppStart,
+) -> Result<(messages::v11::di::SetCredentials, RequestInformation), warp::Rejection> {
     let mut session = ses_with_store.session;
-    fail_if_no_di_and_not_from_diun::<messages::v10::di::AppStart>(&session, &user_data)?;
+    fail_if_no_di_and_not_from_diun::<messages::v11::di::AppStart>(&session, &user_data)?;
 
-    let mfg_info = match msg.mfg_info().as_str() {
+    let mfg_info = msg
+        .mfg_info()
+        .map_err(Error::from_error::<messages::v11::di::AppStart, _>)?;
+
+    let mfg_info = match mfg_info.as_str() {
         Some(val) => val,
         _ => {
             return Err(Error::new(
                 ErrorCode::InternalServerError,
-                messages::v10::di::AppStart::message_type(),
+                messages::v11::di::AppStart::message_type(),
                 "MFG Info is not a string",
             )
             .into())
@@ -75,20 +79,20 @@ pub(crate) async fn app_start(
             Some(store) => store
                 .load_data(&mfg_info.to_string())
                 .await
-                .map_err(Error::from_error::<messages::v10::di::AppStart, _>)?,
+                .map_err(Error::from_error::<messages::v11::di::AppStart, _>)?,
         },
     };
     let public_key = match public_key {
         None => {
             return Err(Error::new(
                 ErrorCode::InternalServerError,
-                messages::v10::di::AppStart::message_type(),
+                messages::v11::di::AppStart::message_type(),
                 "No public key located",
             )
             .into());
         }
         Some(v) => PKey::public_key_from_der(&v)
-            .map_err(Error::from_error::<messages::v10::di::AppStart, _>)?,
+            .map_err(Error::from_error::<messages::v11::di::AppStart, _>)?,
     };
 
     // Create new device certificate chain
@@ -102,46 +106,46 @@ pub(crate) async fn app_start(
         mfg_info,
         &public_key,
     )
-    .map_err(Error::from_error::<messages::v10::di::AppStart, _>)?;
+    .map_err(Error::from_error::<messages::v11::di::AppStart, _>)?;
     let device_certificate_chain =
         create_device_cert_chain(&user_data.device_cert_chain, device_certificate);
     let device_certificate_chain_serialized = device_certificate_chain
         .serialize_data()
-        .map_err(Error::from_error::<messages::v10::di::AppStart, _>)?;
+        .map_err(Error::from_error::<messages::v11::di::AppStart, _>)?;
     let device_certificate_chain_hash =
         Hash::from_data(HashType::Sha384, &device_certificate_chain_serialized)
-            .map_err(Error::from_error::<messages::v10::di::AppStart, _>)?;
+            .map_err(Error::from_error::<messages::v11::di::AppStart, _>)?;
 
     // Create new ownership voucher header
     let new_voucher_header = OwnershipVoucherHeader::new(
-        ProtocolVersion::Version1_0,
-        Guid::new().map_err(Error::from_error::<messages::v10::di::AppStart, _>)?,
+        ProtocolVersion::Version1_1,
+        Guid::new().map_err(Error::from_error::<messages::v11::di::AppStart, _>)?,
         user_data.rendezvous_info.clone(),
         mfg_info.to_string(),
         user_data
             .manufacturer_cert
             .clone()
             .try_into()
-            .map_err(Error::from_error::<messages::v10::di::AppStart, _>)?,
+            .map_err(Error::from_error::<messages::v11::di::AppStart, _>)?,
         Some(device_certificate_chain_hash),
     )
-    .map_err(Error::from_error::<messages::v10::di::AppStart, _>)?;
+    .map_err(Error::from_error::<messages::v11::di::AppStart, _>)?;
 
     // Store the OV Header and device cert chain
     let new_voucher_header_serialized = new_voucher_header
         .serialize_data()
-        .map_err(Error::from_error::<messages::v10::di::AppStart, _>)?;
+        .map_err(Error::from_error::<messages::v11::di::AppStart, _>)?;
     let new_voucher_header_serialized = hex::encode(&new_voucher_header_serialized);
     session
         .insert(OV_HEADER_SES_KEY, new_voucher_header_serialized)
-        .map_err(Error::from_error::<messages::v10::di::AppStart, _>)?;
+        .map_err(Error::from_error::<messages::v11::di::AppStart, _>)?;
     session
         .insert(DEVICE_CERTIFICATE_SES_KEY, device_certificate_chain)
-        .map_err(Error::from_error::<messages::v10::di::AppStart, _>)?;
+        .map_err(Error::from_error::<messages::v11::di::AppStart, _>)?;
 
     ses_with_store.session = session;
     Ok((
-        messages::v10::di::SetCredentials::new(new_voucher_header),
+        messages::v11::di::SetCredentials::new(new_voucher_header),
         ses_with_store,
     ))
 }
@@ -188,23 +192,23 @@ fn create_device_certificate(
 
 pub(crate) async fn set_hmac(
     user_data: ManufacturingServiceUDT,
-    mut ses_with_store: SessionWithStore,
-    msg: messages::v10::di::SetHMAC,
-) -> Result<(messages::v10::di::Done, SessionWithStore), warp::Rejection> {
+    mut ses_with_store: RequestInformation,
+    msg: messages::v11::di::SetHMAC,
+) -> Result<(messages::v11::di::Done, RequestInformation), warp::Rejection> {
     let session = ses_with_store.session;
-    fail_if_no_di_and_not_from_diun::<messages::v10::di::SetHMAC>(&session, &user_data)?;
+    fail_if_no_di_and_not_from_diun::<messages::v11::di::SetHMAC>(&session, &user_data)?;
 
     let ov_header = match session.get::<String>(OV_HEADER_SES_KEY) {
         Some(header) => {
             let header =
-                hex::decode(header).map_err(Error::from_error::<messages::v10::di::SetHMAC, _>)?;
+                hex::decode(header).map_err(Error::from_error::<messages::v11::di::SetHMAC, _>)?;
             OwnershipVoucherHeader::deserialize_data(&header)
-                .map_err(Error::from_error::<messages::v10::di::SetHMAC, _>)?
+                .map_err(Error::from_error::<messages::v11::di::SetHMAC, _>)?
         }
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::v10::diun::RequestKeyParameters::message_type(),
+                messages::v11::diun::RequestKeyParameters::message_type(),
                 "Sequence error: no ownership voucher header",
             )
             .into())
@@ -216,7 +220,7 @@ pub(crate) async fn set_hmac(
         None => {
             return Err(Error::new(
                 ErrorCode::InvalidMessageError,
-                messages::v10::diun::RequestKeyParameters::message_type(),
+                messages::v11::diun::RequestKeyParameters::message_type(),
                 "Sequence error: no device certificate",
             )
             .into())
@@ -229,12 +233,16 @@ pub(crate) async fn set_hmac(
         msg.hmac().clone(),
         Some(device_certificate_chain),
     )
-    .map_err(Error::from_error::<messages::v10::di::SetHMAC, _>)?;
+    .map_err(Error::from_error::<messages::v11::di::SetHMAC, _>)?;
 
     // If intended, extend with the owner key
     if let Some(manufacturer_key) = user_data.manufacturer_key.as_ref() {
-        ov.extend(manufacturer_key, user_data.owner_cert.as_ref().unwrap())
-            .map_err(Error::from_error::<messages::v10::di::SetHMAC, _>)?;
+        ov.extend(
+            manufacturer_key,
+            None,
+            user_data.owner_cert.as_ref().unwrap(),
+        )
+        .map_err(Error::from_error::<messages::v11::di::SetHMAC, _>)?;
     }
 
     // Write Ownership Voucher out to the store
@@ -242,9 +250,9 @@ pub(crate) async fn set_hmac(
         .ownership_voucher_store
         .store_data(device_guid, ov)
         .await
-        .map_err(Error::from_error::<messages::v10::di::SetHMAC, _>)?;
+        .map_err(Error::from_error::<messages::v11::di::SetHMAC, _>)?;
 
     ses_with_store.session = session;
 
-    Ok((messages::v10::di::Done::new(), ses_with_store))
+    Ok((messages::v11::di::Done::new(), ses_with_store))
 }
