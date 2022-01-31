@@ -6,8 +6,8 @@ use serde_cbor::value::from_value;
 use crate::{
     constants::{RendezvousProtocolValue, RendezvousVariable},
     publickey::PublicKey,
-    types::{Hash, IPAddress, RendezvousDirective, RendezvousInfo},
-    Error,
+    types::{CborSimpleType, Hash, IPAddress, RendezvousDirective, RendezvousInfo},
+    Error, Serializable,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -65,7 +65,7 @@ impl RendezvousInterpretedDirective {
     fn from_rv_directive(
         info: &RendezvousDirective,
         side: RendezvousInterpreterSide,
-    ) -> Result<Option<Self>, serde_cbor::Error> {
+    ) -> Result<Option<Self>, Error> {
         let mut ip_addresses = Vec::new();
         let mut dns_name = None;
         let mut port = None;
@@ -80,6 +80,7 @@ impl RendezvousInterpretedDirective {
         let mut bypass = false;
 
         for (variable, value) in info {
+            let value = CborSimpleType::deserialize_data(value)?;
             match variable {
                 RendezvousVariable::DeviceOnly => {
                     if side != RendezvousInterpreterSide::Device {
@@ -168,7 +169,8 @@ impl RendezvousInterpretedDirective {
                     None => {
                         return Err(<serde_cbor::Error as serde::de::Error>::missing_field(
                             "No default port",
-                        ))
+                        )
+                        .into())
                     }
                 },
             },
@@ -189,7 +191,7 @@ impl RendezvousInfo {
     pub fn to_interpreted(
         &self,
         side: RendezvousInterpreterSide,
-    ) -> Result<Vec<RendezvousInterpretedDirective>, serde_cbor::Error> {
+    ) -> Result<Vec<RendezvousInterpretedDirective>, Error> {
         self.values()
             .iter()
             .map(|v| RendezvousInterpretedDirective::from_rv_directive(v, side))

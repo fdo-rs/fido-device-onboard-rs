@@ -1,11 +1,12 @@
 use crate::{
     errors::Error,
     types::{Guid, HMac, Hash, RendezvousInfo},
+    ProtocolVersion,
 };
 
 pub trait DeviceCredential: std::fmt::Debug {
     fn is_active(&self) -> bool;
-    fn protocol_version(&self) -> u16;
+    fn protocol_version(&self) -> ProtocolVersion;
     fn verify_hmac(&self, data: &[u8], hmac: &HMac) -> Result<(), Error>;
     fn device_info(&self) -> &str;
     fn device_guid(&self) -> &Guid;

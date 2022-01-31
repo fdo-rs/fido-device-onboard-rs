@@ -9,13 +9,14 @@ use std::{
 use aws_nitro_enclaves_cose::crypto::{SigningPrivateKey, SigningPublicKey};
 use aws_nitro_enclaves_cose::CoseSign1 as COSESignInner;
 use serde_bytes::ByteBuf;
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use serde_tuple::Serialize_tuple;
 
 use crate::{
-    cborparser::ParsedArray,
+    cborparser::{ParsedArray, ParsedArrayBuilder},
     constants::{DeviceSigType, HashType, HeaderKeys, RendezvousVariable, TransportProtocol},
     errors::Error,
-    ownershipvoucher::{OwnershipVoucher, OwnershipVoucherHeader},
+    ownershipvoucher::OwnershipVoucher,
     publickey::PublicKey,
     Serializable,
 };
@@ -424,8 +425,25 @@ pub type Port = u16;
 pub struct RendezvousInfo(Vec<RendezvousDirective>);
 
 impl RendezvousInfo {
-    pub fn new(directives: Vec<RendezvousDirective>) -> RendezvousInfo {
-        RendezvousInfo(directives)
+    pub fn new(
+        directives: Vec<Vec<(RendezvousVariable, CborSimpleType)>>,
+    ) -> Result<RendezvousInfo, Error> {
+        let mut out = Vec::new();
+
+        for directive in directives {
+            let mut out_directive = Vec::new();
+
+            for (variable, value) in directive {
+                let value = value.serialize_data()?;
+                let value = ByteBuf::from(value);
+
+                out_directive.push((variable, value));
+            }
+
+            out.push(out_directive);
+        }
+
+        Ok(RendezvousInfo(out))
     }
 
     pub fn values(&self) -> &[RendezvousDirective] {
@@ -434,7 +452,7 @@ impl RendezvousInfo {
 }
 
 pub type RendezvousDirective = Vec<RendezvousInstruction>;
-pub type RendezvousInstruction = (RendezvousVariable, CborSimpleType);
+pub type RendezvousInstruction = (RendezvousVariable, ByteBuf);
 
 // TODO: This sends serde_cbor outwards. Possibly re-do this
 pub type CborSimpleType = serde_cbor::Value;
@@ -602,10 +620,12 @@ impl TO0Data {
         wait_seconds: u32,
         nonce: Nonce,
     ) -> Result<Self, Error> {
-        let mut contents = unsafe { ParsedArray::new() };
+        let mut contents = ParsedArrayBuilder::new();
         contents.set(0, &ownership_voucher)?;
         contents.set(1, &wait_seconds)?;
         contents.set(2, &nonce)?;
+
+        let contents = contents.build();
 
         Ok(TO0Data {
             contents,
@@ -710,19 +730,21 @@ impl TO2ProveDevicePayload {
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct ServiceInfo(Vec<Vec<(String, CborSimpleType)>>);
+pub struct ServiceInfo(Vec<(String, ByteBuf)>);
 
 impl ServiceInfo {
     pub fn new() -> Self {
-        ServiceInfo(vec![Vec::new()])
+        ServiceInfo(vec![])
     }
 
     pub fn add<T>(&mut self, module: &str, key: &str, value: &T) -> Result<(), Error>
     where
         T: serde::Serialize,
     {
-        let value = serde_cbor::value::to_value(&value)?;
-        self.0[0].push((format!("{}:{}", module, key), value));
+        let mut buffer = Vec::new();
+        ciborium::ser::into_writer(&value, &mut buffer)?;
+        let value = ByteBuf::from(buffer);
+        self.0.push((format!("{}:{}", module, key), value));
         Ok(())
     }
 
@@ -743,24 +765,20 @@ impl ServiceInfo {
     }
 
     pub fn iter(&self) -> ServiceInfoIter {
-        ServiceInfoIter {
-            info: self,
-            inner_pos: 0,
-            pos: 0,
-        }
+        ServiceInfoIter { info: self, pos: 0 }
     }
 
     pub fn values(&self) -> Result<Vec<(String, String, CborSimpleType)>, Error> {
         self.0
             .iter()
-            .flatten()
             .map(|(k, v)| match k.find(':') {
                 None => Err(Error::InconsistentValue(
                     "ServiceInfo key missing module separation",
                 )),
                 Some(pos) => {
                     let (module, key) = k.split_at(pos);
-                    Ok((module.to_string(), key.to_string(), v.clone()))
+                    let value = serde_cbor::from_slice(v)?;
+                    Ok((module.to_string(), key.to_string(), value))
                 }
             })
             .collect()
@@ -770,7 +788,6 @@ impl ServiceInfo {
 #[derive(Debug)]
 pub struct ServiceInfoIter<'a> {
     info: &'a ServiceInfo,
-    inner_pos: usize,
     pos: usize,
 }
 
@@ -778,14 +795,10 @@ impl Iterator for ServiceInfoIter<'_> {
     type Item = (String, String, CborSimpleType);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.inner_pos >= self.info.0.len() {
+        if self.pos >= self.info.0.len() {
             return None;
         }
-        if self.pos >= self.info.0[self.inner_pos].len() {
-            self.inner_pos += 1;
-            return self.next();
-        }
-        let (module_key, val) = &self.info.0[self.inner_pos][self.pos];
+        let (module_key, val) = &self.info.0[self.pos];
         self.pos += 1;
 
         // When it's stable, use str.split_once
@@ -798,20 +811,29 @@ impl Iterator for ServiceInfoIter<'_> {
         };
 
         let (module, key) = module_key.split_at(split_pos);
-        Some((module.to_string(), key[1..].to_string(), val.clone()))
+        let value = match serde_cbor::from_slice(val) {
+            Ok(val) => val,
+            Err(e) => {
+                log::error!("ServiceInfo value is invalid: {:?}", e);
+                return None;
+            }
+        };
+        Some((module.to_string(), key[1..].to_string(), value))
     }
 }
 
 #[derive(Debug)]
 pub struct TO2ProveOVHdrPayload {
-    contents: ParsedArray<crate::cborparser::ParsedArraySize6>,
+    contents: ParsedArray<crate::cborparser::ParsedArraySize8>,
 
-    cached_ov_header: OwnershipVoucherHeader,
+    cached_ov_header: ByteBuf,
     cached_num_ov_entries: u16,
     cached_hmac: HMac,
     cached_nonce5: Nonce,
     cached_b_signature_info: SigInfo,
     cached_a_key_exchange: ByteBuf,
+    cached_hello_device_hash: Hash,
+    cached_max_owner_message_size: u16,
 }
 
 impl Serializable for TO2ProveOVHdrPayload {
@@ -827,6 +849,8 @@ impl Serializable for TO2ProveOVHdrPayload {
         let cached_nonce5 = contents.get(3)?;
         let cached_b_signature_info = contents.get(4)?;
         let cached_a_key_exchange = contents.get(5)?;
+        let cached_hello_device_hash = contents.get(6)?;
+        let cached_max_owner_message_size = contents.get(7)?;
 
         Ok(TO2ProveOVHdrPayload {
             contents,
@@ -837,6 +861,8 @@ impl Serializable for TO2ProveOVHdrPayload {
             cached_nonce5,
             cached_b_signature_info,
             cached_a_key_exchange,
+            cached_hello_device_hash,
+            cached_max_owner_message_size,
         })
     }
 
@@ -850,22 +876,26 @@ impl Serializable for TO2ProveOVHdrPayload {
 
 impl TO2ProveOVHdrPayload {
     pub fn new(
-        ov_header: OwnershipVoucherHeader,
+        ov_header: ByteBuf,
         num_ov_entries: u16,
         hmac: HMac,
         nonce5: Nonce,
         b_signature_info: SigInfo,
         a_key_exchange: Vec<u8>,
+        hello_device_hash: Hash,
     ) -> Result<Self, Error> {
         let a_key_exchange = ByteBuf::from(a_key_exchange);
 
-        let mut contents = unsafe { ParsedArray::new() };
+        let mut contents = ParsedArrayBuilder::new();
         contents.set(0, &ov_header)?;
         contents.set(1, &num_ov_entries)?;
         contents.set(2, &hmac)?;
         contents.set(3, &nonce5)?;
         contents.set(4, &b_signature_info)?;
         contents.set(5, &a_key_exchange)?;
+        contents.set(6, &hello_device_hash)?;
+        contents.set(7, &crate::messages::v11::to2::MAX_MESSAGE_SIZE)?;
+        let contents = contents.build();
 
         Ok(TO2ProveOVHdrPayload {
             contents,
@@ -876,14 +906,16 @@ impl TO2ProveOVHdrPayload {
             cached_nonce5: nonce5,
             cached_b_signature_info: b_signature_info,
             cached_a_key_exchange: a_key_exchange,
+            cached_hello_device_hash: hello_device_hash,
+            cached_max_owner_message_size: crate::messages::v11::to2::MAX_MESSAGE_SIZE,
         })
     }
 
-    pub fn ov_header(&self) -> &OwnershipVoucherHeader {
+    pub fn ov_header(&self) -> &[u8] {
         &self.cached_ov_header
     }
 
-    pub fn into_ov_header(self) -> OwnershipVoucherHeader {
+    pub fn into_ov_header(self) -> ByteBuf {
         self.cached_ov_header
     }
 
@@ -905,6 +937,14 @@ impl TO2ProveOVHdrPayload {
 
     pub fn a_key_exchange(&self) -> &[u8] {
         &self.cached_a_key_exchange
+    }
+
+    pub fn hello_device_hash(&self) -> &Hash {
+        &self.cached_hello_device_hash
+    }
+
+    pub fn max_owner_message_size(&self) -> u16 {
+        self.cached_max_owner_message_size
     }
 }
 
@@ -1133,9 +1173,9 @@ impl KeyExchange {
         let mut salt = Vec::with_capacity(KEY_DERIVE_CONTEXT_PREFIX.len() + context_rand.len() + 2);
         salt.extend_from_slice(KEY_DERIVE_CONTEXT_PREFIX);
         salt.extend_from_slice(&context_rand);
-        salt.extend_from_slice(&(cipher.required_keylen() as u16).to_be_bytes());
+        salt.extend_from_slice(&((cipher.required_keylen() * 8) as u16).to_be_bytes());
 
-        #[cfg(not(feature = "use_noninteroperable_kdf"))]
+        #[cfg(feature = "use_noninteroperable_kdf")]
         log::warn!("Using non-interoperable key derivation");
 
         let kdf_args = [
@@ -1329,11 +1369,12 @@ impl KexSuite {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr)]
+#[repr(i32)]
 pub enum CipherSuite {
     // Combined ciphers
-    A128Gcm,
-    A256Gcm,
+    A128Gcm = 1,
+    A256Gcm = 3,
 }
 
 impl CipherSuite {
@@ -1391,46 +1432,6 @@ impl ToString for CipherSuite {
             CipherSuite::A128Gcm => "A128GCM".to_string(),
             CipherSuite::A256Gcm => "A256GCM".to_string(),
         }
-    }
-}
-
-impl Serialize for CipherSuite {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&self.to_string())
-    }
-}
-
-impl<'de> Deserialize<'de> for CipherSuite {
-    fn deserialize<D>(deserializer: D) -> Result<CipherSuite, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct CipherSuiteVisitor;
-
-        impl<'de> serde::de::Visitor<'de> for CipherSuiteVisitor {
-            type Value = CipherSuite;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("a ciphersuite string")
-            }
-
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                CipherSuite::from_str(v).map_err(|_| {
-                    serde::de::Error::invalid_value(
-                        serde::de::Unexpected::Str(v),
-                        &"a valid cipher suite",
-                    )
-                })
-            }
-        }
-
-        deserializer.deserialize_str(CipherSuiteVisitor)
     }
 }
 

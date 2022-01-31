@@ -20,6 +20,8 @@ mod private {
     impl Sealed for super::ParsedArraySize4 {}
     impl Sealed for super::ParsedArraySize5 {}
     impl Sealed for super::ParsedArraySize6 {}
+    impl Sealed for super::ParsedArraySize7 {}
+    impl Sealed for super::ParsedArraySize8 {}
 }
 
 macro_rules! parsed_array_size {
@@ -68,6 +70,8 @@ parsed_array_size!(3);
 parsed_array_size!(4);
 parsed_array_size!(5);
 parsed_array_size!(6);
+parsed_array_size!(7);
+parsed_array_size!(8);
 
 #[derive(Clone)]
 pub struct ParsedArray<N: ParsedArraySize> {
@@ -264,7 +268,6 @@ impl<N: ParsedArraySize> Serializable for ParsedArray<N> {
 
         if let Some(expected_len) = N::SIZE {
             if map_len != expected_len {
-                log::warn!("Expected {} elements, but found {}", expected_len, map_len);
                 return Err(ArrayParseError::InvalidNumberOfElements(map_len, expected_len).into());
             }
         } else if map_len == 0 {
@@ -403,30 +406,58 @@ impl ParsedArray<ParsedArraySizeDynamic> {
     }
 }
 
-impl<N: ParsedArraySize> ParsedArray<N>
+#[derive(Clone, Default)]
+pub struct ParsedArrayBuilder<N: ParsedArraySize> {
+    contents: Vec<Option<Vec<u8>>>,
+
+    _marker: std::marker::PhantomData<N>,
+}
+
+impl<N: ParsedArraySize> ParsedArrayBuilder<N>
 where
     N: ParsedArraySizeStatic,
 {
-    /// This creates a new ParsedArray
-    ///
-    /// # Safety
-    /// This is unsafe because the caller needs to make sure that the entries
-    /// are filled directly after the array.
-    /// This means that between the call to this new and the update entries, the
-    /// state of the contents of this array is undefined.
-    // TODO: Turn this into a builder perhaps?
-    pub unsafe fn new() -> Self {
-        let new = vec![vec![]; N::SIZE.unwrap() as usize];
+    pub fn new() -> Self {
+        let new = vec![None; N::SIZE.unwrap() as usize];
         Self {
-            tag: None,
-
-            header: None,
             contents: new,
 
             _marker: std::marker::PhantomData,
         }
     }
 
+    pub fn set<T>(&mut self, n: usize, value: &T) -> Result<(), Error>
+    where
+        T: Serializable,
+    {
+        check_bounds!(n);
+        self.contents[n] = Some(value.serialize_data()?);
+        Ok(())
+    }
+
+    /// This method turns the ParsedArrayBuilder into a ParsedArray.
+    ///
+    /// Safety:
+    /// This will panic if not all the elements have been set!
+    pub fn build(mut self) -> ParsedArray<N> {
+        let contents: Option<Vec<Vec<u8>>> = self.contents.drain(..).collect();
+        let contents = contents.expect("Not all elements set!");
+
+        ParsedArray {
+            tag: None,
+
+            header: None,
+            contents,
+
+            _marker: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<N: ParsedArraySize> ParsedArray<N>
+where
+    N: ParsedArraySizeStatic,
+{
     pub fn set<T>(&mut self, n: usize, value: &T) -> Result<(), Error>
     where
         T: Serializable,
@@ -460,6 +491,11 @@ impl<N: ParsedArraySize> ParsedArray<N> {
     {
         check_bounds!(n);
         T::deserialize_data(&self.contents[n])
+    }
+
+    pub fn get_raw(&self, n: usize) -> &[u8] {
+        check_bounds!(n);
+        &self.contents[n]
     }
 
     pub fn get_hash(&self, n: usize, hash_type: HashType) -> Result<Hash, Error> {

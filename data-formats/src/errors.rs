@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::ProtocolVersion;
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Error, Debug)]
@@ -43,6 +45,8 @@ pub enum Error {
     InconsistentValue(&'static str),
     #[error("An invalid state machine transition was attempted")]
     InvalidTransition,
+    #[error("Data structure with invalid protocol version {0} was encountered")]
+    InvalidProtocolVersion(ProtocolVersion),
     #[error("Invalid cryptographic suite name requested: {0}")]
     InvalidSuiteName(String),
     #[error("Invalid entry number requested")]
@@ -63,4 +67,6 @@ pub enum Error {
     HexError(#[from] hex::FromHexError),
     #[error("Error parsing ip address: {0}")]
     AddrError(#[from] std::net::AddrParseError),
+    #[error("Unsupported version structure encountered. Version: {0:?}")]
+    UnsupportedVersion(Option<crate::constants::ProtocolVersion>),
 }

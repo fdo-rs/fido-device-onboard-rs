@@ -1,10 +1,11 @@
 use serde::Deserialize;
 use serde_tuple::Serialize_tuple;
 
-use super::{ClientMessage, EncryptionRequirement, Message, ServerMessage};
 use crate::{
-    cborparser::ParsedArray, ownershipvoucher::OwnershipVoucherEntry, simple_message_serializable,
-    Serializable,
+    cborparser::ParsedArray,
+    messages::{ClientMessage, EncryptionRequirement, Message, ServerMessage},
+    ownershipvoucher::OwnershipVoucherEntry,
+    simple_message_serializable, Serializable,
 };
 
 use crate::{
@@ -71,6 +72,10 @@ impl Message for HelloDevice {
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustNotBeEncrypted)
     }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
+    }
 }
 
 impl ClientMessage for HelloDevice {}
@@ -101,6 +106,10 @@ impl Message for ProveOVHdr {
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustNotBeEncrypted)
+    }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
     }
 }
 
@@ -135,6 +144,10 @@ impl Message for GetOVNextEntry {
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustNotBeEncrypted)
+    }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
     }
 }
 
@@ -198,6 +211,10 @@ impl Message for OVNextEntry {
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustNotBeEncrypted)
     }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
+    }
 }
 
 impl ServerMessage for OVNextEntry {}
@@ -229,6 +246,10 @@ impl Message for ProveDevice {
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustNotBeEncrypted)
     }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
+    }
 }
 
 impl ClientMessage for ProveDevice {}
@@ -259,6 +280,10 @@ impl Message for SetupDevice {
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustBeEncrypted)
+    }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
     }
 }
 
@@ -299,6 +324,10 @@ impl Message for DeviceServiceInfoReady {
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustBeEncrypted)
     }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
+    }
 }
 
 impl ClientMessage for DeviceServiceInfoReady {}
@@ -331,6 +360,10 @@ impl Message for OwnerServiceInfoReady {
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustBeEncrypted)
+    }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
     }
 }
 
@@ -373,6 +406,10 @@ impl Message for DeviceServiceInfo {
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustBeEncrypted)
+    }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
     }
 }
 
@@ -419,6 +456,10 @@ impl Message for OwnerServiceInfo {
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustBeEncrypted)
     }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
+    }
 }
 
 impl ServerMessage for OwnerServiceInfo {}
@@ -450,6 +491,10 @@ impl Message for Done {
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustBeEncrypted)
     }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
+    }
 }
 
 impl ClientMessage for Done {}
@@ -480,6 +525,10 @@ impl Message for Done2 {
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustBeEncrypted)
+    }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
     }
 }
 

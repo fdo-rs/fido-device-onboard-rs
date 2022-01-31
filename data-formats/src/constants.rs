@@ -8,6 +8,20 @@ use num_traits::FromPrimitive;
 use openssl::hash::MessageDigest;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
+#[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, PartialEq, Eq, PartialOrd)]
+#[repr(u16)]
+#[non_exhaustive]
+pub enum ProtocolVersion {
+    Version1_0 = 100,
+    Version1_1 = 101,
+}
+
+impl std::fmt::Display for ProtocolVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u16)
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, PartialEq, Eq)]
 #[repr(i8)]
 #[non_exhaustive]
@@ -103,10 +117,11 @@ pub enum DeviceSigType {
 #[repr(i16)]
 #[non_exhaustive]
 pub enum PublicKeyType {
-    Rsa2048RESTR = RS256,
-    Rsa = RS384,
-    SECP256R1 = (aws_nitro_enclaves_cose::sign::SignatureAlgorithm::ES256 as i16),
-    SECP384R1 = (aws_nitro_enclaves_cose::sign::SignatureAlgorithm::ES384 as i16),
+    Rsa2048RESTR = 1,
+    RsaPkcs = 5,
+    RsaPss = 6,
+    SECP256R1 = 10,
+    SECP384R1 = 11,
 }
 
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr)]
@@ -115,7 +130,7 @@ pub enum PublicKeyType {
 pub enum PublicKeyEncoding {
     Crypto = 0,
     X509 = 1,
-    COSEX509 = 2,
+    X5CHAIN = 2,
     Cosekey = 3,
 }
 
@@ -127,11 +142,11 @@ pub enum HeaderKeys {
     EatNonce = 10,
     EatUeid = 11,
 
-    CUPHNonce = -17760701,       // IANA Pending
-    CUPHOwnerPubKey = -17760702, // IANA Pending
-    EUPHNonce = -17760709,       // IANA Pending
+    CUPHNonce = 256,
+    CUPHOwnerPubKey = 257,
+    EUPHNonce = -259,
 
-    EatFDO = -17760707,
+    EatFDO = -257,
 }
 
 impl HeaderKeys {

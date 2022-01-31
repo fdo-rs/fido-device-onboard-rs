@@ -1,11 +1,10 @@
 use serde::Deserialize;
 use serde_tuple::Serialize_tuple;
 
-use super::{ClientMessage, EncryptionRequirement, Message, ServerMessage};
-
 use crate::simple_message_serializable;
 use crate::{
     constants::MessageType,
+    messages::{ClientMessage, EncryptionRequirement, Message, ServerMessage},
     types::{COSESign, Guid, Nonce, SigInfo},
 };
 
@@ -43,6 +42,10 @@ impl Message for HelloRV {
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustNotBeEncrypted)
+    }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_1
     }
 }
 
@@ -83,6 +86,10 @@ impl Message for HelloRVAck {
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustNotBeEncrypted)
     }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_1
+    }
 }
 
 impl ServerMessage for HelloRVAck {}
@@ -113,6 +120,10 @@ impl Message for ProveToRV {
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustNotBeEncrypted)
+    }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_1
     }
 }
 
@@ -148,6 +159,10 @@ impl Message for RVRedirect {
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustNotBeEncrypted)
+    }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_1
     }
 }
 

@@ -3,8 +3,12 @@ use std::sync::Arc;
 
 use super::EncryptionKeys;
 use fdo_data_formats::{
-    constants::{ErrorCode, MessageType},
-    messages::{self, ClientMessage, EncryptionRequirement, Message, ServerMessage},
+    constants::{ErrorCode, HashType, MessageType},
+    messages::{
+        self, v11::ErrorMessage, ClientMessage, EncryptionRequirement, Message, ServerMessage,
+    },
+    types::Hash,
+    ProtocolVersion,
 };
 use fdo_store::{MetadataLocalKey, Store};
 
@@ -12,9 +16,13 @@ use thiserror::Error;
 use warp::{Filter, Rejection};
 pub use warp_sessions::Session;
 
-pub struct SessionWithStore {
+pub struct RequestInformation {
+    // Session stuff
     pub session: Session,
     session_store: SessionStoreT,
+
+    // Other request metadata
+    pub req_hash: Hash,
 }
 
 type SessionStoreT = Arc<SessionStore>;
@@ -85,7 +93,7 @@ pub enum SessionError {
 }
 
 #[derive(Debug)]
-pub struct Error(messages::ErrorMessage);
+pub struct Error(ErrorMessage);
 
 impl Error {
     pub fn new(
@@ -95,7 +103,7 @@ impl Error {
     ) -> Self {
         let new_uuid = uuid::Uuid::new_v4();
 
-        Error(messages::ErrorMessage::new(
+        Error(ErrorMessage::new(
             error_code,
             previous_message_type,
             error_string.to_string(),
@@ -153,10 +161,7 @@ pub async fn handle_rejection(err: Rejection) -> Result<warp::reply::Response, I
         &local_err
     };
 
-    Ok(to_response::<messages::ErrorMessage>(
-        err.0.to_response(),
-        None,
-    ))
+    Ok(to_response::<ErrorMessage>(err.0.to_response(), None))
 }
 
 #[derive(Debug)]
@@ -168,8 +173,8 @@ const LAST_MSG_SES_KEY: &str = "_last_message_type_";
 
 async fn parse_request<IM>(
     inbound: warp::hyper::body::Bytes,
-    ses_with_store: SessionWithStore,
-) -> Result<(IM, SessionWithStore), warp::Rejection>
+    ses_with_store: RequestInformation,
+) -> Result<(IM, RequestInformation), warp::Rejection>
 where
     IM: messages::Message,
 {
@@ -252,7 +257,7 @@ where
 
 async fn store_session<IM, OM>(
     response: OM,
-    mut ses_with_store: SessionWithStore,
+    mut ses_with_store: RequestInformation,
 ) -> Result<(OM, Option<String>, EncryptionKeys), warp::Rejection>
 where
     IM: Message,
@@ -364,14 +369,15 @@ pub fn ping_handler() -> warp::filters::BoxedFilter<(warp::reply::Response,)> {
 }
 
 pub fn fdo_request_filter<UDT, IM, OM, F, FR>(
+    protocol_version: ProtocolVersion,
     user_data: UDT,
     session_store: SessionStoreT,
     handler: F,
 ) -> warp::filters::BoxedFilter<(warp::reply::Response,)>
 where
     UDT: Clone + Send + Sync + 'static,
-    F: Fn(UDT, SessionWithStore, IM) -> FR + Clone + Send + Sync + 'static,
-    FR: futures::Future<Output = Result<(OM, SessionWithStore), warp::Rejection>> + Send,
+    F: Fn(UDT, RequestInformation, IM) -> FR + Clone + Send + Sync + 'static,
+    FR: futures::Future<Output = Result<(OM, RequestInformation), warp::Rejection>> + Send,
     IM: messages::Message + ClientMessage + 'static,
     OM: messages::Message + ServerMessage + 'static,
 {
@@ -386,11 +392,33 @@ where
             );
         }
     }
+    if protocol_version != IM::protocol_version() {
+        // This is a programming error, let's just check this on start
+        #[allow(clippy::panic)]
+        {
+            panic!(
+                "Programming error: IM {:?} is not of the selected protocol version {:?}",
+                IM::protocol_version(),
+                protocol_version
+            );
+        }
+    }
+    if OM::protocol_version() != IM::protocol_version() {
+        // This is a programming error, let's just check this on start
+        #[allow(clippy::panic)]
+        {
+            panic!(
+                "Programming error: IM {:?} is not same version as OM {:?}",
+                IM::protocol_version(),
+                OM::protocol_version()
+            );
+        }
+    }
 
     warp::post()
         // Construct expected HTTP path
         .and(warp::path("fdo"))
-        .and(warp::path("100"))
+        .and(warp::path(IM::protocol_version().to_string()))
         .and(warp::path("msg"))
         .and(warp::path((IM::message_type() as u8).to_string()))
         // Parse the request
@@ -423,11 +451,14 @@ where
                     },
                     None => Session::new(),
                 };
+                let req_hash = Hash::from_data(HashType::Sha256, &req).unwrap();
                 Ok((
                     req,
-                    SessionWithStore {
+                    RequestInformation {
                         session: ses,
                         session_store: ses_store,
+
+                        req_hash,
                     },
                 ))
             },

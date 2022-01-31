@@ -2,7 +2,7 @@ use crate::{
     errors::Error,
     types::HMac,
     types::{Guid, Hash, RendezvousInfo},
-    DeviceCredential,
+    DeviceCredential, ProtocolVersion,
 };
 
 use openssl::{pkey::PKey, sign::Signer};
@@ -11,13 +11,13 @@ use serde_tuple::Serialize_tuple;
 
 #[derive(Debug, Serialize_tuple, Deserialize)]
 pub struct FileDeviceCredential {
-    pub active: bool,           // Active
-    pub protver: u16,           // ProtVer
-    pub hmac_secret: Vec<u8>,   // HmacSecret
-    pub device_info: String,    // DeviceInfo
-    pub guid: Guid,             // Guid
-    pub rvinfo: RendezvousInfo, // RVInfo
-    pub pubkey_hash: Hash,      // PubKeyHash
+    pub active: bool,             // Active
+    pub protver: ProtocolVersion, // ProtVer
+    pub hmac_secret: Vec<u8>,     // HmacSecret
+    pub device_info: String,      // DeviceInfo
+    pub guid: Guid,               // Guid
+    pub rvinfo: RendezvousInfo,   // RVInfo
+    pub pubkey_hash: Hash,        // PubKeyHash
 
     // Custom from here
     pub private_key: Vec<u8>,
@@ -28,7 +28,7 @@ impl DeviceCredential for FileDeviceCredential {
         self.active
     }
 
-    fn protocol_version(&self) -> u16 {
+    fn protocol_version(&self) -> ProtocolVersion {
         self.protver
     }
 

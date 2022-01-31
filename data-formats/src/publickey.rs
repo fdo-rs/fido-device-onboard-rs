@@ -4,7 +4,6 @@ use std::fmt;
 use std::fmt::Display;
 
 use openssl::{
-    bn::BigNum,
     nid::Nid,
     pkey::{self, PKey, PKeyRef, Public},
     x509::{X509VerifyResult, X509},
@@ -103,7 +102,7 @@ impl PublicKey {
     }
 
     fn parse_data(
-        key_type: PublicKeyType,
+        _key_type: PublicKeyType,
         encoding: PublicKeyEncoding,
         data: &[u8],
     ) -> Result<(Option<X5Chain>, PKey<Public>)> {
@@ -112,43 +111,9 @@ impl PublicKey {
                 let key = openssl::pkey::PKey::public_key_from_der(data)?;
                 Ok((None, key))
             }
-            PublicKeyEncoding::COSEX509 => {
+            PublicKeyEncoding::X5CHAIN => {
                 if data.is_empty() {
                     return Err(Error::InconsistentValue("Empty public key"));
-                }
-                let (group, keylen) = match key_type {
-                    PublicKeyType::SECP256R1 => (
-                        Some(openssl::ec::EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap()),
-                        32,
-                    ),
-                    PublicKeyType::SECP384R1 => (
-                        Some(openssl::ec::EcGroup::from_curve_name(Nid::SECP384R1).unwrap()),
-                        48,
-                    ),
-                    _ => (None, 0),
-                };
-
-                if data.len() == (2 * keylen) {
-                    // pri-fidoiot release 1.0 used COSEX509 to indicate an EC key that was just the X and Y coordinates
-                    // of the public key. This is no longer supported, and was never supposed to be the case.
-                    // https://github.com/secure-device-onboard/pri-fidoiot/blob/1.0-rel/protocol/src/main/java/org/fidoalliance/fdo/protocol/Const.java#L161
-                    log::warn!("Using fallback pri-fidoiot public key parsing");
-
-                    let (key_x, key_y) = data.split_at(keylen);
-
-                    let key_x = BigNum::from_slice(key_x).unwrap();
-                    let key_y = BigNum::from_slice(key_y).unwrap();
-
-                    let key = openssl::ec::EcKey::from_public_key_affine_coordinates(
-                        &group.unwrap(),
-                        &key_x,
-                        &key_y,
-                    )
-                    .unwrap();
-                    key.check_key().unwrap();
-                    let key = PKey::from_ec_key(key).unwrap();
-
-                    return Ok((None, key));
                 }
 
                 let chain = X5Chain::from_slice(data)?;
@@ -176,7 +141,7 @@ impl PublicKey {
             },
             pkey::Id::RSA => match pkey.bits() {
                 2048 => Ok(PublicKeyType::Rsa2048RESTR),
-                3072 => Ok(PublicKeyType::Rsa),
+                3072 => Ok(PublicKeyType::RsaPkcs),
                 _ => Err(Error::UnsupportedAlgorithm),
             },
             _ => Err(Error::UnsupportedAlgorithm),
@@ -205,7 +170,7 @@ impl TryFrom<X5Chain> for PublicKey {
 
         Ok(PublicKey {
             key_type,
-            encoding: PublicKeyEncoding::COSEX509,
+            encoding: PublicKeyEncoding::X5CHAIN,
             data: encoded,
 
             pkey,

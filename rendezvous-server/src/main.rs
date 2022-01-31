@@ -9,11 +9,11 @@ use tokio::signal::unix::{signal, SignalKind};
 use warp::Filter;
 
 use fdo_data_formats::{
-    cborparser::ParsedArray,
+    cborparser::{ParsedArray, ParsedArrayBuilder},
     enhanced_types::X5Bag,
     publickey::PublicKey,
     types::{COSESign, Guid},
-    Serializable,
+    ProtocolVersion, Serializable,
 };
 use fdo_store::{Store, StoreDriver};
 use fdo_util::servers::{settings_for, AbsolutePathBuf};
@@ -45,10 +45,11 @@ impl Serializable for StoredItem {
     where
         W: std::io::Write,
     {
-        let mut contents: ParsedArray<fdo_data_formats::cborparser::ParsedArraySize2> =
-            unsafe { ParsedArray::new() };
+        let mut contents: ParsedArrayBuilder<fdo_data_formats::cborparser::ParsedArraySize2> =
+            ParsedArrayBuilder::new();
         contents.set(0, &self.public_key)?;
         contents.set(1, &self.to1d)?;
+        let contents = contents.build();
 
         contents.serialize_to_writer(writer)
     }
@@ -180,11 +181,13 @@ async fn main() -> Result<()> {
 
     // TO0
     let handler_to0_hello = fdo_http_wrapper::server::fdo_request_filter(
+        ProtocolVersion::Version1_1,
         user_data.clone(),
         session_store.clone(),
         handlers_to0::hello,
     );
     let handler_to0_ownersign = fdo_http_wrapper::server::fdo_request_filter(
+        ProtocolVersion::Version1_1,
         user_data.clone(),
         session_store.clone(),
         handlers_to0::ownersign,
@@ -192,11 +195,13 @@ async fn main() -> Result<()> {
 
     // TO1
     let handler_to1_hello_rv = fdo_http_wrapper::server::fdo_request_filter(
+        ProtocolVersion::Version1_1,
         user_data.clone(),
         session_store.clone(),
         handlers_to1::hello_rv,
     );
     let handler_to1_prove_to_rv = fdo_http_wrapper::server::fdo_request_filter(
+        ProtocolVersion::Version1_1,
         user_data.clone(),
         session_store.clone(),
         handlers_to1::prove_to_rv,

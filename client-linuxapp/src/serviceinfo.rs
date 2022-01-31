@@ -12,7 +12,7 @@ use anyhow::{anyhow, bail, Context, Result};
 
 use fdo_data_formats::{
     constants::HashType,
-    messages::to2::{DeviceServiceInfo, OwnerServiceInfo},
+    messages::v11::to2::{DeviceServiceInfo, OwnerServiceInfo},
     types::{CborSimpleTypeExt, Hash, ServiceInfo},
 };
 use fdo_http_wrapper::client::{RequestResult, ServiceClient};

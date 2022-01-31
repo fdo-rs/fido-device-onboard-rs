@@ -231,9 +231,9 @@ mod tests {
 
         assert!(result.status.success());
         result.stdout_equals(
-            "Protocol version: 100
-Device GUID: 214d64be-3227-92da-0333-b1e1fe832f24
-Device Info: testdevice1",
+            "Protocol version: 101
+Device GUID: 18907279-a41d-049a-ae3c-4da4ce61c14b
+Device Info: testdevice",
         );
         result.stderr_equals("");
     }
@@ -249,13 +249,13 @@ Device Info: testdevice1",
         assert!(result.status.success());
         result.stdout_equals(
             "Device 0
-    Protocol version: 100
-    Device GUID: 214d64be-3227-92da-0333-b1e1fe832f24
-    Device Info: testdevice1
+    Protocol version: 101
+    Device GUID: 18907279-a41d-049a-ae3c-4da4ce61c14b
+    Device Info: testdevice
 Device 1
-    Protocol version: 100
-    Device GUID: 214d64be-3227-92da-0333-b1e1fe832f24
-    Device Info: testdevice1",
+    Protocol version: 101
+    Device GUID: 18907279-a41d-049a-ae3c-4da4ce61c14b
+    Device Info: testdevice",
         );
         result.stderr_equals("");
     }

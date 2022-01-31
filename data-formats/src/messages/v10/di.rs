@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize, Serializer};
 use serde_tuple::Serialize_tuple;
 
-use super::{ClientMessage, EncryptionRequirement, Message, ServerMessage};
 use crate::simple_message_serializable;
 use crate::{
     constants::MessageType,
+    messages::{ClientMessage, EncryptionRequirement, Message, ServerMessage},
     ownershipvoucher::OwnershipVoucherHeader,
     types::{CborSimpleType, HMac},
 };
@@ -35,6 +35,10 @@ impl Message for AppStart {
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         None
+    }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
     }
 }
 
@@ -71,6 +75,10 @@ impl Message for SetCredentials {
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         None
     }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
+    }
 }
 
 impl ServerMessage for SetCredentials {}
@@ -102,6 +110,10 @@ impl Message for SetHMAC {
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         None
     }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
+    }
 }
 
 impl ClientMessage for SetHMAC {}
@@ -127,6 +139,10 @@ impl Message for Done {
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         None
+    }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
     }
 }
 

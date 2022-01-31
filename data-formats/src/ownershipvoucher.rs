@@ -1,35 +1,44 @@
+use std::collections::HashMap;
 use std::ops::Range;
 
 use openssl::pkey::{PKeyRef, Private};
 use serde::Deserialize;
+use serde_bytes::ByteBuf;
 use serde_tuple::Serialize_tuple;
 
 use crate::{
-    cborparser::{ParsedArray, ParsedArraySize4, ParsedArraySize6, ParsedArraySizeDynamic},
+    cborparser::{
+        ParsedArray, ParsedArrayBuilder, ParsedArraySize5, ParsedArraySize6, ParsedArraySizeDynamic,
+    },
     constants::HashType,
     errors::Result,
     publickey::{PublicKey, X5Chain},
     serializable::MaybeSerializable,
     types::{COSESign, Guid, HMac, Hash, RendezvousInfo, UnverifiedValue},
-    DeserializableMany, Error, Serializable,
+    DeserializableMany, Error, ProtocolVersion, Serializable,
 };
 
 const VOUCHER_PEM_TAG: &str = "OWNERSHIP VOUCHER";
 const ACCEPTABLE_ASCII_RANGE: Range<u8> = 32..127;
 
+type ExtraType = Option<HashMap<u128, ByteBuf>>;
+type RefExtraType<'a> = Option<&'a HashMap<u128, ByteBuf>>;
+
 #[derive(Debug)]
 enum OwnershipVoucherIndex {
-    Header = 0,
-    HeaderHmac = 1,
-    DeviceCertificateChain = 2,
-    Entries = 3,
+    ProtocolVersion = 0,
+    Header = 1,
+    HeaderHmac = 2,
+    DeviceCertificateChain = 3,
+    Entries = 4,
 }
 
 #[derive(Debug, Clone)]
 pub struct OwnershipVoucher {
-    contents: ParsedArray<ParsedArraySize4>,
+    contents: ParsedArray<ParsedArraySize5>,
 
     // Cached data
+    cached_protocol_version: ProtocolVersion,
     cached_header: OwnershipVoucherHeader,
     cached_header_hmac: HMac,
     cached_device_certificate_chain: Option<X5Chain>,
@@ -37,8 +46,11 @@ pub struct OwnershipVoucher {
 }
 
 impl OwnershipVoucher {
-    fn from_parsed_array(contents: ParsedArray<ParsedArraySize4>) -> Result<Self> {
-        let cached_header = contents.get(OwnershipVoucherIndex::Header as usize)?;
+    fn from_parsed_array(contents: ParsedArray<ParsedArraySize5>) -> Result<Self> {
+        let cached_protocol_version =
+            contents.get(OwnershipVoucherIndex::ProtocolVersion as usize)?;
+        let cached_header: ByteBuf = contents.get(OwnershipVoucherIndex::Header as usize)?;
+        let cached_header = OwnershipVoucherHeader::deserialize_data(&cached_header)?;
         let cached_header_hmac = contents.get(OwnershipVoucherIndex::HeaderHmac as usize)?;
         let cached_device_certificate_chain =
             contents.get(OwnershipVoucherIndex::DeviceCertificateChain as usize)?;
@@ -47,6 +59,7 @@ impl OwnershipVoucher {
         Ok(OwnershipVoucher {
             contents,
 
+            cached_protocol_version,
             cached_header,
             cached_header_hmac,
             cached_device_certificate_chain,
@@ -60,7 +73,14 @@ impl Serializable for OwnershipVoucher {
     where
         R: std::io::Read,
     {
-        let contents = ParsedArray::deserialize_from_reader(reader)?;
+        let contents = ParsedArray::deserialize_from_reader(reader);
+        if let Err(Error::ArrayParseError(
+            crate::cborparser::ArrayParseError::InvalidNumberOfElements(4, 5),
+        )) = contents
+        {
+            return Err(Error::UnsupportedVersion(Some(ProtocolVersion::Version1_0)));
+        };
+        let contents = contents?;
         Self::from_parsed_array(contents)
     }
 
@@ -85,23 +105,35 @@ impl DeserializableMany for OwnershipVoucher {}
 
 impl OwnershipVoucher {
     pub fn from_parts(
-        header: OwnershipVoucherHeader,
+        protocol_version: ProtocolVersion,
+        header: &[u8],
         header_hmac: HMac,
         entries: ParsedArray<ParsedArraySizeDynamic>,
     ) -> Result<Self> {
-        let mut contents = unsafe { ParsedArray::new() };
-        contents.set(OwnershipVoucherIndex::Header as usize, &header)?;
+        let mut contents = ParsedArrayBuilder::new();
+        contents.set(
+            OwnershipVoucherIndex::ProtocolVersion as usize,
+            &protocol_version,
+        )?;
+        contents.set(
+            OwnershipVoucherIndex::Header as usize,
+            &ByteBuf::from(header),
+        )?;
         contents.set(OwnershipVoucherIndex::HeaderHmac as usize, &header_hmac)?;
         contents.set::<Option<X5Chain>>(
             OwnershipVoucherIndex::DeviceCertificateChain as usize,
             &None,
         )?;
         contents.set(OwnershipVoucherIndex::Entries as usize, &entries)?;
+        let contents = contents.build();
+
+        let cached_header = OwnershipVoucherHeader::deserialize_data(header)?;
 
         Ok(OwnershipVoucher {
             contents,
 
-            cached_header: header,
+            cached_protocol_version: protocol_version,
+            cached_header,
             cached_header_hmac: header_hmac,
             cached_device_certificate_chain: None,
             cached_entries: entries,
@@ -115,18 +147,26 @@ impl OwnershipVoucher {
     ) -> Result<Self> {
         let entries = ParsedArray::new_empty();
 
-        let mut contents: ParsedArray<ParsedArraySize4> = unsafe { ParsedArray::new() };
-        contents.set(OwnershipVoucherIndex::Header as usize, &header.contents)?;
+        let contents_header = ByteBuf::from(header.contents.serialize_data()?);
+
+        let mut contents = ParsedArrayBuilder::new();
+        contents.set(
+            OwnershipVoucherIndex::ProtocolVersion as usize,
+            &ProtocolVersion::Version1_1,
+        )?;
+        contents.set(OwnershipVoucherIndex::Header as usize, &contents_header)?;
         contents.set(OwnershipVoucherIndex::HeaderHmac as usize, &header_hmac)?;
         contents.set(
             OwnershipVoucherIndex::DeviceCertificateChain as usize,
             &device_certificate_chain,
         )?;
         contents.set(OwnershipVoucherIndex::Entries as usize, &entries)?;
+        let contents = contents.build();
 
         Ok(OwnershipVoucher {
             contents,
 
+            cached_protocol_version: ProtocolVersion::Version1_1,
             cached_header: header,
             cached_header_hmac: header_hmac,
             cached_device_certificate_chain: device_certificate_chain,
@@ -202,19 +242,34 @@ impl OwnershipVoucher {
         self.cached_entries.get(entry_num)
     }
 
+    fn hdr_hash(&self, hash_type: HashType) -> Result<Hash> {
+        let header: ByteBuf = self.contents.get(OwnershipVoucherIndex::Header as usize)?;
+        let header_hmac = self
+            .contents
+            .get_raw(OwnershipVoucherIndex::HeaderHmac as usize);
+
+        let mut data = Vec::with_capacity(header.len() + header_hmac.len());
+
+        data.extend_from_slice(&header);
+        data.extend_from_slice(header_hmac);
+
+        Hash::from_data(hash_type, &data)
+    }
+
     pub fn extend(
         &mut self,
         owner_private_key: &PKeyRef<Private>,
+        extra: ExtraType,
         next_party: &PublicKey,
     ) -> Result<()> {
+        if extra.is_some() && self.cached_protocol_version < ProtocolVersion::Version1_1 {
+            return Err(Error::InvalidProtocolVersion(self.cached_protocol_version));
+        }
+
         let hdrinfo_hash = self.header().get_hdr_info_hash(self.hash_type())?;
         let (last_hash, current_owner_pubkey) = if self.cached_entries.is_empty() {
             (
-                self.contents.get_hash_two_items(
-                    OwnershipVoucherIndex::Header as usize,
-                    OwnershipVoucherIndex::HeaderHmac as usize,
-                    self.hash_type(),
-                )?,
+                self.hdr_hash(self.hash_type())?,
                 self.header().manufacturer_public_key().clone(),
             )
         } else {
@@ -236,11 +291,8 @@ impl OwnershipVoucher {
         }
 
         // Create new entry
-        let new_entry = OwnershipVoucherEntryPayload {
-            hash_previous_entry: last_hash,
-            hash_header_info: hdrinfo_hash,
-            public_key: next_party.clone(),
-        };
+        let new_entry =
+            OwnershipVoucherEntryPayload::new(last_hash, hdrinfo_hash, extra, next_party.clone())?;
 
         // Sign with private key
         let signed_new_entry = COSESign::new(&new_entry, None, owner_private_key)?;
@@ -249,13 +301,22 @@ impl OwnershipVoucher {
         // Append
         self.cached_entries.push(&signed_new_entry)?;
 
-        self.contents.set(3, &self.cached_entries)?;
+        self.contents.set(
+            OwnershipVoucherIndex::Entries as usize,
+            &self.cached_entries,
+        )?;
 
         Ok(())
     }
 
     pub fn header(&self) -> &OwnershipVoucherHeader {
         &self.cached_header
+    }
+
+    pub fn header_raw(&self) -> ByteBuf {
+        self.contents
+            .get(OwnershipVoucherIndex::Header as usize)
+            .unwrap()
     }
 }
 
@@ -321,11 +382,8 @@ impl<'a> EntryIter<'a> {
 
         // Compare the HashPreviousEntry to either (HeaderTag || HeaderHmac) or the previous entry
         let hash_previous_entry = if self.index == 0 {
-            self.voucher.contents.get_hash_two_items(
-                OwnershipVoucherIndex::Header as usize,
-                OwnershipVoucherIndex::HeaderHmac as usize,
-                entry.hash_previous_entry.get_type(),
-            )?
+            self.voucher
+                .hdr_hash(entry.hash_previous_entry.get_type())?
         } else {
             self.voucher
                 .cached_entries
@@ -377,7 +435,7 @@ enum OwnershipVoucherHeaderIndex {
 pub struct OwnershipVoucherHeader {
     contents: ParsedArray<ParsedArraySize6>,
 
-    cached_protocol_version: u16,
+    cached_protocol_version: ProtocolVersion,
     cached_guid: Guid,
     cached_rendezvous_info: RendezvousInfo,
     cached_device_info: String,
@@ -387,7 +445,7 @@ pub struct OwnershipVoucherHeader {
 
 impl OwnershipVoucherHeader {
     pub fn new(
-        protocol_version: u16,
+        protocol_version: ProtocolVersion,
         guid: Guid,
         rendezvous_info: RendezvousInfo,
         device_info: String,
@@ -395,7 +453,7 @@ impl OwnershipVoucherHeader {
         device_certificate_chain_hash: Option<Hash>,
     ) -> Result<Self> {
         let device_info = device_info.trim().to_string();
-        let mut contents = unsafe { ParsedArray::new() };
+        let mut contents = ParsedArrayBuilder::new();
         contents.set(
             OwnershipVoucherHeaderIndex::ProtocolVersion as usize,
             &protocol_version,
@@ -417,6 +475,7 @@ impl OwnershipVoucherHeader {
             OwnershipVoucherHeaderIndex::DeviceCertificateChainHash as usize,
             &device_certificate_chain_hash,
         )?;
+        let contents = contents.build();
 
         Ok(OwnershipVoucherHeader {
             contents,
@@ -430,7 +489,7 @@ impl OwnershipVoucherHeader {
         })
     }
 
-    pub fn protocol_version(&self) -> u16 {
+    pub fn protocol_version(&self) -> ProtocolVersion {
         self.cached_protocol_version
     }
 
@@ -583,6 +642,7 @@ impl std::ops::Deref for OwnershipVoucherEntry {
 pub struct OwnershipVoucherEntryPayload {
     hash_previous_entry: Hash,
     hash_header_info: Hash,
+    extra: ExtraType,
     public_key: PublicKey,
 }
 
@@ -590,11 +650,13 @@ impl OwnershipVoucherEntryPayload {
     pub fn new(
         hash_previous_entry: Hash,
         hash_header_info: Hash,
+        extra: ExtraType,
         public_key: PublicKey,
     ) -> Result<Self> {
-        Ok(OwnershipVoucherEntryPayload {
+        Ok(Self {
             hash_previous_entry,
             hash_header_info,
+            extra,
             public_key,
         })
     }
@@ -605,6 +667,10 @@ impl OwnershipVoucherEntryPayload {
 
     pub fn hash_header_info(&self) -> &Hash {
         &self.hash_header_info
+    }
+
+    pub fn extra(&self) -> RefExtraType {
+        self.extra.as_ref()
     }
 
     pub fn public_key(&self) -> &PublicKey {

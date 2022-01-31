@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
+use serde_bytes::ByteBuf;
 use serde_tuple::Serialize_tuple;
 
-use super::{ClientMessage, EncryptionRequirement, Message, ServerMessage};
-
 use crate::{
-    cborparser::ParsedArray,
+    cborparser::{ParsedArray, ParsedArrayBuilder},
     constants::{HashType, MessageType},
+    messages::{ClientMessage, EncryptionRequirement, Message, ServerMessage},
     types::{COSESign, Hash, Nonce, TO0Data},
     Error, Serializable,
 };
@@ -31,6 +31,10 @@ impl Message for Hello {
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustNotBeEncrypted)
+    }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_1
     }
 }
 
@@ -74,6 +78,10 @@ impl Message for HelloAck {
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustNotBeEncrypted)
     }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_1
+    }
 }
 
 impl ServerMessage for HelloAck {}
@@ -82,7 +90,7 @@ impl ServerMessage for HelloAck {}
 pub struct OwnerSign {
     contents: ParsedArray<crate::cborparser::ParsedArraySize2>,
 
-    cached_to0d: TO0Data,
+    cached_to0d: ByteBuf,
     cached_to1d: COSESign,
 }
 
@@ -113,10 +121,11 @@ impl Serializable for OwnerSign {
 }
 
 impl OwnerSign {
-    pub fn new(to0d: TO0Data, to1d: COSESign) -> Result<Self, Error> {
-        let mut contents = unsafe { ParsedArray::new() };
+    pub fn new(to0d: ByteBuf, to1d: COSESign) -> Result<Self, Error> {
+        let mut contents = ParsedArrayBuilder::new();
         contents.set(0, &to0d)?;
         contents.set(1, &to1d)?;
+        let contents = contents.build();
 
         Ok(OwnerSign {
             contents,
@@ -126,8 +135,8 @@ impl OwnerSign {
         })
     }
 
-    pub fn to0d(&self) -> &TO0Data {
-        &self.cached_to0d
+    pub fn to0d(&self) -> Result<TO0Data, Error> {
+        TO0Data::deserialize_data(&self.cached_to0d)
     }
 
     pub fn to1d(&self) -> &COSESign {
@@ -135,7 +144,7 @@ impl OwnerSign {
     }
 
     pub fn to0d_hash(&self, hash_type: HashType) -> Result<Hash, Error> {
-        self.contents.get_hash(0, hash_type)
+        Hash::from_data(hash_type, &self.cached_to0d)
     }
 }
 
@@ -150,6 +159,10 @@ impl Message for OwnerSign {
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustNotBeEncrypted)
+    }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_1
     }
 }
 
@@ -181,6 +194,10 @@ impl Message for AcceptOwner {
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustNotBeEncrypted)
+    }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_1
     }
 }
 

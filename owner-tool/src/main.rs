@@ -13,7 +13,6 @@ use openssl::{
     sign::Signer,
     x509::{X509Builder, X509NameBuilder, X509NameRef, X509},
 };
-
 use serde_yaml::Value;
 
 use fdo_data_formats::{
@@ -21,8 +20,8 @@ use fdo_data_formats::{
     devicecredential::FileDeviceCredential,
     ownershipvoucher::{OwnershipVoucher, OwnershipVoucherHeader},
     publickey::{PublicKey, X5Chain},
-    types::{CborSimpleType, Guid, HMac, Hash, RendezvousDirective, RendezvousInfo},
-    Serializable, PROTOCOL_VERSION,
+    types::{CborSimpleType, Guid, HMac, Hash, RendezvousInfo},
+    ProtocolVersion, Serializable,
 };
 
 #[tokio::main]
@@ -226,7 +225,7 @@ fn yaml_to_cbor(val: &Value) -> Result<CborSimpleType, Error> {
 
 fn load_rendezvous_info(path: &str) -> Result<RendezvousInfo, Error> {
     let contents = fs::read(path)?;
-    let mut info: Vec<RendezvousDirective> = Vec::new();
+    let mut info = Vec::new();
 
     let value: Value =
         serde_yaml::from_slice(&contents).context("Error parsing rendezvous info")?;
@@ -262,7 +261,7 @@ fn load_rendezvous_info(path: &str) -> Result<RendezvousInfo, Error> {
         info.push(entry);
     }
 
-    Ok(RendezvousInfo::new(info))
+    RendezvousInfo::new(info).context("Error serializing rendezvous info")
 }
 
 fn build_device_cert<T: openssl::pkey::HasPublic>(
@@ -422,7 +421,7 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
 
     // Construct Ownership Voucher Header
     let ov_header = OwnershipVoucherHeader::new(
-        PROTOCOL_VERSION,
+        ProtocolVersion::Version1_1,
         device_guid.clone(),
         rendezvous_info.clone(),
         device_id.to_string(),
@@ -437,7 +436,7 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
     // Build device credential
     let devcred = FileDeviceCredential {
         active: true,
-        protver: PROTOCOL_VERSION,
+        protver: ProtocolVersion::Version1_1,
         hmac_secret: hmac_key_buf.to_vec(),
         device_info: device_id.to_string(),
         guid: device_guid.clone(),
@@ -508,11 +507,11 @@ fn dump_voucher(matches: &ArgMatches) -> Result<(), Error> {
     }
 
     let ov_header = ov.header();
-    if ov_header.protocol_version() != PROTOCOL_VERSION {
+    if ov_header.protocol_version() != ProtocolVersion::Version1_1 {
         bail!(
             "Protocol version in OV ({}) not supported ({})",
             ov_header.protocol_version(),
-            PROTOCOL_VERSION
+            ProtocolVersion::Version1_1,
         );
     }
 
@@ -554,6 +553,9 @@ fn dump_voucher(matches: &ArgMatches) -> Result<(), Error> {
         println!("\tEntry {}", pos);
         println!("\t\tPrevious entry hash: {}", entry.hash_previous_entry());
         println!("\t\tHeader info hash: {}", entry.hash_header_info());
+        if ov_header.protocol_version() >= ProtocolVersion::Version1_1 {
+            println!("\t\tExtra: {:?}", entry.extra());
+        }
         println!("\t\tPublic key: {}", entry.public_key());
     }
 
@@ -569,11 +571,11 @@ fn dump_devcred(matches: &ArgMatches) -> Result<(), Error> {
             .context("Error deserializing device credential")?
     };
 
-    if dc.protver != PROTOCOL_VERSION {
+    if dc.protver != ProtocolVersion::Version1_1 {
         bail!(
             "Protocol version in OV ({}) not supported ({})",
             dc.protver,
-            PROTOCOL_VERSION
+            ProtocolVersion::Version1_1
         );
     }
 
@@ -605,11 +607,11 @@ fn extend_voucher(matches: &ArgMatches) -> Result<(), Error> {
     };
 
     let ov_header = ov.header();
-    if ov_header.protocol_version() != PROTOCOL_VERSION {
+    if ov_header.protocol_version() != ProtocolVersion::Version1_1 {
         bail!(
             "Protocol version in OV ({}) not supported ({})",
             ov_header.protocol_version(),
-            PROTOCOL_VERSION
+            ProtocolVersion::Version1_1,
         );
     }
 
@@ -629,7 +631,7 @@ fn extend_voucher(matches: &ArgMatches) -> Result<(), Error> {
     let new_owner_pubkey =
         PublicKey::try_from(new_owner_cert).context("Error serializing owner public key")?;
 
-    ov.extend(&current_owner_private_key, &new_owner_pubkey)
+    ov.extend(&current_owner_private_key, None, &new_owner_pubkey)
         .context("Error extending ownership voucher")?;
 
     // Write out

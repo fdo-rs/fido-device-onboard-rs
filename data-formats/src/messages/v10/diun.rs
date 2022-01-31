@@ -1,9 +1,9 @@
 use serde::Deserialize;
 use serde_tuple::Serialize_tuple;
 
-use super::{ClientMessage, EncryptionRequirement, Message, ServerMessage};
 use crate::{
     constants::{KeyStorageType, MessageType, MfgStringType, PublicKeyType},
+    messages::{ClientMessage, EncryptionRequirement, Message, ServerMessage},
     simple_message_serializable,
     types::{COSESign, CipherSuite, KexSuite, Nonce},
 };
@@ -60,6 +60,10 @@ impl Message for Connect {
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustNotBeEncrypted)
     }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
+    }
 }
 
 impl ClientMessage for Connect {}
@@ -90,6 +94,10 @@ impl Message for Accept {
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustNotBeEncrypted)
+    }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
     }
 }
 
@@ -138,6 +146,10 @@ impl Message for RequestKeyParameters {
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustNotBeEncrypted)
     }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
+    }
 }
 
 impl ClientMessage for RequestKeyParameters {}
@@ -180,6 +192,10 @@ impl Message for ProvideKeyParameters {
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustBeEncrypted)
     }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
+    }
 }
 
 impl ServerMessage for ProvideKeyParameters {}
@@ -219,6 +235,10 @@ impl Message for ProvideKey {
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustBeEncrypted)
     }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
+    }
 }
 
 impl ClientMessage for ProvideKey {}
@@ -249,6 +269,10 @@ impl Message for Done {
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
         Some(EncryptionRequirement::MustBeEncrypted)
+    }
+
+    fn protocol_version() -> crate::ProtocolVersion {
+        crate::ProtocolVersion::Version1_0
     }
 }
 

@@ -18,7 +18,8 @@ use fdo_data_formats::{
     constants::{KeyStorageType, MfgStringType, PublicKeyType, RendezvousVariable},
     ownershipvoucher::OwnershipVoucher,
     publickey::{PublicKey, X5Chain},
-    types::{Guid, RendezvousDirective, RendezvousInfo},
+    types::{Guid, RendezvousInfo},
+    ProtocolVersion,
 };
 use fdo_store::{Store, StoreDriver};
 use fdo_util::servers::{
@@ -177,7 +178,7 @@ fn load_rendezvous_info(path: &AbsolutePathBuf) -> Result<RendezvousInfo> {
         _ => bail!("Invalid yaml top type"),
     };
 
-    let mut info: Vec<RendezvousDirective> = Vec::new();
+    let mut info = Vec::new();
     for val in value {
         let mut entry = Vec::new();
 
@@ -205,7 +206,7 @@ fn load_rendezvous_info(path: &AbsolutePathBuf) -> Result<RendezvousInfo> {
         info.push(entry);
     }
 
-    Ok(RendezvousInfo::new(info))
+    RendezvousInfo::new(info).context("Error serializing rendezvous info")
 }
 
 #[derive(Debug, Deserialize)]
@@ -383,11 +384,13 @@ async fn main() -> Result<()> {
 
     // DI
     let handler_di_app_start = fdo_http_wrapper::server::fdo_request_filter(
+        ProtocolVersion::Version1_1,
         user_data.clone(),
         session_store.clone(),
         handlers::di::app_start,
     );
     let handler_di_set_hmac = fdo_http_wrapper::server::fdo_request_filter(
+        ProtocolVersion::Version1_1,
         user_data.clone(),
         session_store.clone(),
         handlers::di::set_hmac,
@@ -395,16 +398,19 @@ async fn main() -> Result<()> {
 
     // DIUN
     let handler_diun_connect = fdo_http_wrapper::server::fdo_request_filter(
+        ProtocolVersion::Version1_1,
         user_data.clone(),
         session_store.clone(),
         handlers::diun::connect,
     );
     let handler_diun_request_key_parameters = fdo_http_wrapper::server::fdo_request_filter(
+        ProtocolVersion::Version1_1,
         user_data.clone(),
         session_store.clone(),
         handlers::diun::request_key_parameters,
     );
     let handler_diun_provide_key = fdo_http_wrapper::server::fdo_request_filter(
+        ProtocolVersion::Version1_1,
         user_data.clone(),
         session_store.clone(),
         handlers::diun::provide_key,

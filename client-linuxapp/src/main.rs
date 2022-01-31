@@ -7,13 +7,13 @@ use fdo_data_formats::{
     constants::{DeviceSigType, HeaderKeys, RendezvousProtocolValue, TransportProtocol},
     enhanced_types::{RendezvousInterpretedDirective, RendezvousInterpreterSide},
     messages,
-    ownershipvoucher::OwnershipVoucher,
+    ownershipvoucher::{OwnershipVoucher, OwnershipVoucherHeader},
     types::{
         new_eat, COSEHeaderMap, COSESign, CipherSuite, EATokenPayload, KexSuite, KeyDeriveSide,
         KeyExchange, Nonce, PayloadCreating, SigInfo, TO1DataPayload, TO2AddressEntry,
         TO2ProveDevicePayload, TO2ProveOVHdrPayload, UnverifiedValue,
     },
-    DeviceCredential, Serializable,
+    DeviceCredential, ProtocolVersion, Serializable,
 };
 use fdo_http_wrapper::client::{RequestResult, ServiceClient};
 
@@ -95,7 +95,10 @@ async fn get_client_list(rv_entry: &RendezvousInterpretedDirective) -> Result<Ve
         bail!("Non-HTTP(S) protocol is not implemented");
     }
     for url in &urls {
-        service_client_list.push(fdo_http_wrapper::client::ServiceClient::new(url));
+        service_client_list.push(fdo_http_wrapper::client::ServiceClient::new(
+            ProtocolVersion::Version1_1,
+            url,
+        ));
     }
     log::trace!("Client list: {:?}", service_client_list);
     Ok(service_client_list)
@@ -114,11 +117,11 @@ async fn perform_to1(
     let sig_type = DeviceSigType::StSECP384R1;
 
     // Send: HelloRV, Receive: HelloRVAck
-    let hello_rv = messages::to1::HelloRV::new(
+    let hello_rv = messages::v11::to1::HelloRV::new(
         devcred.device_guid().clone(),
         SigInfo::new(sig_type, vec![]),
     );
-    let hello_rv_ack: RequestResult<messages::to1::HelloRVAck> =
+    let hello_rv_ack: RequestResult<messages::v11::to1::HelloRVAck> =
         client.send_request(hello_rv, None).await;
     let hello_rv_ack = hello_rv_ack.context("Error sending HelloRV")?;
     log::trace!("Hello RV ack: {:?}", hello_rv_ack);
@@ -145,8 +148,8 @@ async fn perform_to1(
     log::trace!("Sending token: {:?}", token);
 
     // Send: ProveToRV, Receive: RVRedirect
-    let prove_to_rv = messages::to1::ProveToRV::new(token);
-    let rv_redirect: RequestResult<messages::to1::RVRedirect> =
+    let prove_to_rv = messages::v11::to1::ProveToRV::new(token);
+    let rv_redirect: RequestResult<messages::v11::to1::RVRedirect> =
         client.send_request(prove_to_rv, None).await;
     let rv_redirect = rv_redirect.context("Error proving self to rendezvous server")?;
 
@@ -195,8 +198,11 @@ async fn get_ov_entries(
     let mut entries = ParsedArray::new_empty();
 
     for entry_num in 0..num_entries {
-        let entry_result: RequestResult<messages::to2::OVNextEntry> = client
-            .send_request(messages::to2::GetOVNextEntry::new(entry_num as u8), None)
+        let entry_result: RequestResult<messages::v11::to2::OVNextEntry> = client
+            .send_request(
+                messages::v11::to2::GetOVNextEntry::new(entry_num as u8),
+                None,
+            )
             .await;
         let entry_result =
             entry_result.with_context(|| format!("Error getting OV entry num {}", entry_num))?;
@@ -231,12 +237,12 @@ async fn perform_to2(
     let kexsuite = KexSuite::Ecdh384;
     let ciphersuite = CipherSuite::A256Gcm;
 
-    let mut client = fdo_http_wrapper::client::ServiceClient::new(url);
+    let mut client = fdo_http_wrapper::client::ServiceClient::new(ProtocolVersion::Version1_1, url);
 
     // Send: HelloDevice, Receive: ProveOVHdr
-    let prove_ov_hdr: RequestResult<messages::to2::ProveOVHdr> = client
+    let prove_ov_hdr: RequestResult<messages::v11::to2::ProveOVHdr> = client
         .send_request(
-            messages::to2::HelloDevice::new(
+            messages::v11::to2::HelloDevice::new(
                 devcred.device_guid().clone(),
                 nonce5.clone(),
                 kexsuite,
@@ -277,14 +283,10 @@ async fn perform_to2(
 
     // Verify the HMAC, we do this in an extra scope to not leak anything untrusted out
     let header_hmac = {
-        let ov_hdr_vec = prove_ov_hdr_payload
-            .get_unverified_value()
-            .ov_header()
-            .serialize_data()
-            .context("Error serializing Ownership Voucher header")?;
+        let ov_hdr_vec = prove_ov_hdr_payload.get_unverified_value().ov_header();
         let ov_hdr_hmac = prove_ov_hdr_payload.get_unverified_value().hmac();
         devcred
-            .verify_hmac(&ov_hdr_vec, ov_hdr_hmac)
+            .verify_hmac(ov_hdr_vec, ov_hdr_hmac)
             .context("Error verifying ownership voucher HMAC")?;
         log::trace!("Ownership Voucher HMAC validated");
 
@@ -294,6 +296,7 @@ async fn perform_to2(
     // Validate the PubKeyHash
     {
         let header = prove_ov_hdr_payload.get_unverified_value().ov_header();
+        let header = OwnershipVoucherHeader::deserialize_data(header)?;
         let pubkey_hash = header
             .manufacturer_public_key_hash(devcred.manufacturer_pubkey_hash().get_type())
             .context("Error computing manufacturer public key hash")?;
@@ -321,11 +324,8 @@ async fn perform_to2(
 
     // At this moment, we have validated all we can, we'll check the signature later (After we get the final bits of the OV)
     let ownership_voucher = {
-        let header = prove_ov_hdr_payload
-            .get_unverified_value()
-            .ov_header()
-            .clone();
-        OwnershipVoucher::from_parts(header, header_hmac, ov_entries)
+        let header = prove_ov_hdr_payload.get_unverified_value().ov_header();
+        OwnershipVoucher::from_parts(ProtocolVersion::Version1_1, header, header_hmac, ov_entries)
     }
     .context("Error reconstructing Ownership Voucher")?;
     log::trace!(
@@ -391,15 +391,18 @@ async fn perform_to2(
     .context("Error signing ProveDevice EAT")?;
 
     log::trace!("Prepared prove_device_token: {:?}", prove_device_token);
-    let prove_device_msg = messages::to2::ProveDevice::new(prove_device_token);
-    let setup_device: RequestResult<messages::to2::SetupDevice> =
+    let prove_device_msg = messages::v11::to2::ProveDevice::new(prove_device_token);
+    let setup_device: RequestResult<messages::v11::to2::SetupDevice> =
         client.send_request(prove_device_msg, Some(new_keys)).await;
     let setup_device = setup_device.context("Error proving device")?;
     log::trace!("Got setup_device response: {:?}", setup_device);
 
     // Send: DeviceServiceInfoReady, Receive: OwnerServiceInfoReady
-    let owner_service_info_ready: RequestResult<messages::to2::OwnerServiceInfoReady> = client
-        .send_request(messages::to2::DeviceServiceInfoReady::new(None, None), None)
+    let owner_service_info_ready: RequestResult<messages::v11::to2::OwnerServiceInfoReady> = client
+        .send_request(
+            messages::v11::to2::DeviceServiceInfoReady::new(None, None),
+            None,
+        )
         .await;
     let owner_service_info_ready =
         owner_service_info_ready.context("Error getting OwnerServiceInfoReady")?;
@@ -421,8 +424,8 @@ async fn perform_to2(
         .context("Error deactivating device credential")?;
 
     // Send: Done, Receive: Done2
-    let done2: RequestResult<messages::to2::Done2> = client
-        .send_request(messages::to2::Done::new(nonce6), None)
+    let done2: RequestResult<messages::v11::to2::Done2> = client
+        .send_request(messages::v11::to2::Done::new(nonce6), None)
         .await;
     let done2 = done2.context("Error sending Done2")?;
 
@@ -497,6 +500,12 @@ async fn main() -> Result<()> {
     if !dc.is_active() {
         log::info!("Device credential deactivated, skipping Device Onboarding");
         return Ok(());
+    }
+    if dc.protocol_version() != ProtocolVersion::Version1_1 {
+        bail!(
+            "Device credential protocol version {} not supported",
+            dc.protocol_version()
+        );
     }
 
     // Get rv entries
