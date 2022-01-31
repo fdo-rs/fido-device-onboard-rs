@@ -107,10 +107,25 @@ where
             |_| Ok(()),
         )
         .context("Error creating rendezvous server")?;
+    let serviceinfo_api_dev_server = ctx
+        .start_test_server(
+            Binary::ServiceInfoApiDevServer,
+            |cfg| Ok(cfg.prepare_config_file(None, |_| Ok(()))?),
+            |_| Ok(()),
+        )
+        .context("Error creating serviceinfo API dev server")?;
     let owner_onboarding_server = ctx
         .start_test_server(
             Binary::OwnerOnboardingServer,
-            |cfg| Ok(cfg.prepare_config_file(None, |_| Ok(()))?),
+            |cfg| {
+                Ok(cfg.prepare_config_file(None, |cfg| {
+                    cfg.insert(
+                        "serviceinfo_api_server_port",
+                        &serviceinfo_api_dev_server.server_port().unwrap(),
+                    );
+                    Ok(())
+                })?)
+            },
             |cmd| {
                 cmd.env("ALLOW_NONINTEROPERABLE_KDF", &"1");
                 Ok(())

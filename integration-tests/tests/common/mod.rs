@@ -62,6 +62,7 @@ pub enum Binary {
     ManufacturingClient,
     ManufacturingServer,
     OwnerOnboardingServer,
+    ServiceInfoApiDevServer,
     OwnerTool,
     RendezvousServer,
 }
@@ -73,6 +74,7 @@ impl Binary {
             Binary::ManufacturingClient => "fdo-manufacturing-client",
             Binary::ManufacturingServer => "fdo-manufacturing-server",
             Binary::OwnerOnboardingServer => "fdo-owner-onboarding-server",
+            Binary::ServiceInfoApiDevServer => "fdo-serviceinfo-api-dev-server",
             Binary::OwnerTool => "fdo-owner-tool",
             Binary::RendezvousServer => "fdo-rendezvous-server",
         }
@@ -83,6 +85,7 @@ impl Binary {
             Binary::ManufacturingServer => Some("manufacturing-server.yml"),
             Binary::OwnerOnboardingServer => Some("owner-onboarding-server.yml"),
             Binary::RendezvousServer => Some("rendezvous-server.yml"),
+            Binary::ServiceInfoApiDevServer => Some("serviceinfo-api-dev-server.yml"),
             _ => None,
         }
     }
@@ -90,7 +93,10 @@ impl Binary {
     fn is_server(&self) -> bool {
         matches!(
             self,
-            Binary::OwnerOnboardingServer | Binary::ManufacturingServer | Binary::RendezvousServer
+            Binary::OwnerOnboardingServer
+                | Binary::ManufacturingServer
+                | Binary::RendezvousServer
+                | Binary::ServiceInfoApiDevServer
         )
     }
 
