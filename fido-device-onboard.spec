@@ -4,7 +4,7 @@
 %global __cargo_is_lib() false
 %global forgeurl https://github.com/fedora-iot/fido-device-onboard-rs
 
-Version:        0.2.0
+Version:        0.3.0
 
 %forgemeta
 
@@ -165,6 +165,9 @@ Summary: FDO Owner tools implementation
 %{_docdir}/fdo/owner-addresses.yml
 
 %changelog
+* Tue Feb 1 2022 Patrick Uiterwijk <puiterwijk@redhat.com> - 0.3.0-1
+- Rebase to 0.3.0
+
 * Fri Dec 10 2021 Patrick Uiterwijk <puiterwijk@redhat.com> - 0.2.0-1
 - Rebase to 0.2.0
 
