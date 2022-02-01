@@ -1,6 +1,6 @@
 [package]
 name = "fdo-rendezvous-server"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Patrick Uiterwijk <patrick@puiterwijk.org>"]
 edition = "2018"
 
@@ -17,7 +17,7 @@ warp = "0.3"
 log = "0.4"
 time = "0.3"
 
-fdo-data-formats = { path = "../data-formats", version = "0.2.0" }
-fdo-http-wrapper = { path = "../http-wrapper", version = "0.2.0", features = ["server"] }
-fdo-store = { path = "../store", version = "0.2.0" }
-fdo-util = { path = "../util", version = "0.2.0" }
+fdo-data-formats = { path = "../data-formats", version = "0.3.0" }
+fdo-http-wrapper = { path = "../http-wrapper", version = "0.3.0", features = ["server"] }
+fdo-store = { path = "../store", version = "0.3.0" }
+fdo-util = { path = "../util", version = "0.3.0" }
