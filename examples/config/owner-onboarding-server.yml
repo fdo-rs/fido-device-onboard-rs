@@ -8,8 +8,5 @@ owner_private_key_path: /path/to/keys/owner_key.der
 owner_public_key_path: /path/to/keys/owner_cert.pem
 bind: 0.0.0.0:8081
 service_info:
-  rhsm_organization_id: 6454382
-  rhsm_activation_key: SDOkey
-  rhsm_run_insights: true
   sshkey_user: admin
   sshkey_key: "testkey"
