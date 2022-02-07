@@ -8,8 +8,26 @@ owner_private_key_path: /path/to/keys/owner_key.der
 owner_public_key_path: /path/to/keys/owner_cert.pem
 bind: 0.0.0.0:8081
 service_info:
-  rhsm_organization_id: 6454382
-  rhsm_activation_key: SDOkey
-  rhsm_run_insights: true
   sshkey_user: admin
   sshkey_key: "testkey"
+  files:
+  - path: hosts
+    permissions: 644
+    source_path: /etc/hosts
+  - path: resolv.conf
+    source_path: /etc/resolv.conf
+  commands:
+  - command: ls
+    args:
+    - /etc/hosts
+    return_stdout: true
+    return_stderr: true
+  - command: ls
+    args:
+    - /etc/doesnotexist/test
+    may_fail: true
+    return_stdout: true
+    return_stderr: true
+  - command: touch
+    args:
+    - /tmp/command-testfile
