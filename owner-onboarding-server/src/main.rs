@@ -151,16 +151,28 @@ async fn report_to_rendezvous(udt: OwnerServiceUDT) -> Result<()> {
 }
 
 async fn check_registration_window(udt: OwnerServiceUDT) -> Result<()> {
-    let now_plus_window = time::OffsetDateTime::now_utc().unix_timestamp() + (udt.re_registration_window as i64);
+    let now_plus_window =
+        time::OffsetDateTime::now_utc().unix_timestamp() + (udt.re_registration_window as i64);
     let mut ft = udt.ownership_voucher_store.query_data().await?;
-    ft.neq(&fdo_store::MetadataKey::Local(OwnershipVoucherStoreMetadataKey::To2Performed),
-           &false,);
-    ft.lt(&fdo_store::MetadataKey::Local(OwnershipVoucherStoreMetadataKey::To0AcceptOwnerWaitSeconds),
-           now_plus_window);
+    ft.neq(
+        &fdo_store::MetadataKey::Local(OwnershipVoucherStoreMetadataKey::To2Performed),
+        &false,
+    );
+    ft.lt(
+        &fdo_store::MetadataKey::Local(OwnershipVoucherStoreMetadataKey::To0AcceptOwnerWaitSeconds),
+        now_plus_window
+    );
     let ov_iter = ft.query().await?;
     if let Some(ovs) = ov_iter {
         for ov in ovs {
-            match report_ov_to_rendezvous(&ov, &udt.owner_addresses, &udt.owner_key, udt.registration_period).await {
+            match report_ov_to_rendezvous(
+                &ov,
+                &udt.owner_addresses,
+                &udt.owner_key,
+                udt.registration_period
+            )
+            .await
+            {
                 Ok(wait_seconds) => {
                     udt.ownership_voucher_store
                         .store_metadata(
@@ -397,9 +409,11 @@ async fn main() -> Result<()> {
     };
 
     // Voucher registration times
-    let registration_period = settings.registration_period
+    let registration_period = settings
+        .registration_period
         .unwrap_or(DEFAULT_REGISTRATION_PERIOD);
-    let re_registration_window = settings.re_registration_window
+    let re_registration_window = settings
+        .re_registration_window
         .unwrap_or(DEFAULT_RE_REGISTRATION_WINDOW);
 
     // Initialize stores
