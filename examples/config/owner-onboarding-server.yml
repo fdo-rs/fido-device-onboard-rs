@@ -6,6 +6,8 @@ ownership_voucher_store_config: /path/to/ownership_vouchers/
 trusted_device_keys_path: /path/to/keys/device_ca_cert.pem
 owner_private_key_path: /path/to/keys/owner_key.der
 owner_public_key_path: /path/to/keys/owner_cert.pem
+registration_period: 600
+re_registration_window: 100
 bind: 0.0.0.0:8081
 service_info:
   rhsm_organization_id: 6454382
