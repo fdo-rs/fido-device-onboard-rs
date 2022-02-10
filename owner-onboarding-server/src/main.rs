@@ -279,7 +279,6 @@ async fn perform_maintenance(udt: OwnerServiceUDT) -> std::result::Result<(), &'
     );
     loop {
         tokio::time::sleep(tokio::time::Duration::from_secs(MAINTENANCE_INTERVAL)).await;
-        log::info!("Performing maintenance");
 
         let ov_maint = udt.ownership_voucher_store.perform_maintenance();
         let ses_maint = udt.session_store.perform_maintenance();
