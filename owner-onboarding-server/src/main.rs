@@ -125,7 +125,14 @@ async fn report_to_rendezvous(udt: OwnerServiceUDT) -> Result<()> {
     let ov_iter = ft.query().await?;
     if let Some(ovs) = ov_iter {
         for ov in ovs {
-            match report_ov_to_rendezvous(&ov, &udt.owner_addresses, &udt.owner_key, udt.registration_period).await {
+            match report_ov_to_rendezvous(
+                &ov,
+                &udt.owner_addresses,
+                &udt.owner_key,
+                udt.registration_period,
+            )
+            .await
+            {
                 Ok(wait_seconds) => {
                     udt.ownership_voucher_store
                         .store_metadata(
@@ -160,7 +167,7 @@ async fn check_registration_window(udt: OwnerServiceUDT) -> Result<()> {
     );
     ft.lt(
         &fdo_store::MetadataKey::Local(OwnershipVoucherStoreMetadataKey::To0AcceptOwnerWaitSeconds),
-        now_plus_window
+        now_plus_window,
     );
     let ov_iter = ft.query().await?;
     if let Some(ovs) = ov_iter {
