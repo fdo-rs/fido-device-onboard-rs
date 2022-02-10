@@ -398,9 +398,9 @@ async fn main() -> Result<()> {
 
     // Voucher registration times
     let registration_period = settings.registration_period
-        .unwrap_or_else(|| { DEFAULT_REGISTRATION_PERIOD });
+        .unwrap_or(DEFAULT_REGISTRATION_PERIOD);
     let re_registration_window = settings.re_registration_window
-        .unwrap_or_else(|| { DEFAULT_RE_REGISTRATION_WINDOW });
+        .unwrap_or(DEFAULT_RE_REGISTRATION_WINDOW);
 
     // Initialize stores
     let ownership_voucher_store = settings
