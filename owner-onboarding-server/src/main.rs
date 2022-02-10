@@ -169,7 +169,7 @@ async fn check_registration_window(udt: OwnerServiceUDT) -> Result<()> {
                 &ov,
                 &udt.owner_addresses,
                 &udt.owner_key,
-                udt.registration_period
+                udt.registration_period,
             )
             .await
             {
