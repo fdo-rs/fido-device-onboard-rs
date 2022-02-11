@@ -96,8 +96,8 @@ async fn main() -> Result<()> {
                         .takes_value(true)
                         .possible_values(&["pem", "cose"])
                         .help("Output format")
-                        .long("outform")
-                )
+                        .long("outform"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("dump-device-credential")
@@ -132,38 +132,6 @@ async fn main() -> Result<()> {
                         .help("Path to the new owner certificate")
                         .long("new-owner-cert"),
                 ),
-        )
-        .subcommand(
-            SubCommand::with_name("report-to-rendezvous")
-                .about("Report to the rendezvous server, from when on it should send clients to where we want them")
-                .arg(
-                    Arg::with_name("ownership-voucher")
-                        .required(true)
-                        .takes_value(true)
-                        .help("Path to the ownership voucher")
-                        .long("ownership-voucher")
-                )
-                .arg(
-                    Arg::with_name("owner-private-key")
-                        .required(true)
-                        .takes_value(true)
-                        .help("Path to the owner private key")
-                        .long("owner-private-key")
-                )
-                .arg(
-                    Arg::with_name("owner-addresses-path")
-                        .required(true)
-                        .takes_value(true)
-                        .help("Path to the yaml describing the addresses for the ownership server")
-                        .long("owner-addresses-path")
-                )
-                .arg(
-                    Arg::with_name("wait-time")
-                        .takes_value(true)
-                        .help("Wait time (in seconds) for the rendezvous server to remember this owner information")
-                        .long("wait-time")
-                        .default_value("2592000")
-                )
         )
         .get_matches();
 
