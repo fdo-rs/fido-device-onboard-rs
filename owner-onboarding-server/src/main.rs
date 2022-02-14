@@ -102,8 +102,8 @@ struct Settings {
     report_to_rendezvous_endpoint_enabled: bool,
 
     // in seconds
-    registration_period: Option<u32>,
-    re_registration_window: Option<u32>,
+    registration_period: Option<String>,
+    re_registration_window: Option<String>,
 }
 
 fn load_private_key(path: &AbsolutePathBuf) -> Result<PKey<Private>> {
@@ -358,8 +358,8 @@ fn generate_owner2_keys() -> Result<(PKey<Private>, PublicKey)> {
 
 // 1 week
 const DEFAULT_REGISTRATION_PERIOD: u32 = 7 * 24 * 60 * 60;
-// 1 hour
-const DEFAULT_RE_REGISTRATION_WINDOW: u32 = 60 * 60;
+// 1 day
+const DEFAULT_RE_REGISTRATION_WINDOW: u32 = 24 * 60 * 60;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -416,12 +416,46 @@ async fn main() -> Result<()> {
     };
 
     // Voucher registration times
-    let registration_period = settings
-        .registration_period
-        .unwrap_or(DEFAULT_REGISTRATION_PERIOD);
-    let re_registration_window = settings
-        .re_registration_window
-        .unwrap_or(DEFAULT_RE_REGISTRATION_WINDOW);
+    let str_registration_period = settings.registration_period;
+    let str_re_registration_window = settings.re_registration_window;
+    let registration_period = match str_registration_period {
+        Some(value) => {
+            let tmp = value
+                .parse::<u32>()
+                .context("must provide a valid registration_period")?;
+            if tmp == 0 {
+                bail!("registration_period cannot be 0");
+            }
+            tmp
+        }
+        None => DEFAULT_REGISTRATION_PERIOD,
+    };
+    let re_registration_window = match str_re_registration_window {
+        Some(value) => {
+            let tmp = value
+                .parse::<u32>()
+                .context("must provide a valid re_registration_window")?;
+            if tmp == 0 {
+                bail!("re_registration_window cannot be 0");
+            }
+            if tmp >= registration_period {
+                bail!(
+                    "re_registration_window ({}) must be smaller than registration_period ({})",
+                    tmp,
+                    registration_period
+                );
+            }
+            tmp
+        }
+        None => DEFAULT_RE_REGISTRATION_WINDOW,
+    };
+    if re_registration_window >= registration_period {
+        bail!(
+            "re_registration_window ({}) must be smaller than registration_period ({})",
+            re_registration_window,
+            registration_period
+        );
+    }
 
     // Initialize stores
     let ownership_voucher_store = settings
