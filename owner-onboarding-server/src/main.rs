@@ -416,9 +416,7 @@ async fn main() -> Result<()> {
     };
 
     // Voucher registration times
-    let str_registration_period = settings.registration_period;
-    let str_re_registration_window = settings.re_registration_window;
-    let registration_period = match str_registration_period {
+    let registration_period = match settings.registration_period {
         Some(value) => {
             let tmp = value
                 .parse::<u32>()
@@ -430,20 +428,13 @@ async fn main() -> Result<()> {
         }
         None => DEFAULT_REGISTRATION_PERIOD,
     };
-    let re_registration_window = match str_re_registration_window {
+    let re_registration_window = match settings.re_registration_window {
         Some(value) => {
             let tmp = value
                 .parse::<u32>()
                 .context("must provide a valid re_registration_window")?;
             if tmp == 0 {
                 bail!("re_registration_window cannot be 0");
-            }
-            if tmp >= registration_period {
-                bail!(
-                    "re_registration_window ({}) must be smaller than registration_period ({})",
-                    tmp,
-                    registration_period
-                );
             }
             tmp
         }
