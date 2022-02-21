@@ -74,7 +74,9 @@ fn generate_key_and_cert(matches: &ArgMatches) -> Result<(), Error> {
     let name = name.build();
 
     let mut builder = X509::builder()?;
-    let serial = BigNum::from_u32(42)?;
+    let mut serial_buf = [0; 8];
+    openssl::rand::rand_bytes(&mut serial_buf)?;
+    let serial = BigNum::from_slice(&serial_buf)?;
     let serial = Asn1Integer::from_bn(&serial)?;
     builder.set_version(2)?;
     builder.set_serial_number(&serial)?;
