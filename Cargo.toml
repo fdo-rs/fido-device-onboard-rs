@@ -12,6 +12,7 @@ members = [
     "rendezvous-server",
     "manufacturing-server",
     "manufacturing-client",
+    "admin-tool",
 
     "integration-tests",
 ]
