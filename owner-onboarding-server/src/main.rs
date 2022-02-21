@@ -363,17 +363,11 @@ async fn main() -> Result<()> {
 
     // Owner addresses for report to rendezvous
     let owner_addresses = {
-        let owner_addresses_path = &settings.owner_addresses_path;
         let mut owner_addresses: Vec<RemoteConnection> = {
-            let f = fs::File::open(&owner_addresses_path)?;
+            let f = fs::File::open(settings.owner_addresses_path)?;
             serde_yaml::from_reader(f)
         }
-        .with_context(|| {
-            format!(
-                "Error reading owner addresses from {}",
-                owner_addresses_path
-            )
-        })?;
+        .context("Error reading owner addresses")?;
         let owner_addresses: Result<Vec<Vec<TO2AddressEntry>>> = owner_addresses
             .drain(..)
             .map(|v| v.try_into().context("Error converting owner addresses"))

@@ -4,7 +4,15 @@ session_store_config: /path/to/sessions/
 ownership_voucher_store_driver: Directory
 ownership_voucher_store_config: /path/to/ownership_vouchers/
 bind: 0.0.0.0:8080
-rendezvous_info_path: /path/to/rendezvous-info.yml
+rendezvous_info:
+- dns: fdo.example.com
+  device_port: 8082
+  owner_port: 8082
+  protocol: http
+- ip: 127.0.0.1
+  device_port: 8083
+  owner_port: 8083
+  protocol: http
 protocols:
   diun:
     key_path: /path/to/keys/diun_key.der

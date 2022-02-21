@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 use std::fs;
 use std::net::SocketAddr;
@@ -169,29 +170,12 @@ impl TryFrom<DiunSettings> for DiunConfiguration {
     }
 }
 
-fn load_rendezvous_info(path: &AbsolutePathBuf) -> Result<RendezvousInfo> {
-    let contents = fs::read(path).context("Failed to read rendezvous info")?;
-    let value: Value =
-        serde_yaml::from_slice(&contents).context("Error parsing rendezvous info")?;
-    let value = match value {
-        Value::Sequence(vals) => vals,
-        _ => bail!("Invalid yaml top type"),
-    };
-
+fn load_rendezvous_info(rvs: &[BTreeMap<String, Value>]) -> Result<RendezvousInfo> {
     let mut info = Vec::new();
-    for val in value {
+    for val in rvs {
         let mut entry = Vec::new();
 
-        let val = match val {
-            Value::Mapping(map) => map,
-            _ => bail!("Invalid entry type"),
-        };
-
         for (key, val) in val.iter() {
-            let key = match key {
-                Value::String(val) => val,
-                _ => bail!("Invalid key type"),
-            };
             let key = RendezvousVariable::from_str(key)
                 .with_context(|| format!("Error parsing rendezvous key '{}'", key))?;
 
@@ -244,7 +228,7 @@ struct Settings {
 
     protocols: ProtocolSetting,
 
-    rendezvous_info_path: AbsolutePathBuf,
+    rendezvous_info: Vec<BTreeMap<String, Value>>,
 
     manufacturing: ManufacturingSettings,
 }
@@ -356,7 +340,7 @@ async fn main() -> Result<()> {
         Some(v) => Some(v.try_into().context("Error parsing DIUN configuration")?),
     };
 
-    let rendezvous_info = load_rendezvous_info(&settings.rendezvous_info_path)
+    let rendezvous_info = load_rendezvous_info(&settings.rendezvous_info)
         .context("Error processing rendezvous info")?;
 
     // Initialize user data
