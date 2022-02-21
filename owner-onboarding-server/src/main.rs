@@ -64,6 +64,11 @@ pub(crate) struct OwnerServiceUD {
     service_info_configuration: crate::serviceinfo::ServiceInfoConfiguration,
 
     owner_addresses: Vec<TO2AddressEntry>,
+
+    // How much time (s) the OV is going to be registered
+    registration_period: u32,
+    // The time window (s) within when the re-registration will start
+    re_registration_window: u32,
 }
 
 pub(crate) type OwnerServiceUDT = Arc<OwnerServiceUD>;
@@ -95,6 +100,10 @@ struct Settings {
     owner_addresses_path: AbsolutePathBuf,
 
     report_to_rendezvous_endpoint_enabled: bool,
+
+    // in seconds
+    registration_period: Option<String>,
+    re_registration_window: Option<String>,
 }
 
 fn load_private_key(path: &AbsolutePathBuf) -> Result<PKey<Private>> {
@@ -116,7 +125,14 @@ async fn report_to_rendezvous(udt: OwnerServiceUDT) -> Result<()> {
     let ov_iter = ft.query().await?;
     if let Some(ovs) = ov_iter {
         for ov in ovs {
-            match report_ov_to_rendezvous(&ov, &udt.owner_addresses, &udt.owner_key).await {
+            match report_ov_to_rendezvous(
+                &ov,
+                &udt.owner_addresses,
+                &udt.owner_key,
+                udt.registration_period,
+            )
+            .await
+            {
                 Ok(wait_seconds) => {
                     udt.ownership_voucher_store
                         .store_metadata(
@@ -141,10 +157,58 @@ async fn report_to_rendezvous(udt: OwnerServiceUDT) -> Result<()> {
     Ok(())
 }
 
+async fn check_registration_window(udt: OwnerServiceUDT) -> Result<()> {
+    let now_plus_window =
+        time::OffsetDateTime::now_utc().unix_timestamp() + (udt.re_registration_window as i64);
+    let mut ft = udt.ownership_voucher_store.query_data().await?;
+    ft.neq(
+        &fdo_store::MetadataKey::Local(OwnershipVoucherStoreMetadataKey::To2Performed),
+        &false,
+    );
+    ft.lt(
+        &fdo_store::MetadataKey::Local(OwnershipVoucherStoreMetadataKey::To0AcceptOwnerWaitSeconds),
+        now_plus_window,
+    );
+    let ov_iter = ft.query().await?;
+    if let Some(ovs) = ov_iter {
+        for ov in ovs {
+            match report_ov_to_rendezvous(
+                &ov,
+                &udt.owner_addresses,
+                &udt.owner_key,
+                udt.registration_period,
+            )
+            .await
+            {
+                Ok(wait_seconds) => {
+                    udt.ownership_voucher_store
+                        .store_metadata(
+                            ov.header().guid(),
+                            &fdo_store::MetadataKey::Local(
+                                OwnershipVoucherStoreMetadataKey::To0AcceptOwnerWaitSeconds,
+                            ),
+                            &time::Duration::new(wait_seconds.into(), 0),
+                        )
+                        .await?
+                }
+                Err(e) => {
+                    log::warn!(
+                        "OV({}): failed to re-report to rendezvous: {}",
+                        ov.header().guid().to_string(),
+                        e
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 async fn report_ov_to_rendezvous(
     ov: &OwnershipVoucher,
     owner_addresses: &[TO2AddressEntry],
     owner_key: &PKey<Private>,
+    registration_period: u32,
 ) -> Result<u32> {
     let ov_header = ov.header();
     if ov_header.protocol_version() != ProtocolVersion::Version1_1 {
@@ -196,8 +260,7 @@ async fn report_ov_to_rendezvous(
             };
 
             // Build to0d and to1d
-            // TODO(runcom): 600 has to come from configuration
-            let to0d = TO0Data::new(ov.clone(), 600, hello_ack.nonce3().clone())
+            let to0d = TO0Data::new(ov.clone(), registration_period, hello_ack.nonce3().clone())
                 .context("Error creating to0d")?;
             let to0d_vec = to0d.serialize_data().context("Error serializing TO0Data")?;
             let to0d_hash =
@@ -220,7 +283,6 @@ async fn report_ov_to_rendezvous(
                 ov_header.guid().to_string(),
                 accept_owner.wait_seconds()
             );
-
             return Ok(accept_owner.wait_seconds());
         }
     }
@@ -234,7 +296,6 @@ async fn perform_maintenance(udt: OwnerServiceUDT) -> std::result::Result<(), &'
         "Scheduling maintenance every {} seconds",
         MAINTENANCE_INTERVAL
     );
-
     loop {
         tokio::time::sleep(tokio::time::Duration::from_secs(MAINTENANCE_INTERVAL)).await;
 
@@ -244,6 +305,7 @@ async fn perform_maintenance(udt: OwnerServiceUDT) -> std::result::Result<(), &'
 
         #[allow(unused_must_use)]
         let (ov_res, ses_res, rtr_res) = tokio::join!(ov_maint, ses_maint, rtr_maint);
+        let win_res = check_registration_window(udt.clone()).await;
 
         if let Err(e) = ov_res {
             log::warn!("Error during ownership voucher store maintenance: {:?}", e);
@@ -253,6 +315,9 @@ async fn perform_maintenance(udt: OwnerServiceUDT) -> std::result::Result<(), &'
         }
         if let Err(e) = rtr_res {
             log::warn!("Error during report to rendezvous maintenance: {:?}", e)
+        }
+        if let Err(e) = win_res {
+            log::warn!("Error during re-registration window check: {:?}", e)
         }
     }
 }
@@ -291,11 +356,15 @@ fn generate_owner2_keys() -> Result<(PKey<Private>, PublicKey)> {
     Ok((owner2_key, pubkey))
 }
 
+// 1 week
+const DEFAULT_REGISTRATION_PERIOD: u32 = 7 * 24 * 60 * 60;
+// 1 day
+const DEFAULT_RE_REGISTRATION_WINDOW: u32 = 24 * 60 * 60;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     fdo_util::add_version!();
     fdo_http_wrapper::init_logging();
-
     if !fdo_data_formats::INTEROPERABLE_KDF && std::env::var("ALLOW_NONINTEROPERABLE_KDF").is_err()
     {
         bail!("Provide environment ALLOW_NONINTEROPERABLE_KDF=1 to enable interoperable KDF");
@@ -345,6 +414,39 @@ async fn main() -> Result<()> {
         PublicKey::try_from(X509::from_pem(&contents).context("Error parsing owner public key")?)
             .context("Error converting owner public key to PK")?
     };
+
+    // Voucher registration times
+    let registration_period = match settings.registration_period {
+        Some(value) => {
+            let tmp = value
+                .parse::<u32>()
+                .context("must provide a valid registration_period")?;
+            if tmp == 0 {
+                bail!("registration_period cannot be 0");
+            }
+            tmp
+        }
+        None => DEFAULT_REGISTRATION_PERIOD,
+    };
+    let re_registration_window = match settings.re_registration_window {
+        Some(value) => {
+            let tmp = value
+                .parse::<u32>()
+                .context("must provide a valid re_registration_window")?;
+            if tmp == 0 {
+                bail!("re_registration_window cannot be 0");
+            }
+            tmp
+        }
+        None => DEFAULT_RE_REGISTRATION_WINDOW,
+    };
+    if re_registration_window >= registration_period {
+        bail!(
+            "re_registration_window ({}) must be smaller than registration_period ({})",
+            re_registration_window,
+            registration_period
+        );
+    }
 
     // Initialize stores
     let ownership_voucher_store = settings
@@ -407,6 +509,10 @@ async fn main() -> Result<()> {
 
         // Owner addresses
         owner_addresses,
+
+        // Registration times
+        registration_period,
+        re_registration_window,
     });
 
     // Initialize handlers
