@@ -6,7 +6,11 @@ ownership_voucher_store_config: /path/to/ownership_vouchers/
 trusted_device_keys_path: /path/to/keys/device_ca_cert.pem
 owner_private_key_path: /path/to/keys/owner_key.der
 owner_public_key_path: /path/to/keys/owner_cert.pem
-owner_addresses_path: /path/to/owner-addresses.yml
+owner_addresses:
+- transport: HTTP
+  port: 8081
+  addresses:
+    - dns_name: fdo.example.com
 report_to_rendezvous_endpoint_enabled: false
 bind: 0.0.0.0:8081
 service_info:

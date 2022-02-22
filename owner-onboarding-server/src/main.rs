@@ -91,8 +91,7 @@ struct Settings {
     // Service Info
     service_info: crate::serviceinfo::ServiceInfoSettings,
 
-    // owner addresses path for report to rendezvous
-    owner_addresses_path: AbsolutePathBuf,
+    owner_addresses: Vec<RemoteConnection>,
 
     report_to_rendezvous_endpoint_enabled: bool,
 }
@@ -361,23 +360,13 @@ async fn main() -> Result<()> {
     let (owner2_key, owner2_pub) =
         generate_owner2_keys().context("Error generating new owner2 keys")?;
 
-    // Owner addresses for report to rendezvous
-    let owner_addresses = {
-        let mut owner_addresses: Vec<RemoteConnection> = {
-            let f = fs::File::open(settings.owner_addresses_path)?;
-            serde_yaml::from_reader(f)
+    let mut owner_addresses: Vec<TO2AddressEntry> = Vec::new();
+    for oa in settings.owner_addresses {
+        let address_entries: Vec<TO2AddressEntry> = oa.try_into()?;
+        for ae in address_entries {
+            owner_addresses.push(ae);
         }
-        .context("Error reading owner addresses")?;
-        let owner_addresses: Result<Vec<Vec<TO2AddressEntry>>> = owner_addresses
-            .drain(..)
-            .map(|v| v.try_into().context("Error converting owner addresses"))
-            .collect();
-        owner_addresses
-            .context("Error parsing owner addresses")?
-            .drain(..)
-            .flatten()
-            .collect()
-    };
+    }
 
     // Initialize user data
     let user_data = Arc::new(OwnerServiceUD {

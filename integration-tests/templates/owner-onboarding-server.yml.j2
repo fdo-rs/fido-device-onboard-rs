@@ -6,7 +6,15 @@ ownership_voucher_store_config: {{ config_dir }}/ownership_vouchers/
 trusted_device_keys_path: {{ keys_path }}/device_ca_cert.pem
 owner_private_key_path: {{ keys_path }}/owner_key.der
 owner_public_key_path: {{ keys_path }}/owner_cert.pem
-owner_addresses_path: {{ config_dir }}/owner-addresses.yml
+owner_addresses:
+- transport: HTTP
+  port: 8079
+  addresses:
+    - dns_name: localhost
+- transport: HTTP
+  port: {{ owner_port }}
+  addresses:
+    - dns_name: localhost
 report_to_rendezvous_endpoint_enabled: true
 bind: {{ bind }}
 service_info:
