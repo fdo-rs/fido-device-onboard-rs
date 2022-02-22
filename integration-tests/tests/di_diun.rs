@@ -14,12 +14,7 @@ async fn test_diun() -> Result<()> {
     let mfg_server = ctx
         .start_test_server(
             Binary::ManufacturingServer,
-            |cfg| {
-                cfg.prepare_config_file(Some("rendezvous-info.yml"), |ctx| {
-                    Ok(ctx.insert("rendezvous_port", &1337))
-                })?;
-                Ok(cfg.prepare_config_file(None, |_| Ok(()))?)
-            },
+            |cfg| Ok(cfg.prepare_config_file(None, |_| Ok(()))?),
             |_| Ok(()),
         )
         .context("Error creating manufacturing server")?;
@@ -106,12 +101,7 @@ async fn test_device_credentials_already_active() -> Result<()> {
     let mfg_server = ctx
         .start_test_server(
             Binary::ManufacturingServer,
-            |cfg| {
-                cfg.prepare_config_file(Some("rendezvous-info.yml"), |ctx| {
-                    Ok(ctx.insert("rendezvous_port", &1337))
-                })?;
-                Ok(cfg.prepare_config_file(None, |_| Ok(()))?)
-            },
+            |cfg| Ok(cfg.prepare_config_file(None, |_| Ok(()))?),
             |_| Ok(()),
         )
         .context("Error creating manufacturing server")?;
