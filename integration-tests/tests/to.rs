@@ -22,10 +22,7 @@ async fn test_to() -> Result<()> {
     let owner_onboarding_server = ctx
         .start_test_server(
             Binary::OwnerOnboardingServer,
-            |cfg| {
-                cfg.prepare_config_file(Some("owner-addresses.yml"), |_| Ok(()))?;
-                Ok(cfg.prepare_config_file(None, |_| Ok(()))?)
-            },
+            |cfg| Ok(cfg.prepare_config_file(None, |_| Ok(()))?),
             |cmd| {
                 cmd.env("ALLOW_NONINTEROPERABLE_KDF", &"1");
                 Ok(())

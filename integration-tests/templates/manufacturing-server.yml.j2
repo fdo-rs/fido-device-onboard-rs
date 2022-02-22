@@ -4,7 +4,16 @@ session_store_config: {{ config_dir }}/sessions/
 ownership_voucher_store_driver: Directory
 ownership_voucher_store_config: {{ config_dir }}/ownership_vouchers/
 bind: {{ bind }}
-rendezvous_info_path: {{ config_dir }}/rendezvous-info.yml
+rendezvous_info:
+- dns: localhost
+  device_port: 8082
+  owner_port: 8082
+  protocol: http
+- dns: localhost
+  delay: 30
+  device_port: {{ rendezvous_port }}
+  owner_port: {{ rendezvous_port }}
+  protocol: http
 protocols:
   diun:
     key_path: {{ keys_path }}/diun_key.der
