@@ -1,5 +1,0 @@
----
-- dns: fdo.example.com
-  device_port: 8082
-  owner_port: 8082
-  protocol: http
