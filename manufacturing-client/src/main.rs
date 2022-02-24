@@ -6,6 +6,7 @@ use anyhow::{bail, Context, Result};
 use fdo_data_formats::{
     constants::{HashType, HeaderKeys, KeyStorageType, MfgStringType, PublicKeyType},
     devicecredential::FileDeviceCredential,
+    enhanced_types::X5Bag,
     messages,
     publickey::PublicKey,
     types::{
@@ -68,6 +69,7 @@ async fn perform_diun(
 
     let diun_pubkey = match pub_key_verification {
         DiunPublicKeyVerificationMode::Hash(hash) => diun_pubchain.verify_from_digest(&hash),
+        DiunPublicKeyVerificationMode::Certs(bag) => diun_pubchain.verify_from_x5bag(&bag),
         DiunPublicKeyVerificationMode::Insecure => {
             diun_pubchain.insecure_verify_without_root_verification()
         }
@@ -173,13 +175,20 @@ async fn perform_di(
 #[derive(Debug)]
 enum DiunPublicKeyVerificationMode {
     Hash(Hash),
+    Certs(X5Bag),
     Insecure,
 }
 
 impl DiunPublicKeyVerificationMode {
     fn get_from_env() -> Result<Self> {
-        if let Ok(_rootcerts) = env::var("DIUN_PUB_KEY_ROOTCERTS") {
-            bail!("DIUN_PUB_KEY_ROOTCERTS is not yet implemented");
+        if let Ok(rootcerts_path) = env::var("DIUN_PUB_KEY_ROOTCERTS") {
+            let certs =
+                fs::read(&rootcerts_path).context("Error reading DIUN_PUB_KEY_ROOTCERTS")?;
+            let certs = openssl::x509::X509::stack_from_pem(&certs)
+                .context("Error parsing DIUN_PUB_KEY_ROOTCERTS as X509 stack")?;
+            let bag =
+                X5Bag::with_certs(certs).context("Error building DIUN_PUB_KEY_ROOTCERTS bag")?;
+            Ok(DiunPublicKeyVerificationMode::Certs(bag))
         } else if let Ok(hash) = env::var("DIUN_PUB_KEY_HASH") {
             Ok(DiunPublicKeyVerificationMode::Hash(
                 Hash::from_str(&hash).context("Error parsing DIUN_PUB_KEY_HASH as hash")?,
