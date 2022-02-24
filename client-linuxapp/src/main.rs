@@ -4,7 +4,10 @@ use anyhow::{bail, Context, Result};
 
 use fdo_data_formats::{
     cborparser::ParsedArray,
-    constants::{DeviceSigType, HeaderKeys, RendezvousProtocolValue, TransportProtocol},
+    constants::{
+        DeviceSigType, ErrorCode, HeaderKeys, MessageType, RendezvousProtocolValue,
+        TransportProtocol,
+    },
     enhanced_types::{RendezvousInterpretedDirective, RendezvousInterpreterSide},
     messages,
     ownershipvoucher::{OwnershipVoucher, OwnershipVoucherHeader},
@@ -123,38 +126,110 @@ async fn perform_to1(
     );
     let hello_rv_ack: RequestResult<messages::v11::to1::HelloRVAck> =
         client.send_request(hello_rv, None).await;
-    let hello_rv_ack = hello_rv_ack.context("Error sending HelloRV")?;
+    let hello_rv_ack = match hello_rv_ack {
+        Ok(hello_rv_ack) => hello_rv_ack,
+        Err(_) => {
+            send_error(
+                client,
+                ErrorCode::InternalServerError,
+                MessageType::TO1HelloRV,
+                &String::from("Error sending HelloRV"),
+            )
+            .await;
+            bail!("Error sending HelloRV");
+        }
+    };
     log::trace!("Hello RV ack: {:?}", hello_rv_ack);
 
     // Check ack
     let b_sig_info = hello_rv_ack.b_signature_info();
     if b_sig_info.sig_type() != sig_type {
+        send_error(
+            client,
+            ErrorCode::InvalidMessageError,
+            MessageType::TO1HelloRVAck,
+            &String::from("Unsupported sig type returned"),
+        )
+        .await;
         bail!("Unsupported sig type returned");
     }
     if !b_sig_info.info().is_empty() {
+        send_error(
+            client,
+            ErrorCode::InvalidMessageError,
+            MessageType::TO1HelloRVAck,
+            &String::from("Non-empty sig info returned"),
+        )
+        .await;
         bail!("Non-empty sig info returned");
     }
     let nonce4 = hello_rv_ack.nonce4();
 
     // Create EAT payload
     let eat: EATokenPayload<PayloadCreating> =
-        new_eat::<bool>(None, nonce4.clone(), devcred.device_guid().clone())
-            .context("Error creating EATokenPayload")?;
+        match new_eat::<bool>(None, nonce4.clone(), devcred.device_guid().clone()) {
+            Ok(eat) => eat,
+            _ => {
+                send_error(
+                    client,
+                    ErrorCode::InternalServerError,
+                    MessageType::TO1HelloRVAck,
+                    &String::from("Error creating EATokenPayload"),
+                )
+                .await;
+                bail!("Error creating EATokenPayload");
+            }
+        };
 
     // Create signature over nonce4
-    let signer = devcred.get_signer().context("Error getting Cose signer")?;
-    let token =
-        COSESign::from_eat(eat, None, signer.as_ref()).context("Error signing new token")?;
+    let signer = match devcred.get_signer() {
+        Ok(signer) => signer,
+        _ => {
+            send_error(
+                client,
+                ErrorCode::InternalServerError,
+                MessageType::TO1HelloRVAck,
+                &String::from("Error getting Cose signer"),
+            )
+            .await;
+            bail!("Error getting Cose signer");
+        }
+    };
+    let token = match COSESign::from_eat(eat, None, signer.as_ref()) {
+        Ok(token) => token,
+        _ => {
+            send_error(
+                client,
+                ErrorCode::InternalServerError,
+                MessageType::TO1HelloRVAck,
+                &String::from("Error signing new token"),
+            )
+            .await;
+            bail!("Error signing new token");
+        }
+    };
     log::trace!("Sending token: {:?}", token);
 
     // Send: ProveToRV, Receive: RVRedirect
     let prove_to_rv = messages::v11::to1::ProveToRV::new(token);
     let rv_redirect: RequestResult<messages::v11::to1::RVRedirect> =
         client.send_request(prove_to_rv, None).await;
-    let rv_redirect = rv_redirect.context("Error proving self to rendezvous server")?;
-
-    // Done!
-    Ok(rv_redirect.into_to1d())
+    match rv_redirect {
+        Ok(rv_redirect) => {
+            // Done!
+            Ok(rv_redirect.into_to1d())
+        }
+        _ => {
+            send_error(
+                client,
+                ErrorCode::InvalidMessageError,
+                MessageType::TO1RVRedirect,
+                &String::from("Error proving self to rendezvous server"),
+            )
+            .await;
+            bail!("Error proving self to rendezvous server");
+        }
+    }
 }
 
 fn get_rv_info(devcred: &dyn DeviceCredential) -> Result<Vec<RendezvousInterpretedDirective>> {
@@ -226,21 +301,18 @@ async fn get_ov_entries(
 
 async fn send_error(
     client: &mut fdo_http_wrapper::client::ServiceClient,
-    ecode: fdo_data_formats::constants::ErrorCode,
-    prev_mess: fdo_data_formats::constants::MessageType,
+    ecode: ErrorCode,
+    prev_mess: MessageType,
     emess: &str,
 ) {
-    let _: RequestResult<messages::v11::ErrorMessage> = client
-        .send_request(
-            messages::v11::ErrorMessage::new(
-                ecode,
-                prev_mess,
-                String::from(emess),
-                uuid::Uuid::new_v4().as_u128(),
-            ),
-            None,
-        )
-        .await;
+    let message = messages::v11::ErrorMessage::new(
+        ecode,
+        prev_mess,
+        String::from(emess),
+        uuid::Uuid::new_v4().as_u128(),
+    );
+    log::trace!("{:?}", &message);
+    let _: RequestResult<messages::v11::ErrorMessage> = client.send_request(message, None).await;
 }
 
 async fn perform_to2(
@@ -258,8 +330,8 @@ async fn perform_to2(
         _ => {
             send_error(
                 &mut client,
-                fdo_data_formats::constants::ErrorCode::InternalServerError,
-                fdo_data_formats::constants::MessageType::TO1RVRedirect,
+                ErrorCode::InternalServerError,
+                MessageType::TO1RVRedirect,
                 &String::from("Error generating nonce5"),
             )
             .await;
@@ -289,8 +361,8 @@ async fn perform_to2(
         _ => {
             send_error(
                 &mut client,
-                fdo_data_formats::constants::ErrorCode::InternalServerError,
-                fdo_data_formats::constants::MessageType::TO2ProveOVHdr,
+                ErrorCode::InternalServerError,
+                MessageType::TO2ProveOVHdr,
                 &String::from("Error sending HelloDevice"),
             )
             .await;
@@ -306,8 +378,8 @@ async fn perform_to2(
             _ => {
                 send_error(
                     &mut client,
-                    fdo_data_formats::constants::ErrorCode::MessageBodyError,
-                    fdo_data_formats::constants::MessageType::TO2ProveOVHdr,
+                    ErrorCode::MessageBodyError,
+                    MessageType::TO2ProveOVHdr,
                     &String::from("Error parsing unverified payload"),
                 )
                 .await;
@@ -321,8 +393,8 @@ async fn perform_to2(
     if &nonce5 != prove_ov_hdr_payload.get_unverified_value().nonce5() {
         send_error(
             &mut client,
-            fdo_data_formats::constants::ErrorCode::InvalidMessageError,
-            fdo_data_formats::constants::MessageType::TO2ProveOVHdr,
+            ErrorCode::InvalidMessageError,
+            MessageType::TO2ProveOVHdr,
             &String::from("Nonce5 value is mismatched"),
         )
         .await;
@@ -337,8 +409,8 @@ async fn perform_to2(
         if b_signature_info.sig_type() != sigtype {
             send_error(
                 &mut client,
-                fdo_data_formats::constants::ErrorCode::InvalidMessageError,
-                fdo_data_formats::constants::MessageType::TO2ProveOVHdr,
+                ErrorCode::InvalidMessageError,
+                MessageType::TO2ProveOVHdr,
                 &String::from("Invalid signature type returned"),
             )
             .await;
@@ -347,8 +419,8 @@ async fn perform_to2(
         if !b_signature_info.info().is_empty() {
             send_error(
                 &mut client,
-                fdo_data_formats::constants::ErrorCode::InvalidMessageError,
-                fdo_data_formats::constants::MessageType::TO2ProveOVHdr,
+                ErrorCode::InvalidMessageError,
+                MessageType::TO2ProveOVHdr,
                 &String::from("Non-empty signature info returned"),
             )
             .await;
@@ -366,8 +438,8 @@ async fn perform_to2(
             _ => {
                 send_error(
                     &mut client,
-                    fdo_data_formats::constants::ErrorCode::InvalidMessageError,
-                    fdo_data_formats::constants::MessageType::TO2ProveOVHdr,
+                    ErrorCode::InvalidMessageError,
+                    MessageType::TO2ProveOVHdr,
                     &String::from("Error, invalid message"),
                 )
                 .await;
@@ -384,8 +456,8 @@ async fn perform_to2(
             _ => {
                 send_error(
                     &mut client,
-                    fdo_data_formats::constants::ErrorCode::MessageBodyError,
-                    fdo_data_formats::constants::MessageType::TO2ProveOVHdr,
+                    ErrorCode::MessageBodyError,
+                    MessageType::TO2ProveOVHdr,
                     &String::from("Error deserializing OV Header"),
                 )
                 .await;
@@ -399,8 +471,8 @@ async fn perform_to2(
             _ => {
                 send_error(
                     &mut client,
-                    fdo_data_formats::constants::ErrorCode::InvalidMessageError,
-                    fdo_data_formats::constants::MessageType::TO2ProveOVHdr,
+                    ErrorCode::InvalidMessageError,
+                    MessageType::TO2ProveOVHdr,
                     &String::from("Error computing manufacturer public key hash"),
                 )
                 .await;
@@ -414,8 +486,8 @@ async fn perform_to2(
         {
             send_error(
                 &mut client,
-                fdo_data_formats::constants::ErrorCode::InvalidMessageError,
-                fdo_data_formats::constants::MessageType::TO2ProveOVHdr,
+                ErrorCode::InvalidMessageError,
+                MessageType::TO2ProveOVHdr,
                 &String::from("Error comparing manufacturer public key hash"),
             )
             .await;
@@ -430,8 +502,8 @@ async fn perform_to2(
             None => {
                 send_error(
                     &mut client,
-                    fdo_data_formats::constants::ErrorCode::MessageBodyError,
-                    fdo_data_formats::constants::MessageType::TO2ProveOVHdr,
+                    ErrorCode::MessageBodyError,
+                    MessageType::TO2ProveOVHdr,
                     &String::from("Missing nonce6"),
                 )
                 .await;
@@ -441,8 +513,8 @@ async fn perform_to2(
         _ => {
             send_error(
                 &mut client,
-                fdo_data_formats::constants::ErrorCode::MessageBodyError,
-                fdo_data_formats::constants::MessageType::TO2ProveOVHdr,
+                ErrorCode::MessageBodyError,
+                MessageType::TO2ProveOVHdr,
                 &String::from("Error getting nonce"),
             )
             .await;
@@ -461,8 +533,8 @@ async fn perform_to2(
         _ => {
             send_error(
                 &mut client,
-                fdo_data_formats::constants::ErrorCode::InternalServerError,
-                fdo_data_formats::constants::MessageType::TO2OVNextEntry,
+                ErrorCode::InternalServerError,
+                MessageType::TO2OVNextEntry,
                 &String::from("Error getting remaining OV entries"),
             )
             .await;
@@ -484,8 +556,8 @@ async fn perform_to2(
             _ => {
                 send_error(
                     &mut client,
-                    fdo_data_formats::constants::ErrorCode::MessageBodyError,
-                    fdo_data_formats::constants::MessageType::TO2OVNextEntry,
+                    ErrorCode::MessageBodyError,
+                    MessageType::TO2OVNextEntry,
                     &String::from("Error reconstructing Ownership Voucher"),
                 )
                 .await;
@@ -507,8 +579,8 @@ async fn perform_to2(
                 _ => {
                     send_error(
                         &mut client,
-                        fdo_data_formats::constants::ErrorCode::InvalidMessageError,
-                        fdo_data_formats::constants::MessageType::TO2OVNextEntry,
+                        ErrorCode::InvalidMessageError,
+                        MessageType::TO2OVNextEntry,
                         &String::from("Last entry on ownership voucher was wrong"),
                     )
                     .await;
@@ -518,8 +590,8 @@ async fn perform_to2(
             _ => {
                 send_error(
                     &mut client,
-                    fdo_data_formats::constants::ErrorCode::InvalidMessageError,
-                    fdo_data_formats::constants::MessageType::TO2OVNextEntry,
+                    ErrorCode::InvalidMessageError,
+                    MessageType::TO2OVNextEntry,
                     &String::from("Error validating ownership voucher"),
                 )
                 .await;
@@ -529,8 +601,8 @@ async fn perform_to2(
         _ => {
             send_error(
                 &mut client,
-                fdo_data_formats::constants::ErrorCode::InternalServerError,
-                fdo_data_formats::constants::MessageType::TO2OVNextEntry,
+                ErrorCode::InternalServerError,
+                MessageType::TO2OVNextEntry,
                 &String::from("Error initializing iterator"),
             )
             .await;
@@ -547,8 +619,8 @@ async fn perform_to2(
             _ => {
                 send_error(
                     &mut client,
-                    fdo_data_formats::constants::ErrorCode::InvalidMessageError,
-                    fdo_data_formats::constants::MessageType::TO2OVNextEntry,
+                    ErrorCode::InvalidMessageError,
+                    MessageType::TO2OVNextEntry,
                     &String::from("Error validating ProveOVHdr signature"),
                 )
                 .await;
@@ -564,8 +636,8 @@ async fn perform_to2(
     if to1d.verify(ov_owner_entry.public_key().pkey()).is_err() {
         send_error(
             &mut client,
-            fdo_data_formats::constants::ErrorCode::InvalidMessageError,
-            fdo_data_formats::constants::MessageType::TO2OVNextEntry,
+            ErrorCode::InvalidMessageError,
+            MessageType::TO2OVNextEntry,
             &String::from("Error validating to1d after receiving full ownership voucher"),
         )
         .await;
@@ -579,8 +651,8 @@ async fn perform_to2(
         _ => {
             send_error(
                 &mut client,
-                fdo_data_formats::constants::ErrorCode::InternalServerError,
-                fdo_data_formats::constants::MessageType::TO2OVNextEntry,
+                ErrorCode::InternalServerError,
+                MessageType::TO2OVNextEntry,
                 &String::from("Error creating device side of key exchange"),
             )
             .await;
@@ -594,8 +666,8 @@ async fn perform_to2(
             _ => {
                 send_error(
                     &mut client,
-                    fdo_data_formats::constants::ErrorCode::InternalServerError,
-                    fdo_data_formats::constants::MessageType::TO2OVNextEntry,
+                    ErrorCode::InternalServerError,
+                    MessageType::TO2OVNextEntry,
                     &String::from("Error performing key derivation"),
                 )
                 .await;
@@ -610,8 +682,8 @@ async fn perform_to2(
         _ => {
             send_error(
                 &mut client,
-                fdo_data_formats::constants::ErrorCode::InternalServerError,
-                fdo_data_formats::constants::MessageType::TO2OVNextEntry,
+                ErrorCode::InternalServerError,
+                MessageType::TO2OVNextEntry,
                 &String::from("Error generating nonce7"),
             )
             .await;
@@ -625,8 +697,8 @@ async fn perform_to2(
         _ => {
             send_error(
                 &mut client,
-                fdo_data_formats::constants::ErrorCode::InternalServerError,
-                fdo_data_formats::constants::MessageType::TO2OVNextEntry,
+                ErrorCode::InternalServerError,
+                MessageType::TO2OVNextEntry,
                 &String::from("Error building prove device payload"),
             )
             .await;
@@ -642,8 +714,8 @@ async fn perform_to2(
         _ => {
             send_error(
                 &mut client,
-                fdo_data_formats::constants::ErrorCode::InternalServerError,
-                fdo_data_formats::constants::MessageType::TO2OVNextEntry,
+                ErrorCode::InternalServerError,
+                MessageType::TO2OVNextEntry,
                 &String::from("Error building provedevice EAT"),
             )
             .await;
@@ -657,8 +729,8 @@ async fn perform_to2(
     {
         send_error(
             &mut client,
-            fdo_data_formats::constants::ErrorCode::MessageBodyError,
-            fdo_data_formats::constants::MessageType::TO2OVNextEntry,
+            ErrorCode::MessageBodyError,
+            MessageType::TO2OVNextEntry,
             &String::from("Error adding nonce7 to unprotected"),
         )
         .await;
@@ -670,8 +742,8 @@ async fn perform_to2(
         _ => {
             send_error(
                 &mut client,
-                fdo_data_formats::constants::ErrorCode::InternalServerError,
-                fdo_data_formats::constants::MessageType::TO2OVNextEntry,
+                ErrorCode::InternalServerError,
+                MessageType::TO2OVNextEntry,
                 &String::from("Error getting Cose signer"),
             )
             .await;
@@ -688,8 +760,8 @@ async fn perform_to2(
         _ => {
             send_error(
                 &mut client,
-                fdo_data_formats::constants::ErrorCode::InternalServerError,
-                fdo_data_formats::constants::MessageType::TO2GetOVNextEntry,
+                ErrorCode::InternalServerError,
+                MessageType::TO2GetOVNextEntry,
                 &String::from("Error signing ProveDevice EAT"),
             )
             .await;
@@ -706,8 +778,8 @@ async fn perform_to2(
         _ => {
             send_error(
                 &mut client,
-                fdo_data_formats::constants::ErrorCode::InternalServerError,
-                fdo_data_formats::constants::MessageType::TO2SetupDevice,
+                ErrorCode::InternalServerError,
+                MessageType::TO2SetupDevice,
                 &String::from("Error proving device"),
             )
             .await;
@@ -727,8 +799,8 @@ async fn perform_to2(
     if owner_service_info_ready.is_err() {
         send_error(
             &mut client,
-            fdo_data_formats::constants::ErrorCode::InternalServerError,
-            fdo_data_formats::constants::MessageType::TO2OwnerServiceInfoReady,
+            ErrorCode::InternalServerError,
+            MessageType::TO2OwnerServiceInfoReady,
             &String::from("Error getting OwnerServiceInfoReady"),
         )
         .await;
@@ -746,8 +818,8 @@ async fn perform_to2(
     {
         send_error(
             &mut client,
-            fdo_data_formats::constants::ErrorCode::InternalServerError,
-            fdo_data_formats::constants::MessageType::TO2OwnerServiceInfo,
+            ErrorCode::InternalServerError,
+            MessageType::TO2OwnerServiceInfo,
             &String::from("Error performing the ServiceInfo roundtrips"),
         )
         .await;
@@ -757,8 +829,8 @@ async fn perform_to2(
     if mark_device_onboarding_executed().is_err() {
         send_error(
             &mut client,
-            fdo_data_formats::constants::ErrorCode::InternalServerError,
-            fdo_data_formats::constants::MessageType::TO2OwnerServiceInfo,
+            ErrorCode::InternalServerError,
+            MessageType::TO2OwnerServiceInfo,
             &String::from("Error creating the device onboarding executed marker file"),
         )
         .await;
@@ -768,8 +840,8 @@ async fn perform_to2(
     if devcredloc.deactivate().is_err() {
         send_error(
             &mut client,
-            fdo_data_formats::constants::ErrorCode::InternalServerError,
-            fdo_data_formats::constants::MessageType::TO2OwnerServiceInfo,
+            ErrorCode::InternalServerError,
+            MessageType::TO2OwnerServiceInfo,
             &String::from("Error deactivating device credential"),
         )
         .await;
@@ -785,8 +857,8 @@ async fn perform_to2(
             if &nonce7 != d2.nonce7() {
                 send_error(
                     &mut client,
-                    fdo_data_formats::constants::ErrorCode::InvalidMessageError,
-                    fdo_data_formats::constants::MessageType::TO2Done2,
+                    ErrorCode::InvalidMessageError,
+                    MessageType::TO2Done2,
                     &String::from("Nonce7 did not match in Done2"),
                 )
                 .await;
@@ -796,8 +868,8 @@ async fn perform_to2(
         _ => {
             send_error(
                 &mut client,
-                fdo_data_formats::constants::ErrorCode::InternalServerError,
-                fdo_data_formats::constants::MessageType::TO2Done2,
+                ErrorCode::InternalServerError,
+                MessageType::TO2Done2,
                 &String::from("Error sending Done2"),
             )
             .await;
