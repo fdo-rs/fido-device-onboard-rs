@@ -46,6 +46,7 @@ jobs:
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
+    container: fedora:latest
     steps:
       - uses: actions/checkout@v2
       - name: Cache
@@ -58,12 +59,9 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-clippy-${{ hashFiles('**/Cargo.lock') }}
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - run: rustup component add clippy
+      - name: Install deps
+        run: |
+          dnf install -y make gcc openssl openssl-devel findutils golang git tpm2-tss-devel clippy cargo rust
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
@@ -71,7 +69,11 @@ jobs:
 
   build_and_test:
     runs-on: ubuntu-latest
+    container: fedora:latest
     steps:
+      - name: Install deps
+        run: |
+          dnf install -y make gcc openssl openssl-devel findutils golang git tpm2-tss-devel swtpm swtpm-tools cargo rust git
       - uses: actions/checkout@v2
       - name: Cache
         uses: actions/cache@v2

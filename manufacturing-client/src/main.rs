@@ -1,11 +1,11 @@
-use std::fs;
-use std::{env, str::FromStr};
+use std::{convert::TryFrom, fs};
+use std::{convert::TryInto, env, str::FromStr};
 
 use anyhow::{bail, Context, Result};
 
 use fdo_data_formats::{
     constants::{HashType, HeaderKeys, KeyStorageType, MfgStringType, PublicKeyType},
-    devicecredential::FileDeviceCredential,
+    devicecredential::{file::KeyStorage, FileDeviceCredential},
     enhanced_types::X5Bag,
     messages,
     publickey::PublicKey,
@@ -20,14 +20,22 @@ use fdo_http_wrapper::{
     EncryptionKeys,
 };
 use openssl::{
+    bn::BigNum,
     ec::{EcGroup, EcKey},
     hash::MessageDigest,
     nid::Nid,
     pkey::{PKey, Private},
+    rsa::Rsa,
     sign::Signer,
 };
 
 use fdo_util::device_credential_locations;
+use tss_esapi::{
+    attributes::ObjectAttributesBuilder,
+    interface_types::algorithm::HashingAlgorithm,
+    structures::PublicBuilder,
+    traits::{Marshall, UnMarshall},
+};
 
 const DEVICE_CREDENTIAL_FILESYSTEM_PATH: &str = "/etc/device-credentials";
 
@@ -121,7 +129,7 @@ async fn perform_diun(
         .send_request(
             messages::v11::diun::ProvideKey::new(
                 key_ref
-                    .get_public_key()
+                    .get_public_key_as_der()
                     .context("Error getting public key from key reference")?,
                 key_ref.get_public_key_storage_type(),
             ),
@@ -134,7 +142,7 @@ async fn perform_diun(
 
 async fn perform_di(
     client: &mut ServiceClient,
-    key_reference: KeyReference,
+    mut key_reference: KeyReference,
     mfg_string_type: MfgStringType,
 ) -> Result<()> {
     let mfg_info = get_mfg_info(mfg_string_type)
@@ -302,6 +310,93 @@ enum KeyReference {
         sign_key: PKey<Private>,
         hmac_key: Vec<u8>,
     },
+    SemiTpm {
+        tss_context: Box<tss_esapi::Context>,
+        primary_handle: tss_esapi::handles::KeyHandle,
+
+        // KeyStorage data
+        signing_public: Vec<u8>,
+        signing_private: Vec<u8>,
+        hmac_public: Vec<u8>,
+        hmac_private: Vec<u8>,
+    },
+}
+
+fn semi_tpm_hmac_key_template(keytype: PublicKeyType) -> Result<tss_esapi::structures::Public> {
+    let hash_algo = match keytype {
+        PublicKeyType::SECP256R1 => HashingAlgorithm::Sha256,
+        PublicKeyType::SECP384R1 => HashingAlgorithm::Sha384,
+        _ => bail!("Unsupported key type {:?}", keytype),
+    };
+    let primary_attributes = ObjectAttributesBuilder::new()
+        .with_fixed_tpm(true)
+        .with_fixed_parent(true)
+        .with_sensitive_data_origin(true)
+        .with_restricted(false)
+        .with_sign_encrypt(true)
+        .with_user_with_auth(true)
+        .build()
+        .context("Error creating object attributes")?;
+    PublicBuilder::new()
+        .with_object_attributes(primary_attributes)
+        .with_public_algorithm(tss_esapi::interface_types::algorithm::PublicAlgorithm::KeyedHash)
+        .with_name_hashing_algorithm(
+            tss_esapi::interface_types::algorithm::HashingAlgorithm::Sha256,
+        )
+        .with_keyed_hash_parameters(tss_esapi::structures::PublicKeyedHashParameters::new(
+            tss_esapi::structures::KeyedHashScheme::Hmac {
+                hmac_scheme: tss_esapi::structures::HmacScheme::new(hash_algo),
+            },
+        ))
+        .with_keyed_hash_unique_identifier(Default::default())
+        .build()
+        .context("Error creating public template")
+}
+
+fn semi_tpm_signing_key_template(key_type: PublicKeyType) -> Result<tss_esapi::structures::Public> {
+    let primary_attributes = ObjectAttributesBuilder::new()
+        .with_fixed_tpm(true)
+        .with_fixed_parent(true)
+        .with_user_with_auth(true)
+        .with_sensitive_data_origin(true)
+        .with_restricted(false)
+        .with_sign_encrypt(true)
+        .build()
+        .context("Error creating object attributes")?;
+    let builder = PublicBuilder::new().with_object_attributes(primary_attributes);
+
+    match key_type {
+        PublicKeyType::SECP256R1 | PublicKeyType::SECP384R1 => {
+            let (curve, hash_algo) = match key_type {
+                PublicKeyType::SECP256R1 => (
+                    tss_esapi::interface_types::ecc::EccCurve::NistP256,
+                    HashingAlgorithm::Sha256,
+                ),
+                PublicKeyType::SECP384R1 => (
+                    tss_esapi::interface_types::ecc::EccCurve::NistP384,
+                    HashingAlgorithm::Sha384,
+                ),
+                _ => unreachable!(),
+            };
+            builder
+                .with_public_algorithm(tss_esapi::interface_types::algorithm::PublicAlgorithm::Ecc)
+                .with_name_hashing_algorithm(
+                    tss_esapi::interface_types::algorithm::HashingAlgorithm::Sha256,
+                )
+                .with_ecc_parameters(tss_esapi::structures::PublicEccParameters::new(
+                    tss_esapi::structures::SymmetricDefinitionObject::Null,
+                    tss_esapi::structures::EccScheme::EcDsa(
+                        tss_esapi::structures::HashScheme::new(hash_algo),
+                    ),
+                    curve,
+                    tss_esapi::structures::KeyDerivationFunctionScheme::Null,
+                ))
+                .with_ecc_unique_identifier(Default::default())
+        }
+        _ => bail!("Unsupported key type {:?}", key_type),
+    }
+    .build()
+    .context("Error creating public template")
 }
 
 impl KeyReference {
@@ -332,6 +427,64 @@ impl KeyReference {
         }
     }
 
+    async fn get_new_key_tpm(keytype: PublicKeyType) -> Result<Self> {
+        let tcti_conf = tss_esapi::tcti_ldr::TctiNameConf::from_environment_variable()
+            .unwrap_or_else(|_| tss_esapi::tcti_ldr::TctiNameConf::Tabrmd(Default::default()));
+        let mut tss_context =
+            tss_esapi::Context::new(tcti_conf).context("Error initializing the TPM context")?;
+
+        let primary_template =
+            fdo_data_formats::devicecredential::file::semi_tpm_primary_key_template()
+                .context("Error creating TPM Primary Key template")?;
+        log::trace!("Primary key template: {:?}", primary_template);
+        let signing_template = semi_tpm_signing_key_template(keytype)
+            .context("Error creating TPM Signing key template")?;
+        log::trace!("Signing key template: {:?}", signing_template);
+        let hmac_template =
+            semi_tpm_hmac_key_template(keytype).context("Error creating TPM hmac key template")?;
+        log::trace!("HMAC key template: {:?}", hmac_template);
+
+        let primary_handle = tss_context
+            .execute_with_nullauth_session(|ctx| {
+                ctx.create_primary(
+                    tss_esapi::interface_types::resource_handles::Hierarchy::Owner,
+                    primary_template,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+            })
+            .context("Error creating primary key")?
+            .key_handle;
+
+        let signing_key_result = tss_context
+            .execute_with_nullauth_session(|ctx| {
+                ctx.create(primary_handle, signing_template, None, None, None, None)
+            })
+            .context("Error creating signing key")?;
+        let hmac_key_result = tss_context
+            .execute_with_nullauth_session(|ctx| {
+                ctx.create(primary_handle, hmac_template, None, None, None, None)
+            })
+            .context("Error creating HMAC key")?;
+
+        Ok(Self::SemiTpm {
+            tss_context: Box::new(tss_context),
+            primary_handle,
+            signing_public: signing_key_result
+                .out_public
+                .marshall()
+                .context("Error marshalling Signing Public")?,
+            signing_private: signing_key_result.out_private.to_vec(),
+            hmac_public: hmac_key_result
+                .out_public
+                .marshall()
+                .context("Error marshalling Hmac Public")?,
+            hmac_private: hmac_key_result.out_private.to_vec(),
+        })
+    }
+
     async fn get_new_key(
         keytype: PublicKeyType,
         allowed_storage_types: Option<&[KeyStorageType]>,
@@ -346,8 +499,21 @@ impl KeyReference {
         for key_storage_type in allowed_storage_types {
             #[allow(clippy::single_match)]
             match *key_storage_type {
+                KeyStorageType::Tpm => match KeyReference::get_new_key_tpm(keytype).await {
+                    Ok(keyref) => return Ok(keyref),
+                    Err(e) => {
+                        log::debug!("Error getting new key from TPM: {:?}", e);
+                        continue;
+                    }
+                },
                 KeyStorageType::FileSystem => {
-                    return KeyReference::get_new_key_filesystem(keytype).await
+                    match KeyReference::get_new_key_filesystem(keytype).await {
+                        Ok(keyref) => return Ok(keyref),
+                        Err(e) => {
+                            log::debug!("Error creating new filesystem key: {}", e);
+                            continue;
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -384,17 +550,64 @@ impl KeyReference {
         }
     }
 
-    fn get_public_key(&self) -> Result<Vec<u8>> {
+    fn get_public_key_as_der(&self) -> Result<Vec<u8>> {
         match self {
             KeyReference::FileSystem { sign_key, .. } => sign_key
                 .public_key_to_der()
                 .context("Error serializing public key"),
+            KeyReference::SemiTpm { signing_public, .. } => {
+                let signing_public = tss_esapi::structures::Public::unmarshall(signing_public)
+                    .context("Error unmarshalling Public")?;
+                match signing_public {
+                    tss_esapi::structures::Public::Rsa {
+                        parameters, unique, ..
+                    } => {
+                        let exponent = BigNum::from_u32(parameters.exponent().value())
+                            .context("Error converting exponent to BigNum")?;
+                        let modulus = BigNum::from_slice(unique.value())
+                            .context("Error converting modulus to BigNum")?;
+                        Rsa::from_public_components(modulus, exponent)
+                            .context("Error creating RSA key")?
+                            .public_key_to_der()
+                            .context("Error serializing public key")
+                    }
+                    tss_esapi::structures::Public::Ecc {
+                        parameters, unique, ..
+                    } => {
+                        let curve = match parameters.ecc_curve() {
+                            tss_esapi::interface_types::ecc::EccCurve::NistP192 => {
+                                Nid::X9_62_PRIME192V1
+                            }
+                            tss_esapi::interface_types::ecc::EccCurve::NistP224 => Nid::SECP224R1,
+                            tss_esapi::interface_types::ecc::EccCurve::NistP256 => {
+                                Nid::X9_62_PRIME256V1
+                            }
+                            tss_esapi::interface_types::ecc::EccCurve::NistP384 => Nid::SECP384R1,
+                            tss_esapi::interface_types::ecc::EccCurve::NistP521 => Nid::SECP521R1,
+                            _ => bail!("Unsupported ECC curve"),
+                        };
+                        let curve =
+                            EcGroup::from_curve_name(curve).context("Error creating EC group")?;
+                        let x = BigNum::from_slice(unique.x())
+                            .context("Error converting X coordinate to BigNum")?;
+                        let y = BigNum::from_slice(unique.y())
+                            .context("Error converting Y coordinate to BigNum")?;
+
+                        EcKey::from_public_key_affine_coordinates(&curve, &x, &y)
+                            .context("Error creating EC key")?
+                            .public_key_to_der()
+                            .context("Error serializing public key")
+                    }
+                    _ => bail!("Unsupported signing key type"),
+                }
+            }
         }
     }
 
     fn get_public_key_storage_type(&self) -> KeyStorageType {
         match self {
             KeyReference::FileSystem { .. } => KeyStorageType::FileSystem,
+            KeyReference::SemiTpm { .. } => KeyStorageType::Tpm,
         }
     }
 
@@ -414,12 +627,49 @@ impl KeyReference {
                 let cred = FileDeviceCredential {
                     active: true,
                     protver: ProtocolVersion::Version1_1,
-                    hmac_secret: hmac_key,
                     device_info,
                     guid,
                     rvinfo,
                     pubkey_hash: manufacturer_public_key_hash,
-                    private_key,
+
+                    key_storage: KeyStorage::Plain {
+                        hmac_secret: hmac_key,
+                        private_key,
+                    },
+                };
+
+                let cred = cred
+                    .serialize_data()
+                    .context("Error serializing device credential")?;
+
+                let filename = match env::var_os("DEVICE_CREDENTIAL_FILENAME") {
+                    Some(filename) => filename.into_string().unwrap(),
+                    None => DEVICE_CREDENTIAL_FILESYSTEM_PATH.to_string(),
+                };
+
+                fs::write(filename, &cred).context("Error writing device credential")
+            }
+            KeyReference::SemiTpm {
+                signing_public,
+                signing_private,
+                hmac_public,
+                hmac_private,
+                ..
+            } => {
+                let cred = FileDeviceCredential {
+                    active: true,
+                    protver: ProtocolVersion::Version1_1,
+                    device_info,
+                    guid,
+                    rvinfo,
+                    pubkey_hash: manufacturer_public_key_hash,
+
+                    key_storage: KeyStorage::Tpm {
+                        signing_public,
+                        signing_private,
+                        hmac_public,
+                        hmac_private,
+                    },
                 };
 
                 let cred = cred
@@ -436,7 +686,7 @@ impl KeyReference {
         }
     }
 
-    fn perform_hmac(&self, data: &[u8]) -> Result<HMac> {
+    fn perform_hmac(&mut self, data: &[u8]) -> Result<HMac> {
         match self {
             KeyReference::FileSystem { hmac_key, .. } => {
                 let hmac_key =
@@ -449,7 +699,73 @@ impl KeyReference {
                 let hmac = hmac_signer
                     .sign_to_vec()
                     .context("Error finalizing hmac computation")?;
-                Ok(HMac::from_digest(HashType::HmacSha384, hmac)?)
+                HMac::from_digest(HashType::HmacSha384, hmac)
+                    .context("Error converting result to hmac")
+            }
+            KeyReference::SemiTpm {
+                ref mut tss_context,
+                primary_handle,
+                hmac_public,
+                hmac_private,
+                ..
+            } => {
+                let hmac_public = tss_esapi::structures::Public::unmarshall(hmac_public)
+                    .context("Error unmarshalling public key")?;
+                let hash_algo = match hmac_public {
+                    tss_esapi::structures::Public::KeyedHash { parameters, .. } => {
+                        let parameters: tss_esapi::tss2_esys::TPMS_KEYEDHASH_PARMS =
+                            parameters.into();
+                        let scheme = parameters.scheme;
+                        match tss_esapi::constants::AlgorithmIdentifier::try_from(scheme.scheme)
+                            .context("Error converting scheme to scheme type")?
+                        {
+                            tss_esapi::constants::AlgorithmIdentifier::Hmac => {}
+                            scheme => bail!("Unsupported scheme in key: {:?}", scheme),
+                        }
+                        let details = unsafe { scheme.details.hmac }.hashAlg;
+                        let details = tss_esapi::constants::AlgorithmIdentifier::try_from(details)
+                            .context("Error converting scheme to hash algorithm")?;
+
+                        match details {
+                            tss_esapi::constants::AlgorithmIdentifier::Sha256 => {
+                                HashingAlgorithm::Sha256
+                            }
+                            tss_esapi::constants::AlgorithmIdentifier::Sha384 => {
+                                HashingAlgorithm::Sha384
+                            }
+                            details => bail!("Unsupported ECC details: {:?}", details),
+                        }
+                    }
+                    algo => bail!("Unsupported signing key type: {:?}", algo),
+                };
+                let hash_type = match hash_algo {
+                    HashingAlgorithm::Sha256 => HashType::Sha256,
+                    HashingAlgorithm::Sha384 => HashType::Sha384,
+                    algo => bail!("Unsupported hash algorithm: {:?}", algo),
+                };
+                let hmac_key = tss_context
+                    .execute_with_nullauth_session(|ctx| {
+                        ctx.load(
+                            *primary_handle,
+                            hmac_private
+                                .as_slice()
+                                .try_into()
+                                .context("Error converting hmac private key")?,
+                            hmac_public,
+                        )
+                        .context("Error loading TPM hmac key")
+                    })
+                    .context("Error loading HMAC key")?;
+                let data = data.try_into().context("Error creating data buffer")?;
+                let hmac = tss_context
+                    .execute_with_nullauth_session(|ctx| {
+                        ctx.execute_with_temporary_object(hmac_key.into(), |ctx, hmac_key| {
+                            ctx.hmac(hmac_key, data, hash_algo)
+                        })
+                    })
+                    .context("Error computing hmac")?;
+                HMac::from_digest(hash_type, hmac.to_vec())
+                    .context("Error converting result to hmac")
             }
         }
     }
