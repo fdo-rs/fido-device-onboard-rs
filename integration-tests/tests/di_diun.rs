@@ -9,6 +9,61 @@ const L: LogSide = LogSide::Test;
 
 #[tokio::test]
 async fn test_diun() -> Result<()> {
+    let verification_methods: &[(
+        &'static str,
+        Box<dyn Fn(&TestContext) -> Result<(&'static str, String, &'static str)>>,
+    )] = &[
+        (
+            "insecure",
+            Box::new(|_| {
+                Ok((
+                    "DIUN_PUB_KEY_INSECURE",
+                    "true".to_string(),
+                    "Trusting any certificate as root",
+                ))
+            }),
+        ),
+        (
+            "hash",
+            Box::new(|ctx| {
+                let diun_cert = std::fs::read(ctx.keys_path().join("diun_cert.pem"))?;
+                let diun_cert = openssl::x509::X509::from_pem(&diun_cert)?;
+                let diun_cert_hash = diun_cert.digest(openssl::hash::MessageDigest::sha256())?;
+                Ok((
+                    "DIUN_PUB_KEY_HASH",
+                    format!("sha256:{}", hex::encode(&diun_cert_hash)),
+                    "Checking digest",
+                ))
+            }),
+        ),
+        (
+            "rootcert",
+            Box::new(|ctx| {
+                Ok((
+                    "DIUN_PUB_KEY_ROOTCERTS",
+                    ctx.keys_path()
+                        .join("diun_cert.pem")
+                        .to_string_lossy()
+                        .to_string(),
+                    "Checking for cert",
+                ))
+            }),
+        ),
+    ];
+
+    for (verification_method_name, verification_method_generator) in verification_methods {
+        test_diun_impl(verification_method_generator)
+            .await
+            .context(format!("{} verification method", verification_method_name))?;
+    }
+
+    Ok(())
+}
+
+async fn test_diun_impl<F>(verification_generator: F) -> Result<()>
+where
+    F: Fn(&TestContext) -> Result<(&'static str, String, &'static str)>,
+{
     let mut ctx = TestContext::new().context("Error building test context")?;
 
     let mfg_server = ctx
@@ -22,6 +77,9 @@ async fn test_diun() -> Result<()> {
         .await
         .context("Error waiting for servers to start")?;
 
+    let (verification_key, verification_value, verification_searchstr) =
+        verification_generator(&ctx).context("Error generating verification information")?;
+
     let client_result = ctx
         .run_client(
             Binary::ManufacturingClient,
@@ -29,7 +87,7 @@ async fn test_diun() -> Result<()> {
             |cfg| {
                 cfg.env("DEVICE_CREDENTIAL_FILENAME", "devicecredential.dc")
                     .env("MANUFACTURING_INFO", "testdevice")
-                    .env("DIUN_PUB_KEY_INSECURE", "true");
+                    .env(&verification_key, &verification_value);
                 Ok(())
             },
             Duration::from_secs(5),
@@ -38,7 +96,7 @@ async fn test_diun() -> Result<()> {
     client_result
         .expect_success()
         .context("Manufacturing client failed")?;
-    client_result.expect_stderr_line("Trusting any certificate as root")?;
+    client_result.expect_stderr_line(verification_searchstr)?;
 
     let dc_path = client_result.client_path().join("devicecredential.dc");
     L.l(format!("Device Credential should be in {:?}", dc_path));
