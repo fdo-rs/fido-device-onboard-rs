@@ -1,5 +1,5 @@
 use glob::glob;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::{env, path::PathBuf};
 
@@ -138,4 +138,18 @@ pub fn yaml_to_cbor(val: &Value) -> Result<CborValue> {
                 .collect(),
         ),
     })
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ServiceInfoApiReplyInitialUser {
+    pub username: String,
+    pub ssh_keys: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct ServiceInfoApiReply {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub initial_user: Option<ServiceInfoApiReplyInitialUser>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extra_commands: Option<Vec<(String, String, serde_json::Value)>>,
 }

@@ -1,5 +1,6 @@
 use std::{convert::TryFrom, str::FromStr};
 
+use serde::Deserialize;
 use thiserror::Error;
 
 use aws_nitro_enclaves_cose::error::CoseError;
@@ -12,6 +13,7 @@ use fdo_data_formats::{
 use crate::EncryptionKeys;
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum Error {
     #[error("Cryptographic error encrypting/decrypting")]
     Crypto(#[from] CoseError),
@@ -37,9 +39,103 @@ pub enum Error {
     InvalidSequenceRequest,
     #[error("Programming error: invalid message sequence for expected response")]
     InvalidSequenceResponse,
+    #[error("URL parse error: {0:?}")]
+    UrlParseError(#[from] url::ParseError),
+    #[error("The URL {0:?} is not valid: {1:?}")]
+    InvalidUrl(String, &'static str),
 }
 
 pub type RequestResult<MT> = Result<MT, Error>;
+
+#[derive(Debug, Deserialize)]
+pub enum JsonAuthentication {
+    None,
+    BearerToken {
+        token: String,
+    },
+    ClientCertificate {
+        client_certificate: Vec<u8>,
+        password: String,
+    },
+}
+
+#[derive(Debug)]
+pub struct JsonClient {
+    base_url: reqwest::Url,
+    client: reqwest::Client,
+    authentication: JsonAuthentication,
+}
+
+impl JsonClient {
+    pub fn new(base_url: String, authentication: JsonAuthentication) -> RequestResult<Self> {
+        let mut client_builder = reqwest::Client::builder();
+
+        let authentication = if let JsonAuthentication::ClientCertificate {
+            client_certificate,
+            password,
+        } = authentication
+        {
+            let identity = reqwest::tls::Identity::from_pkcs12_der(&client_certificate, &password)?;
+            client_builder = client_builder.identity(identity);
+            // We no longer need to keep track of this
+            JsonAuthentication::None
+        } else {
+            authentication
+        };
+
+        let base_url = reqwest::Url::parse(&base_url)?;
+        if base_url.cannot_be_a_base() {
+            return Err(Error::InvalidUrl(
+                base_url.to_string(),
+                "URL is not a valid base URL",
+            ));
+        }
+
+        Ok(JsonClient {
+            base_url,
+            client: client_builder.build()?,
+            authentication,
+        })
+    }
+
+    pub async fn send_get<'a, QT, OT>(&self, query: QT) -> RequestResult<OT>
+    where
+        QT: IntoIterator<Item = (&'a str, &'a str)>,
+        OT: serde::de::DeserializeOwned,
+    {
+        let mut url = self.base_url.clone();
+
+        let query_str = query
+            .into_iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join("&");
+
+        url.set_query(Some(&query_str));
+
+        let request_builder = self.client.request(reqwest::Method::GET, url);
+
+        let request_builder = match &self.authentication {
+            JsonAuthentication::None => request_builder,
+            JsonAuthentication::BearerToken { token } => {
+                request_builder.header("Authorization", format!("Bearer {}", token))
+            }
+            JsonAuthentication::ClientCertificate { .. } => {
+                unreachable!("Should not be possible to get here")
+            }
+        };
+
+        let request = request_builder.build()?;
+
+        log::trace!("Sending JSON API request: {:?}", request);
+
+        let resp = self.client.execute(request).await;
+
+        log::trace!("Received JSON API response: {:?}", resp);
+
+        resp?.error_for_status()?.json().await.map_err(Error::from)
+    }
+}
 
 #[derive(Debug)]
 pub struct ServiceClient {

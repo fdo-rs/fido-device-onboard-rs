@@ -29,8 +29,9 @@ warp-sessions = { version = "1.0", optional = true }
 time = "0.3"
 
 # Client-side
-reqwest = { version = "0.11", optional = true }
+reqwest = { version = "0.11", optional = true, features = ["native-tls", "json"] }
+url = { version = "2", optional = true }
 
 [features]
 server = ["warp", "warp-sessions", "uuid"]
-client = ["reqwest"]
+client = ["reqwest", "url"]
