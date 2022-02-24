@@ -115,10 +115,7 @@ async fn test_to() -> Result<()> {
         .to_string();
     L.l(format!("Device GUID: {:?}", device_guid));
 
-    let ov_to = ctx
-        .runner_path(&owner_onboarding_server)
-        .join("ownership_vouchers")
-        .join(&device_guid);
+    let ov_to = ctx.testpath().join("ownership_vouchers").join(&device_guid);
     L.l(format!(
         "Converting Ownership Voucher {:?}(pem) -> {:?}(cose)",
         ov_path, ov_to
