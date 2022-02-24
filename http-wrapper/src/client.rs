@@ -145,6 +145,7 @@ pub struct ServiceClient {
     authorization_token: Option<String>,
     encryption_keys: EncryptionKeys,
     last_message_type: Option<MessageType>,
+    non_interoperable_kdf_required: Option<bool>,
 }
 
 impl ServiceClient {
@@ -156,7 +157,12 @@ impl ServiceClient {
             authorization_token: None,
             encryption_keys: EncryptionKeys::unencrypted(),
             last_message_type: None,
+            non_interoperable_kdf_required: None,
         }
+    }
+
+    pub fn non_interoperable_kdf_required(&self) -> Option<bool> {
+        self.non_interoperable_kdf_required
     }
 
     pub async fn send_request<OM, SM>(
@@ -223,7 +229,7 @@ impl ServiceClient {
             req = req.header("Authorization", authorization_token);
         }
 
-        if !fdo_data_formats::INTEROPERABLE_KDF {
+        if !fdo_data_formats::interoperable_kdf_available() {
             req = req.header("X-Non-Interoperable-KDF", "true");
         }
 
@@ -232,6 +238,19 @@ impl ServiceClient {
         }
 
         let resp = req.send().await?;
+
+        if self.non_interoperable_kdf_required.is_none() {
+            self.non_interoperable_kdf_required = Some(
+                resp.headers()
+                    .get("X-Non-Interoperable-KDF")
+                    .map(|v| v.to_str().unwrap_or("").eq("true"))
+                    .unwrap_or(false),
+            );
+            log::trace!(
+                "Determined whether non-interoperable KDF is required: {:?}",
+                self.non_interoperable_kdf_required
+            );
+        }
 
         let msgtype = resp
             .headers()

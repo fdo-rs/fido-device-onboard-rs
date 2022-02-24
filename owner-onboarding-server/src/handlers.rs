@@ -160,10 +160,10 @@ pub(super) async fn get_ov_next_entry(
 
 pub(super) async fn prove_device(
     user_data: super::OwnerServiceUDT,
-    mut ses_with_store: RequestInformation,
+    mut request_info: RequestInformation,
     msg: messages::v11::to2::ProveDevice,
 ) -> Result<(messages::v11::to2::SetupDevice, RequestInformation), warp::Rejection> {
-    let mut session = ses_with_store.session;
+    let mut session = request_info.session;
 
     let device_guid: String = match session.get("device_guid") {
         Some(v) => v,
@@ -306,12 +306,21 @@ pub(super) async fn prove_device(
         .insert("nonce7", nonce7.clone())
         .map_err(Error::from_error::<messages::v11::to2::ProveDevice, _>)?;
 
+    let use_noninteroperable_kdf =
+        if let Some(value) = request_info.headers.get("X-Non-Interoperable-KDF") {
+            log::trace!("Got a X-Non-Interoperable-KDF header: {:?}", value);
+            matches!(value.to_str(), Ok("true"))
+        } else {
+            false
+        };
+
     // Derive and set the keys
     let new_keys = a_key_exchange
         .derive_key(
             KeyDeriveSide::OwnerService,
             ciphersuite,
             eat_payload.b_key_exchange(),
+            use_noninteroperable_kdf,
         )
         .map_err(Error::from_error::<messages::v11::to2::ProveDevice, _>)?;
     let new_keys = EncryptionKeys::from_derived(ciphersuite, new_keys);
@@ -337,9 +346,9 @@ pub(super) async fn prove_device(
         .insert("proven_device", true)
         .map_err(Error::from_error::<messages::v11::to2::ProveDevice, _>)?;
 
-    ses_with_store.session = session;
+    request_info.session = session;
 
-    Ok((resp, ses_with_store))
+    Ok((resp, request_info))
 }
 
 pub(super) async fn device_service_info_ready(

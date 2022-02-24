@@ -23,7 +23,18 @@ mod serializable;
 pub use serializable::DeserializableMany;
 pub use serializable::Serializable;
 
-#[cfg(feature = "use_noninteroperable_kdf")]
-pub const INTEROPERABLE_KDF: bool = false;
-#[cfg(not(feature = "use_noninteroperable_kdf"))]
-pub const INTEROPERABLE_KDF: bool = true;
+pub fn interoperable_kdf_available() -> bool {
+    #[cfg(feature = "use_noninteroperable_kdf")]
+    {
+        false
+    }
+    #[cfg(not(feature = "use_noninteroperable_kdf"))]
+    {
+        if std::env::var("FORCE_NONINTEROPERABLE_KDF").is_ok() {
+            log::warn!("Forcing the use of non-interoperable KDF via environment variable");
+            false
+        } else {
+            true
+        }
+    }
+}
