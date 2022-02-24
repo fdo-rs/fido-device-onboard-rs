@@ -295,7 +295,8 @@ async fn main() -> Result<()> {
     fdo_util::add_version!();
     fdo_http_wrapper::init_logging();
 
-    if !fdo_data_formats::INTEROPERABLE_KDF && std::env::var("ALLOW_NONINTEROPERABLE_KDF").is_err()
+    if !fdo_data_formats::interoperable_kdf_available()
+        && std::env::var("ALLOW_NONINTEROPERABLE_KDF").is_err()
     {
         bail!("Provide environment ALLOW_NONINTEROPERABLE_KDF=1 to enable interoperable KDF");
     }

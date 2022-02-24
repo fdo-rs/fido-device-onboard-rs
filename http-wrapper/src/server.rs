@@ -23,6 +23,7 @@ pub struct RequestInformation {
 
     // Other request metadata
     pub req_hash: Hash,
+    pub headers: warp::http::header::HeaderMap,
 }
 
 type SessionStoreT = Arc<SessionStore>;
@@ -311,7 +312,7 @@ where
             builder = builder.header("Authorization", token);
         }
     }
-    if !fdo_data_formats::INTEROPERABLE_KDF {
+    if !fdo_data_formats::interoperable_kdf_available() {
         builder = builder.header("X-Non-Interoperable-KDF", "true");
     }
 
@@ -427,11 +428,17 @@ where
         .and(warp::header::exact("Content-Type", "application/cbor"))
         // Process "session" (i.e. Authorization header) retrieval
         .and(warp::header::optional("Authorization"))
-        .map(move |req, hdr| (req, hdr, session_store.clone()))
+        .and(warp::header::headers_cloned())
+        .map(move |req, auth_hdr, hdrs| (req, auth_hdr, session_store.clone(), hdrs))
         .and_then(
-            |(req, hdr, ses_store): (warp::hyper::body::Bytes, Option<String>, SessionStoreT)| async move {
+            |(req, hdr, ses_store, headers): (
+                warp::hyper::body::Bytes,
+                Option<String>,
+                SessionStoreT,
+                warp::http::header::HeaderMap,
+            )| async move {
                 let ses = match hdr {
-                    Some(val) =>  {
+                    Some(val) => {
                         let val = if val.contains(' ') {
                             val.split(' ').nth(1).unwrap().to_string()
                         } else {
@@ -448,7 +455,7 @@ where
                                 )))
                             }
                         }
-                    },
+                    }
                     None => Session::new(),
                 };
                 let req_hash = Hash::from_data(HashType::Sha256, &req).unwrap();
@@ -459,6 +466,7 @@ where
                         session_store: ses_store,
 
                         req_hash,
+                        headers,
                     },
                 ))
             },

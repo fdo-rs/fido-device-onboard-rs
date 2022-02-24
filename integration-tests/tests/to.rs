@@ -3,13 +3,58 @@ use std::{fs, os::unix::prelude::PermissionsExt, path::Path, time::Duration};
 
 use common::{Binary, LogSide, TestContext};
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use fdo_data_formats::{devicecredential::FileDeviceCredential, types::Guid};
 
 const L: LogSide = LogSide::Test;
 
 #[tokio::test]
 async fn test_to() -> Result<()> {
+    let mut failed = Vec::new();
+
+    for client_noninteroperable_kdf in [true, false] {
+        for server_noninteroperable_kdf in [true, false] {
+            L.l(format!("Starting test case, client_noninteroperable_kdf: {:?}, server_noninteroperable_kdf: {:?}", client_noninteroperable_kdf, server_noninteroperable_kdf));
+            L.l("********************************************************============================================================");
+            if let Err(e) =
+                test_to_impl(client_noninteroperable_kdf, server_noninteroperable_kdf).await
+            {
+                L.l(format!("Test FAILED: {:?}", e));
+                failed.push(TestCase {
+                    client_noninteroperable_kdf,
+                    server_noninteroperable_kdf,
+                    error: e,
+                });
+            } else {
+                L.l("Test passed");
+            }
+        }
+    }
+
+    if failed.is_empty() {
+        Ok(())
+    } else {
+        for failed_case in failed {
+            eprintln!("Failed test: {:?}", failed_case);
+        }
+        bail!("Some test cases failed");
+    }
+}
+
+#[derive(Debug)]
+struct TestCase {
+    #[allow(dead_code)]
+    client_noninteroperable_kdf: bool,
+    #[allow(dead_code)]
+    server_noninteroperable_kdf: bool,
+    #[allow(dead_code)]
+    error: anyhow::Error,
+}
+
+async fn test_to_impl(
+    client_noninteroperable_kdf: bool,
+    server_noninteroperable_kdf: bool,
+) -> Result<()> {
     let mut ctx = TestContext::new().context("Error building test context")?;
 
     let rendezvous_server = ctx
@@ -40,6 +85,9 @@ async fn test_to() -> Result<()> {
             },
             |cmd| {
                 cmd.env("ALLOW_NONINTEROPERABLE_KDF", &"1");
+                if server_noninteroperable_kdf {
+                    cmd.env("FORCE_NONINTEROPERABLE_KDF", &"true");
+                }
                 Ok(())
             },
         )
@@ -185,12 +233,26 @@ async fn test_to() -> Result<()> {
                         &marker_file_path.to_str().unwrap(),
                     )
                     .env("ALLOW_NONINTEROPERABLE_KDF", &"1");
+                if client_noninteroperable_kdf {
+                    cfg.env("FORCE_NONINTEROPERABLE_KDF", &"true");
+                }
                 Ok(())
             },
             Duration::from_secs(5),
         )
         .context("Error running client")?;
     output.expect_success().context("client failed")?;
+    if client_noninteroperable_kdf {
+        output.expect_stderr_line(
+            "Forcing the use of non-interoperable KDF via environment variable",
+        )?;
+    }
+    if client_noninteroperable_kdf || server_noninteroperable_kdf {
+        output.expect_stderr_line("Using non-interoperable KDF")?;
+    }
+    if !client_noninteroperable_kdf && !server_noninteroperable_kdf {
+        output.expect_stderr_line("Using fully interoperable KDF")?;
+    }
 
     pretty_assertions::assert_eq!(
         fs::read_to_string(&marker_file_path).context("Error reading marker file")?,

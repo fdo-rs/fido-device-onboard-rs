@@ -75,6 +75,10 @@ async fn perform_diun(
         .chain()
         .context("Error getting diun_pubkey: no chain")?;
 
+    let non_interoperable_kdf_required = client
+        .non_interoperable_kdf_required()
+        .ok_or_else(|| anyhow::anyhow!("Error getting non-interoperable KDF requirement"))?;
+
     let diun_pubkey = match pub_key_verification {
         DiunPublicKeyVerificationMode::Hash(hash) => diun_pubchain.verify_from_digest(&hash),
         DiunPublicKeyVerificationMode::Certs(bag) => diun_pubchain.verify_from_x5bag(&bag),
@@ -104,6 +108,7 @@ async fn perform_diun(
             KeyDeriveSide::Device,
             ciphersuite,
             accept_payload.key_exchange(),
+            non_interoperable_kdf_required,
         )
         .context("Error performing key derivation")?;
     let new_keys = EncryptionKeys::from_derived(ciphersuite, new_keys);
