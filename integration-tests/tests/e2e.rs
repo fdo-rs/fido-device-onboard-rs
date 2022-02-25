@@ -319,7 +319,7 @@ where
     // Submit additional ServiceInfo for this device
     client
         .post(format!(
-            "http://localhost:{}/admin/v0",
+            "http://localhost:{}/admin/v0", //DevSkim: ignore DS137138
             serviceinfo_api_server.server_port().unwrap()
         ))
         .header("Authorization", "Bearer TestAdminToken")
@@ -336,7 +336,7 @@ where
     // Ensure TO0 is executed
     let res = client
         .post(format!(
-            "http://localhost:{}/report-to-rendezvous",
+            "http://localhost:{}/report-to-rendezvous", //DevSkim: ignore DS137138
             owner_onboarding_server.server_port().unwrap()
         ))
         .send()

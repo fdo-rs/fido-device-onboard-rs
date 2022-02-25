@@ -760,7 +760,9 @@ mod test {
 
     #[test]
     fn complicated_message() {
-        let data = hex::decode("8550cbf6ca589001016cafa4e5c15fb6b2885045c751c1c96532c81ca670028d9903e16745434448333834674132353647434d82382240").unwrap();
+        let data = hex::decode(
+            "8550cbf6ca589001016cafa4e5c15fb6b2885045c751c1c96532c81ca670028d9903e16745434448333834674132353647434d82382240" //DevSkim: ignore DS173237
+        ).unwrap();
         let parsed: ParsedArray<super::ParsedArraySize5> =
             ParsedArray::deserialize_data(&data).expect("Failed to parse");
         assert_eq!(
@@ -779,7 +781,9 @@ mod test {
 
     #[test]
     fn complicated_message_with_nested_tag() {
-        let data = hex::decode("8550cbf6ca589001016cafa4e5c15fb6b2885045c751c1c96532c81ca670028d9903e16745434448333834674132353647434dc682382240").unwrap();
+        let data = hex::decode(
+            "8550cbf6ca589001016cafa4e5c15fb6b2885045c751c1c96532c81ca670028d9903e16745434448333834674132353647434dc682382240" //DevSkim: ignore DS173237
+        ).unwrap();
         let parsed: ParsedArray<super::ParsedArraySize5> =
             ParsedArray::deserialize_data(&data).expect("Failed to parse");
         assert_eq!(
@@ -798,7 +802,9 @@ mod test {
 
     #[test]
     fn complicated_message_with_deeply_nested_tag() {
-        let data = hex::decode("8550cbf6ca589001016cafa4e5c15fb6b2885045c751c1c96532c81ca670028d9903e16745434448333834674132353647434d82c6382240").unwrap();
+        let data = hex::decode(
+            "8550cbf6ca589001016cafa4e5c15fb6b2885045c751c1c96532c81ca670028d9903e16745434448333834674132353647434d82c6382240" //DevSkim: ignore DS173237
+        ).unwrap();
         let parsed: ParsedArray<super::ParsedArraySize5> =
             ParsedArray::deserialize_data(&data).expect("Failed to parse");
         assert_eq!(

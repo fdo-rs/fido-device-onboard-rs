@@ -326,7 +326,7 @@ fn generate_configs(aio_dir: &Path, config_args: &Configuration) -> Result<(), E
             )
             .unwrap(),
             service_info_api_url: format!(
-                "http://localhost:{}/device_info",
+                "http://localhost:{}/device_info", //DevSkim: ignore DS137138
                 config_args.listen_port_serviceinfo_api_server
             ),
             service_info_api_authentication:

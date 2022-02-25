@@ -169,7 +169,10 @@ impl TestBinaryNumber {
 
     fn server_url(&self) -> Option<String> {
         if self.binary.is_server() {
-            Some(format!("http://localhost:{}", self.server_port().unwrap()))
+            Some(format!(
+                "http://localhost:{}", //DevSkim: ignore DS137138
+                self.server_port().unwrap()
+            ))
         } else {
             None
         }
@@ -822,7 +825,7 @@ impl TestServer {
         loop {
             let res = client
                 .post(&format!(
-                    "http://localhost:{}/ping",
+                    "http://localhost:{}/ping", //DevSkim: ignore DS137138
                     self.server_number.server_port().unwrap()
                 ))
                 .send()
