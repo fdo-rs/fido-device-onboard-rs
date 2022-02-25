@@ -12,13 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: ruby/setup-ruby@v1
+      - uses: actions/jekyll-build-pages@main
         with:
-          ruby-version: 3.0
-          bundler-cache: true
-          working-directory: ./docs
-      - run: bundle exec jekyll build --verbose --trace
-        working-directory: ./docs
+          source: ./docs
+          verbose: true
 
   fmt:
     name: Rustfmt
