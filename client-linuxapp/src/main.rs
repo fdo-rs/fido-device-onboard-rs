@@ -1,6 +1,6 @@
 use std::{borrow::Borrow, env, fs, path::PathBuf, thread, time};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 
 use fdo_data_formats::{
     cborparser::ParsedArray,
@@ -12,13 +12,15 @@ use fdo_data_formats::{
     messages,
     ownershipvoucher::{OwnershipVoucher, OwnershipVoucherHeader},
     types::{
-        new_eat, COSEHeaderMap, COSESign, CipherSuite, EATokenPayload, KexSuite, KeyDeriveSide,
-        KeyExchange, Nonce, PayloadCreating, SigInfo, TO1DataPayload, TO2AddressEntry,
-        TO2ProveDevicePayload, TO2ProveOVHdrPayload, UnverifiedValue,
+        new_eat, COSEHeaderMap, COSESign, CipherSuite, EATokenPayload, HMac, KexSuite,
+        KeyDeriveSide, KeyExchange, Nonce, PayloadCreating, SigInfo, TO1DataPayload,
+        TO2AddressEntry, TO2ProveDevicePayload, TO2ProveOVHdrPayload, UnverifiedValue,
     },
     DeviceCredential, ProtocolVersion, Serializable,
 };
 use fdo_http_wrapper::client::{RequestResult, ServiceClient};
+
+use thiserror::Error;
 
 mod serviceinfo;
 
@@ -40,6 +42,53 @@ fn marker_file_location() -> PathBuf {
 const RV_DEFAULT_DELAY_SEC: f32 = 120.0;
 const RV_DEFAULT_DELAY_OFFSET: f32 = 30.0;
 const RV_USER_DEFINED_DELAY_OFFSET: f32 = 0.25;
+
+// Encapsulates errors caused during TO1/TO2
+#[derive(Debug)]
+struct ErrorResult {
+    e_code: ErrorCode,
+    e_string: String,
+    message: MessageType,
+    error: anyhow::Error,
+}
+
+impl ErrorResult {
+    fn new(
+        e_code: ErrorCode,
+        e_string: String,
+        message: MessageType,
+        error: anyhow::Error,
+    ) -> Self {
+        ErrorResult {
+            e_code,
+            e_string,
+            message,
+            error,
+        }
+    }
+}
+
+#[derive(Error, Debug)]
+enum ClientError {
+    #[error("Error in the response result")]
+    Response(ErrorResult),
+    #[error("Error with the request")]
+    Request(ErrorResult),
+}
+
+async fn send_client_error(
+    client: &mut fdo_http_wrapper::client::ServiceClient,
+    error: &ErrorResult,
+) {
+    let message = messages::v11::ErrorMessage::new(
+        error.e_code,
+        error.message,
+        error.e_string.clone(),
+        uuid::Uuid::new_v4().as_u128(),
+    );
+    log::trace!("{:?}", &message);
+    let _: RequestResult<messages::v11::ErrorMessage> = client.send_request(message, None).await;
+}
 
 fn mark_device_onboarding_executed() -> Result<()> {
     fs::write(&marker_file_location(), "executed").context("Error creating executed marker file")
@@ -107,6 +156,115 @@ async fn get_client_list(rv_entry: &RendezvousInterpretedDirective) -> Result<Ve
     Ok(service_client_list)
 }
 
+/// TO1: Sends HelloRV, Receives HelloRVAck
+async fn perform_hellorv(
+    devcred: &dyn DeviceCredential,
+    client: &mut ServiceClient,
+) -> Result<COSESign, ClientError> {
+    let sig_type = DeviceSigType::StSECP384R1;
+
+    let hello_rv = messages::v11::to1::HelloRV::new(
+        devcred.device_guid().clone(),
+        SigInfo::new(sig_type, vec![]),
+    );
+    let hello_rv_ack: RequestResult<messages::v11::to1::HelloRVAck> =
+        client.send_request(hello_rv, None).await;
+
+    let hello_rv_ack = match hello_rv_ack {
+        Ok(hello_rv_ack) => hello_rv_ack,
+        Err(e) => {
+            return Err(ClientError::Request(ErrorResult::new(
+                ErrorCode::InternalServerError,
+                String::from("Error sending HelloRV"),
+                MessageType::TO1HelloRV,
+                anyhow!(e),
+            )))
+        }
+    };
+    log::trace!("Hello RV ack: {:?}", hello_rv_ack);
+
+    let b_sig_info = hello_rv_ack.b_signature_info();
+    if b_sig_info.sig_type() != sig_type {
+        return Err(ClientError::Response(ErrorResult::new(
+            ErrorCode::InvalidMessageError,
+            String::from("Unsupported sig type returned"),
+            MessageType::TO1HelloRVAck,
+            anyhow!("Unsupported sig type returned"),
+        )));
+    }
+    if !b_sig_info.info().is_empty() {
+        return Err(ClientError::Response(ErrorResult::new(
+            ErrorCode::InvalidMessageError,
+            String::from("Non-empty sig info returned"),
+            MessageType::TO1HelloRVAck,
+            anyhow!("Non-empty sig info returned"),
+        )));
+    }
+    let nonce4 = hello_rv_ack.nonce4();
+
+    // Create EAT payload
+    let eat: EATokenPayload<PayloadCreating> =
+        match new_eat::<bool>(None, nonce4.clone(), devcred.device_guid().clone()) {
+            Ok(eat) => eat,
+            Err(e) => {
+                return Err(ClientError::Request(ErrorResult::new(
+                    ErrorCode::InternalServerError,
+                    String::from("Error creating EATokenPayload"),
+                    MessageType::TO1HelloRVAck,
+                    anyhow!(e),
+                )));
+            }
+        };
+
+    // Create signature over nonce4
+    let signer = match devcred.get_signer() {
+        Ok(signer) => signer,
+        Err(e) => {
+            return Err(ClientError::Response(ErrorResult::new(
+                ErrorCode::InternalServerError,
+                String::from("Error getting Cose signer"),
+                MessageType::TO1HelloRVAck,
+                anyhow!(e),
+            )))
+        }
+    };
+    match COSESign::from_eat(eat, None, signer.as_ref()) {
+        Ok(token) => {
+            log::trace!("Sending token: {:?}", token);
+            Ok(token)
+        }
+        Err(e) => Err(ClientError::Response(ErrorResult::new(
+            ErrorCode::InternalServerError,
+            String::from("Error signing new token"),
+            MessageType::TO1HelloRVAck,
+            anyhow!(e),
+        ))),
+    }
+}
+
+/// TO1: Sends ProveToRV, Receives RVRedirect
+async fn perform_provetorv(
+    token: COSESign,
+    client: &mut ServiceClient,
+) -> Result<COSESign, ClientError> {
+    let prove_to_rv = messages::v11::to1::ProveToRV::new(token);
+    let rv_redirect: RequestResult<messages::v11::to1::RVRedirect> =
+        client.send_request(prove_to_rv, None).await;
+
+    match rv_redirect {
+        Ok(rv_redirect) => {
+            // Done!
+            Ok(rv_redirect.into_to1d())
+        }
+        Err(e) => Err(ClientError::Response(ErrorResult::new(
+            ErrorCode::InvalidMessageError,
+            String::from("Error proving self to rendezvous server"),
+            MessageType::TO1RVRedirect,
+            anyhow!(e),
+        ))),
+    }
+}
+
 async fn perform_to1(
     devcred: &dyn DeviceCredential,
     client: &mut ServiceClient,
@@ -117,118 +275,34 @@ async fn perform_to1(
         client
     );
 
-    let sig_type = DeviceSigType::StSECP384R1;
-
     // Send: HelloRV, Receive: HelloRVAck
-    let hello_rv = messages::v11::to1::HelloRV::new(
-        devcred.device_guid().clone(),
-        SigInfo::new(sig_type, vec![]),
-    );
-    let hello_rv_ack: RequestResult<messages::v11::to1::HelloRVAck> =
-        client.send_request(hello_rv, None).await;
-    let hello_rv_ack = match hello_rv_ack {
-        Ok(hello_rv_ack) => hello_rv_ack,
-        Err(_) => {
-            send_error(
-                client,
-                ErrorCode::InternalServerError,
-                MessageType::TO1HelloRV,
-                &String::from("Error sending HelloRV"),
-            )
-            .await;
-            bail!("Error sending HelloRV");
-        }
-    };
-    log::trace!("Hello RV ack: {:?}", hello_rv_ack);
-
-    // Check ack
-    let b_sig_info = hello_rv_ack.b_signature_info();
-    if b_sig_info.sig_type() != sig_type {
-        send_error(
-            client,
-            ErrorCode::InvalidMessageError,
-            MessageType::TO1HelloRVAck,
-            &String::from("Unsupported sig type returned"),
-        )
-        .await;
-        bail!("Unsupported sig type returned");
-    }
-    if !b_sig_info.info().is_empty() {
-        send_error(
-            client,
-            ErrorCode::InvalidMessageError,
-            MessageType::TO1HelloRVAck,
-            &String::from("Non-empty sig info returned"),
-        )
-        .await;
-        bail!("Non-empty sig info returned");
-    }
-    let nonce4 = hello_rv_ack.nonce4();
-
-    // Create EAT payload
-    let eat: EATokenPayload<PayloadCreating> =
-        match new_eat::<bool>(None, nonce4.clone(), devcred.device_guid().clone()) {
-            Ok(eat) => eat,
-            _ => {
-                send_error(
-                    client,
-                    ErrorCode::InternalServerError,
-                    MessageType::TO1HelloRVAck,
-                    &String::from("Error creating EATokenPayload"),
-                )
-                .await;
-                bail!("Error creating EATokenPayload");
-            }
-        };
-
-    // Create signature over nonce4
-    let signer = match devcred.get_signer() {
-        Ok(signer) => signer,
-        _ => {
-            send_error(
-                client,
-                ErrorCode::InternalServerError,
-                MessageType::TO1HelloRVAck,
-                &String::from("Error getting Cose signer"),
-            )
-            .await;
-            bail!("Error getting Cose signer");
-        }
-    };
-    let token = match COSESign::from_eat(eat, None, signer.as_ref()) {
+    let token = match perform_hellorv(devcred, client).await {
         Ok(token) => token,
-        _ => {
-            send_error(
-                client,
-                ErrorCode::InternalServerError,
-                MessageType::TO1HelloRVAck,
-                &String::from("Error signing new token"),
-            )
-            .await;
-            bail!("Error signing new token");
-        }
+        Err(e) => match e {
+            ClientError::Request(e) => {
+                send_client_error(client, e.borrow()).await;
+                bail!(e.error);
+            }
+            ClientError::Response(e) => {
+                send_client_error(client, e.borrow()).await;
+                bail!(e.error);
+            }
+        },
     };
-    log::trace!("Sending token: {:?}", token);
 
     // Send: ProveToRV, Receive: RVRedirect
-    let prove_to_rv = messages::v11::to1::ProveToRV::new(token);
-    let rv_redirect: RequestResult<messages::v11::to1::RVRedirect> =
-        client.send_request(prove_to_rv, None).await;
-    match rv_redirect {
-        Ok(rv_redirect) => {
-            // Done!
-            Ok(rv_redirect.into_to1d())
-        }
-        _ => {
-            send_error(
-                client,
-                ErrorCode::InvalidMessageError,
-                MessageType::TO1RVRedirect,
-                &String::from("Error proving self to rendezvous server"),
-            )
-            .await;
-            bail!("Error proving self to rendezvous server");
-        }
+    match perform_provetorv(token, client).await {
+        Ok(to1d) => Ok(to1d),
+        Err(e) => match e {
+            ClientError::Request(e) => {
+                send_client_error(client, e.borrow()).await;
+                bail!(e.error);
+            }
+            ClientError::Response(e) => {
+                send_client_error(client, e.borrow()).await;
+                bail!(e.error);
+            }
+        },
     }
 }
 
@@ -299,50 +373,27 @@ async fn get_ov_entries(
     Ok(entries)
 }
 
-async fn send_error(
-    client: &mut fdo_http_wrapper::client::ServiceClient,
-    ecode: ErrorCode,
-    prev_mess: MessageType,
-    emess: &str,
-) {
-    let message = messages::v11::ErrorMessage::new(
-        ecode,
-        prev_mess,
-        String::from(emess),
-        uuid::Uuid::new_v4().as_u128(),
-    );
-    log::trace!("{:?}", &message);
-    let _: RequestResult<messages::v11::ErrorMessage> = client.send_request(message, None).await;
+async fn get_nonce(message_type: MessageType) -> Result<Nonce, ClientError> {
+    match Nonce::new() {
+        Ok(nonce7) => Ok(nonce7),
+        Err(e) => Err(ClientError::Response(ErrorResult::new(
+            ErrorCode::InternalServerError,
+            String::from("Error generating nonce"),
+            message_type,
+            anyhow!(e),
+        ))),
+    }
 }
 
-async fn perform_to2(
-    devcredloc: &dyn UsableDeviceCredentialLocation,
+/// TO2: Sends HelloDevice, Receives ProveOVHdr
+async fn perform_hellodevice(
     devcred: &dyn DeviceCredential,
-    url: &str,
-    to1d: &COSESign,
-) -> Result<()> {
-    log::info!("Performing TO2 protocol, URL: {:?}", url);
-
-    let mut client = fdo_http_wrapper::client::ServiceClient::new(ProtocolVersion::Version1_1, url);
-
-    let nonce5 = match Nonce::new() {
-        Ok(nonce5) => nonce5,
-        _ => {
-            send_error(
-                &mut client,
-                ErrorCode::InternalServerError,
-                MessageType::TO1RVRedirect,
-                &String::from("Error generating nonce5"),
-            )
-            .await;
-            bail!("Error generating nonce5");
-        }
-    };
-    let sigtype = DeviceSigType::StSECP384R1;
-    let kexsuite = KexSuite::Ecdh384;
-    let ciphersuite = CipherSuite::A256Gcm;
-
-    // Send: HelloDevice, Receive: ProveOVHdr
+    client: &mut ServiceClient,
+    nonce5: Nonce,
+    sigtype: DeviceSigType,
+    kexsuite: KexSuite,
+    ciphersuite: CipherSuite,
+) -> Result<(COSESign, UnverifiedValue<TO2ProveOVHdrPayload>, HMac), ClientError> {
     let prove_ov_hdr: RequestResult<messages::v11::to2::ProveOVHdr> = client
         .send_request(
             messages::v11::to2::HelloDevice::new(
@@ -358,15 +409,13 @@ async fn perform_to2(
 
     let prove_ov_hdr = match prove_ov_hdr {
         Ok(p) => p.into_token(),
-        _ => {
-            send_error(
-                &mut client,
+        Err(e) => {
+            return Err(ClientError::Request(ErrorResult::new(
                 ErrorCode::InternalServerError,
+                String::from("Error sending HelloDevice"),
                 MessageType::TO2ProveOVHdr,
-                &String::from("Error sending HelloDevice"),
-            )
-            .await;
-            bail!("Error sending HelloDevice");
+                anyhow!(e),
+            )))
         }
     };
 
@@ -374,16 +423,14 @@ async fn perform_to2(
     // We can only do so after we got all of the OV parts..
     let prove_ov_hdr_payload: UnverifiedValue<TO2ProveOVHdrPayload> =
         match prove_ov_hdr.get_payload_unverified() {
-            Ok(stuff) => stuff,
-            _ => {
-                send_error(
-                    &mut client,
+            Ok(prove_ov_hdr_payload) => prove_ov_hdr_payload,
+            Err(e) => {
+                return Err(ClientError::Response(ErrorResult::new(
                     ErrorCode::MessageBodyError,
+                    String::from("Error parsing unverified payload"),
                     MessageType::TO2ProveOVHdr,
-                    &String::from("Error parsing unverified payload"),
-                )
-                .await;
-                bail!("Error parsing unverified payload");
+                    anyhow!(e),
+                )))
             }
         };
 
@@ -391,14 +438,12 @@ async fn perform_to2(
 
     // Verify the nonce5 value
     if &nonce5 != prove_ov_hdr_payload.get_unverified_value().nonce5() {
-        send_error(
-            &mut client,
+        return Err(ClientError::Response(ErrorResult::new(
             ErrorCode::InvalidMessageError,
+            String::from("Nonce5 value is mismatched"),
             MessageType::TO2ProveOVHdr,
-            &String::from("Nonce5 value is mismatched"),
-        )
-        .await;
-        bail!("Nonce5 value is mismatched");
+            anyhow!("Nonce5 value is mismatched"),
+        )));
     }
 
     // Check the bSigInfo is what we expect it to be
@@ -407,24 +452,20 @@ async fn perform_to2(
             .get_unverified_value()
             .b_signature_info();
         if b_signature_info.sig_type() != sigtype {
-            send_error(
-                &mut client,
+            return Err(ClientError::Response(ErrorResult::new(
                 ErrorCode::InvalidMessageError,
+                String::from("Invalid signature type returned"),
                 MessageType::TO2ProveOVHdr,
-                &String::from("Invalid signature type returned"),
-            )
-            .await;
-            bail!("Invalid signature type returned");
+                anyhow!("Invalid signature type returned"),
+            )));
         }
         if !b_signature_info.info().is_empty() {
-            send_error(
-                &mut client,
+            return Err(ClientError::Response(ErrorResult::new(
                 ErrorCode::InvalidMessageError,
+                String::from("Non-empty signature info returned"),
                 MessageType::TO2ProveOVHdr,
-                &String::from("Non-empty signature info returned"),
-            )
-            .await;
-            bail!("Non-empty signature info returned");
+                anyhow!("Non-empty signature info returned"),
+            )));
         }
     }
 
@@ -435,15 +476,14 @@ async fn perform_to2(
 
         match devcred.verify_hmac(ov_hdr_vec, ov_hdr_hmac) {
             Ok(_) => ov_hdr_hmac.clone(),
-            _ => {
-                send_error(
-                    &mut client,
+            Err(e) => {
+                return Err(ClientError::Response(ErrorResult::new(
                     ErrorCode::InvalidMessageError,
+                    String::from("Error, invalid message"),
                     MessageType::TO2ProveOVHdr,
-                    &String::from("Error, invalid message"),
-                )
-                .await;
-                bail!("Error verifying ownership voucher HMAC");
+                    anyhow!(e),
+                )));
+                // bail!("Error verifying ownership voucher HMAC"),
             }
         }
     };
@@ -453,30 +493,26 @@ async fn perform_to2(
         let header = prove_ov_hdr_payload.get_unverified_value().ov_header();
         let header = match OwnershipVoucherHeader::deserialize_data(header) {
             Ok(header) => header,
-            _ => {
-                send_error(
-                    &mut client,
+            Err(e) => {
+                return Err(ClientError::Response(ErrorResult::new(
                     ErrorCode::MessageBodyError,
+                    String::from("Error deserializing OV Header"),
                     MessageType::TO2ProveOVHdr,
-                    &String::from("Error deserializing OV Header"),
-                )
-                .await;
-                bail!("Error deserializing OV Header");
+                    anyhow!(e),
+                )));
             }
         };
         let pubkey_hash = match header
             .manufacturer_public_key_hash(devcred.manufacturer_pubkey_hash().get_type())
         {
             Ok(hash) => hash,
-            _ => {
-                send_error(
-                    &mut client,
+            Err(e) => {
+                return Err(ClientError::Response(ErrorResult::new(
                     ErrorCode::InvalidMessageError,
+                    String::from("Error computing manufacturer public key hash"),
                     MessageType::TO2ProveOVHdr,
-                    &String::from("Error computing manufacturer public key hash"),
-                )
-                .await;
-                bail!("Error computing manufacturer public key hash");
+                    anyhow!(e),
+                )));
             }
         };
         if devcred
@@ -484,68 +520,71 @@ async fn perform_to2(
             .compare(&pubkey_hash)
             .is_err()
         {
-            send_error(
-                &mut client,
+            return Err(ClientError::Response(ErrorResult::new(
                 ErrorCode::InvalidMessageError,
+                String::from("Error comparing manufacturer public key hash"),
                 MessageType::TO2ProveOVHdr,
-                &String::from("Error comparing manufacturer public key hash"),
-            )
-            .await;
-            bail!("Error comparing manufacturer public key hash");
+                anyhow!("Error comparing manufacturere public key hash"),
+            )));
         }
     }
+    Ok((prove_ov_hdr, prove_ov_hdr_payload, header_hmac))
+}
 
+async fn get_nonce6(prove_ov_hdr: &COSESign) -> Result<Nonce, ClientError> {
     // Get nonce6
     let nonce6: Nonce = match prove_ov_hdr.get_unprotected_value(HeaderKeys::CUPHNonce) {
         Ok(nonce) => match nonce {
             Some(nonce) => nonce,
             None => {
-                send_error(
-                    &mut client,
+                return Err(ClientError::Response(ErrorResult::new(
                     ErrorCode::MessageBodyError,
+                    String::from("Missing nonce6"),
                     MessageType::TO2ProveOVHdr,
-                    &String::from("Missing nonce6"),
-                )
-                .await;
-                bail!("Missing nonce6");
+                    anyhow!("Missing nonce6"),
+                )));
             }
         },
-        _ => {
-            send_error(
-                &mut client,
+        Err(e) => {
+            return Err(ClientError::Response(ErrorResult::new(
                 ErrorCode::MessageBodyError,
+                String::from("Error getting nonce"),
                 MessageType::TO2ProveOVHdr,
-                &String::from("Error getting nonce"),
-            )
-            .await;
-            bail!("Error getting nonce");
+                anyhow!(e),
+            )));
         }
     };
+    Ok(nonce6)
+}
 
+async fn get_and_verify_ov_header_signature(
+    client: &mut ServiceClient,
+    prove_ov_hdr: &COSESign,
+    prove_ov_hdr_payload: &UnverifiedValue<TO2ProveOVHdrPayload>,
+    header_hmac: HMac,
+    to1d: &COSESign,
+) -> Result<TO2ProveOVHdrPayload, ClientError> {
     // Get the other OV entries
     let ov_entries = match get_ov_entries(
-        &mut client,
+        client,
         prove_ov_hdr_payload.get_unverified_value().num_ov_entries(),
     )
     .await
     {
         Ok(ov_entries) => ov_entries,
-        _ => {
-            send_error(
-                &mut client,
+        Err(e) => {
+            return Err(ClientError::Response(ErrorResult::new(
                 ErrorCode::InternalServerError,
+                String::from("Error getting remaining OV entries"),
                 MessageType::TO2OVNextEntry,
-                &String::from("Error getting remaining OV entries"),
-            )
-            .await;
-            bail!("Error getting remaining OV entries");
+                anyhow!(e),
+            )));
         }
     };
 
     // At this moment, we have validated all we can, we'll check the signature later (After we get the final bits of the OV)
     let ownership_voucher = {
         let header = prove_ov_hdr_payload.get_unverified_value().ov_header();
-
         match OwnershipVoucher::from_parts(
             ProtocolVersion::Version1_1,
             header,
@@ -553,15 +592,13 @@ async fn perform_to2(
             ov_entries,
         ) {
             Ok(ov) => ov,
-            _ => {
-                send_error(
-                    &mut client,
+            Err(e) => {
+                return Err(ClientError::Response(ErrorResult::new(
                     ErrorCode::MessageBodyError,
+                    String::from("Error reconstructing Ownership Voucher"),
                     MessageType::TO2OVNextEntry,
-                    &String::from("Error reconstructing Ownership Voucher"),
-                )
-                .await;
-                bail!("Error reconstructiong Ownership Voucher");
+                    anyhow!(e),
+                )));
             }
         }
     };
@@ -576,37 +613,31 @@ async fn perform_to2(
         Ok(entry_iterator) => match entry_iterator.last() {
             Some(last_entry_iterator) => match last_entry_iterator {
                 Ok(ov_owner_entry) => ov_owner_entry,
-                _ => {
-                    send_error(
-                        &mut client,
+                Err(e) => {
+                    return Err(ClientError::Response(ErrorResult::new(
                         ErrorCode::InvalidMessageError,
+                        String::from("Last entry on ownership voucher was wrong"),
                         MessageType::TO2OVNextEntry,
-                        &String::from("Last entry on ownership voucher was wrong"),
-                    )
-                    .await;
-                    bail!("Last entry on ownership voucher was wrong");
+                        anyhow!(e),
+                    )));
                 }
             },
-            _ => {
-                send_error(
-                    &mut client,
+            None => {
+                return Err(ClientError::Response(ErrorResult::new(
                     ErrorCode::InvalidMessageError,
+                    String::from("Error validating ownership voucher"),
                     MessageType::TO2OVNextEntry,
-                    &String::from("Error validating ownership voucher"),
-                )
-                .await;
-                bail!("Error validating ownership voucher")
+                    anyhow!("Error validating ownership voucher"),
+                )));
             }
         },
-        _ => {
-            send_error(
-                &mut client,
+        Err(e) => {
+            return Err(ClientError::Response(ErrorResult::new(
                 ErrorCode::InternalServerError,
+                String::from("Error initializing iterator"),
                 MessageType::TO2OVNextEntry,
-                &String::from("Error initializing iterator"),
-            )
-            .await;
-            bail!("Error initializing iterator");
+                anyhow!(e),
+            )));
         }
     };
 
@@ -616,15 +647,13 @@ async fn perform_to2(
     let prove_ov_hdr_payload: TO2ProveOVHdrPayload =
         match prove_ov_hdr.get_payload(ov_owner_entry.public_key().pkey()) {
             Ok(prove) => prove,
-            _ => {
-                send_error(
-                    &mut client,
+            Err(e) => {
+                return Err(ClientError::Response(ErrorResult::new(
                     ErrorCode::InvalidMessageError,
+                    String::from("Error validating ProveOVHdr signature"),
                     MessageType::TO2OVNextEntry,
-                    &String::from("Error validating ProveOVHdr signature"),
-                )
-                .await;
-                bail!("Error validating ProveOVHdr signature");
+                    anyhow!(e),
+                )));
             }
         };
     log::trace!(
@@ -634,75 +663,71 @@ async fn perform_to2(
 
     // Verify that to1d was signed by the current owner
     if to1d.verify(ov_owner_entry.public_key().pkey()).is_err() {
-        send_error(
-            &mut client,
+        return Err(ClientError::Response(ErrorResult::new(
             ErrorCode::InvalidMessageError,
+            String::from("Error validating to1d after receiving full ownership voucher"),
             MessageType::TO2OVNextEntry,
-            &String::from("Error validating to1d after receiving full ownership voucher"),
-        )
-        .await;
-        bail!("Error validating to1d after receiving full ownership voucher");
+            anyhow!("Error validating to1d after receiving full ownership voucher"),
+        )));
     }
 
+    Ok(prove_ov_hdr_payload)
+}
+
+async fn perform_key_derivation(
+    prove_ov_hdr_payload: TO2ProveOVHdrPayload,
+    kexsuite: KexSuite,
+    ciphersuite: CipherSuite,
+) -> Result<(KeyExchange, fdo_http_wrapper::EncryptionKeys), ClientError> {
     // Perform the key derivation
     let a_key_exchange = prove_ov_hdr_payload.a_key_exchange();
     let b_key_exchange = match KeyExchange::new(kexsuite) {
         Ok(bke) => bke,
-        _ => {
-            send_error(
-                &mut client,
+        Err(e) => {
+            return Err(ClientError::Response(ErrorResult::new(
                 ErrorCode::InternalServerError,
+                String::from("Error creating device side of key exchange"),
                 MessageType::TO2OVNextEntry,
-                &String::from("Error creating device side of key exchange"),
-            )
-            .await;
-            bail!("Error creating device side of key exchange");
+                anyhow!(e),
+            )));
         }
     };
 
     let new_keys =
         match b_key_exchange.derive_key(KeyDeriveSide::Device, ciphersuite, a_key_exchange) {
             Ok(nk) => nk,
-            _ => {
-                send_error(
-                    &mut client,
+            Err(e) => {
+                return Err(ClientError::Response(ErrorResult::new(
                     ErrorCode::InternalServerError,
+                    String::from("Error performing key derivation"),
                     MessageType::TO2OVNextEntry,
-                    &String::from("Error performing key derivation"),
-                )
-                .await;
-                bail!("Error performing key derivation");
+                    anyhow!(e),
+                )));
             }
         };
 
     let new_keys = fdo_http_wrapper::EncryptionKeys::from_derived(ciphersuite, new_keys);
+    Ok((b_key_exchange, new_keys))
+}
 
-    let nonce7 = match Nonce::new() {
-        Ok(nonce7) => nonce7,
-        _ => {
-            send_error(
-                &mut client,
-                ErrorCode::InternalServerError,
-                MessageType::TO2OVNextEntry,
-                &String::from("Error generating nonce7"),
-            )
-            .await;
-            bail!("Error generating nonce7");
-        }
-    };
-
-    // Send: ProveDevice, Receive: SetupDevice
+/// TO2: Sends ProveDevice, Receives SetupDevice
+async fn perform_provedevice(
+    devcred: &dyn DeviceCredential,
+    client: &mut ServiceClient,
+    b_key_exchange: KeyExchange,
+    nonce6: &Nonce,
+    nonce7: &Nonce,
+    new_keys: fdo_http_wrapper::EncryptionKeys,
+) -> Result<(), ClientError> {
     let prove_device_payload = TO2ProveDevicePayload::new(match b_key_exchange.get_public() {
         Ok(pdp) => pdp,
-        _ => {
-            send_error(
-                &mut client,
+        Err(e) => {
+            return Err(ClientError::Response(ErrorResult::new(
                 ErrorCode::InternalServerError,
+                String::from("Error building prove device payload"),
                 MessageType::TO2OVNextEntry,
-                &String::from("Error building prove device payload"),
-            )
-            .await;
-            bail!("Error building our public");
+                anyhow!(e),
+            )));
         }
     });
     let prove_device_eat = match new_eat(
@@ -711,15 +736,13 @@ async fn perform_to2(
         devcred.device_guid().clone(),
     ) {
         Ok(pde) => pde,
-        _ => {
-            send_error(
-                &mut client,
+        Err(e) => {
+            return Err(ClientError::Response(ErrorResult::new(
                 ErrorCode::InternalServerError,
+                String::from("Error building provedevice EAT"),
                 MessageType::TO2OVNextEntry,
-                &String::from("Error building provedevice EAT"),
-            )
-            .await;
-            bail!("Error building provedevice EAT");
+                anyhow!(e),
+            )));
         }
     };
     let mut prove_device_eat_unprotected = COSEHeaderMap::new();
@@ -727,27 +750,23 @@ async fn perform_to2(
         .insert(HeaderKeys::EUPHNonce, &nonce7)
         .is_err()
     {
-        send_error(
-            &mut client,
+        return Err(ClientError::Response(ErrorResult::new(
             ErrorCode::MessageBodyError,
+            String::from("Error adding nonce7 to unprotected"),
             MessageType::TO2OVNextEntry,
-            &String::from("Error adding nonce7 to unprotected"),
-        )
-        .await;
-        bail!("Error adding nonce7 to unprotected");
+            anyhow!("Error adding nonce7 to unprotected"),
+        )));
     }
 
     let signer = match devcred.get_signer() {
-        Ok(s) => s,
-        _ => {
-            send_error(
-                &mut client,
+        Ok(signer) => signer,
+        Err(e) => {
+            return Err(ClientError::Response(ErrorResult::new(
                 ErrorCode::InternalServerError,
+                String::from("Error getting Cose signer"),
                 MessageType::TO2OVNextEntry,
-                &String::from("Error getting Cose signer"),
-            )
-            .await;
-            bail!("Error getting Cose signer");
+                anyhow!(e),
+            )));
         }
     };
 
@@ -757,15 +776,13 @@ async fn perform_to2(
         signer.as_ref(),
     ) {
         Ok(pdt) => pdt,
-        _ => {
-            send_error(
-                &mut client,
+        Err(e) => {
+            return Err(ClientError::Response(ErrorResult::new(
                 ErrorCode::InternalServerError,
-                MessageType::TO2GetOVNextEntry,
-                &String::from("Error signing ProveDevice EAT"),
-            )
-            .await;
-            bail!("Error signing ProveDevice EAT");
+                String::from("Error signing ProveDevice EAT"),
+                MessageType::TO2OVNextEntry,
+                anyhow!(e),
+            )));
         }
     };
 
@@ -775,21 +792,22 @@ async fn perform_to2(
         client.send_request(prove_device_msg, Some(new_keys)).await;
     let setup_device = match setup_device {
         Ok(setup_device) => setup_device,
-        _ => {
-            send_error(
-                &mut client,
+        Err(e) => {
+            return Err(ClientError::Response(ErrorResult::new(
                 ErrorCode::InternalServerError,
+                String::from("Error proving device"),
                 MessageType::TO2SetupDevice,
-                &String::from("Error proving device"),
-            )
-            .await;
-            bail!("Error proving device");
+                anyhow!(e),
+            )));
         }
     };
 
     log::trace!("Got setup_device response: {:?}", setup_device);
+    Ok(())
+}
 
-    // Send: DeviceServiceInfoReady, Receive: OwnerServiceInfoReady
+/// TO2: Sends DeviceServiceInfoReady, Receives OwnerService
+async fn perform_deviceserviceinfoready(client: &mut ServiceClient) -> Result<(), ClientError> {
     let owner_service_info_ready: RequestResult<messages::v11::to2::OwnerServiceInfoReady> = client
         .send_request(
             messages::v11::to2::DeviceServiceInfoReady::new(None, None),
@@ -797,87 +815,255 @@ async fn perform_to2(
         )
         .await;
     if owner_service_info_ready.is_err() {
-        send_error(
-            &mut client,
+        return Err(ClientError::Response(ErrorResult::new(
             ErrorCode::InternalServerError,
+            String::from("Error getting OwnerServiceInfoReady"),
             MessageType::TO2OwnerServiceInfoReady,
-            &String::from("Error getting OwnerServiceInfoReady"),
-        )
-        .await;
-        bail!("Error getting OwnerServiceInfoReady");
+            anyhow!("Error getting OwnserServiceInfoReady"),
+        )));
     }
     log::trace!(
         "Received OwnerServiceInfoReady: {:?}",
         owner_service_info_ready
     );
+    Ok(())
+}
 
-    // Now, the magic: performing the roundtrip! We delegated that.
-    if serviceinfo::perform_to2_serviceinfos(&mut client)
-        .await
-        .is_err()
-    {
-        send_error(
-            &mut client,
-            ErrorCode::InternalServerError,
-            MessageType::TO2OwnerServiceInfo,
-            &String::from("Error performing the ServiceInfo roundtrips"),
-        )
-        .await;
-        bail!("Error performing the ServiceInfo roundtrips");
-    }
-
-    if mark_device_onboarding_executed().is_err() {
-        send_error(
-            &mut client,
-            ErrorCode::InternalServerError,
-            MessageType::TO2OwnerServiceInfo,
-            &String::from("Error creating the device onboarding executed marker file"),
-        )
-        .await;
-        bail!("Error creating the device onboarding executed marker file");
-    }
-
-    if devcredloc.deactivate().is_err() {
-        send_error(
-            &mut client,
-            ErrorCode::InternalServerError,
-            MessageType::TO2OwnerServiceInfo,
-            &String::from("Error deactivating device credential"),
-        )
-        .await;
-        bail!("Error deactivating device credential");
-    }
-
-    // Send: Done, Receive: Done2
+/// TO2: Sends Done, Receives Done2
+async fn perform_done(
+    nonce7: Nonce,
+    nonce6: Nonce,
+    client: &mut ServiceClient,
+) -> Result<(), ClientError> {
     let done2: RequestResult<messages::v11::to2::Done2> = client
         .send_request(messages::v11::to2::Done::new(nonce6), None)
         .await;
     match done2 {
         Ok(d2) => {
             if &nonce7 != d2.nonce7() {
-                send_error(
-                    &mut client,
+                return Err(ClientError::Response(ErrorResult::new(
                     ErrorCode::InvalidMessageError,
+                    String::from("Nonce7 did not match in Done2"),
                     MessageType::TO2Done2,
-                    &String::from("Nonce7 did not match in Done2"),
-                )
-                .await;
-                bail!("Nonce7 did not match in Done 2");
+                    anyhow!("Nonce7 did not match in Done2"),
+                )));
             }
         }
-        _ => {
-            send_error(
-                &mut client,
+        Err(e) => {
+            return Err(ClientError::Response(ErrorResult::new(
                 ErrorCode::InternalServerError,
+                String::from("Error sending Done2"),
                 MessageType::TO2Done2,
-                &String::from("Error sending Done2"),
-            )
-            .await;
-            bail!("Error sending Done2");
+                anyhow!(e),
+            )));
         }
     }
-
     Ok(())
+}
+
+async fn perform_to2(
+    devcredloc: &dyn UsableDeviceCredentialLocation,
+    devcred: &dyn DeviceCredential,
+    url: &str,
+    to1d: &COSESign,
+) -> Result<()> {
+    log::info!("Performing TO2 protocol, URL: {:?}", url);
+
+    let mut client = fdo_http_wrapper::client::ServiceClient::new(ProtocolVersion::Version1_1, url);
+
+    let nonce5 = match get_nonce(MessageType::TO1RVRedirect).await {
+        Ok(nonce5) => nonce5,
+        Err(e) => match e {
+            ClientError::Request(e) => {
+                send_client_error(&mut client, e.borrow()).await;
+                bail!(e.error);
+            }
+            ClientError::Response(e) => {
+                send_client_error(&mut client, e.borrow()).await;
+                bail!(e.error);
+            }
+        },
+    };
+
+    let sigtype = DeviceSigType::StSECP384R1;
+    let kexsuite = KexSuite::Ecdh384;
+    let ciphersuite = CipherSuite::A256Gcm;
+
+    // Send: HelloDevice, Receive: ProveOVHdr
+    let (prove_ov_hdr, prove_ov_hdr_payload, header_hmac) =
+        match perform_hellodevice(devcred, &mut client, nonce5, sigtype, kexsuite, ciphersuite)
+            .await
+        {
+            Ok(values) => values,
+            Err(e) => match e {
+                ClientError::Request(e) => {
+                    send_client_error(&mut client, e.borrow()).await;
+                    bail!(e.error);
+                }
+                ClientError::Response(e) => {
+                    send_client_error(&mut client, e.borrow()).await;
+                    bail!(e.error);
+                }
+            },
+        };
+    // Get nonce6
+    let nonce6 = match get_nonce6(&prove_ov_hdr).await {
+        Ok(nonce6) => nonce6,
+        Err(e) => match e {
+            ClientError::Request(e) => {
+                send_client_error(&mut client, e.borrow()).await;
+                bail!(e.error);
+            }
+            ClientError::Response(e) => {
+                send_client_error(&mut client, e.borrow()).await;
+                bail!(e.error);
+            }
+        },
+    };
+    // Get OV and verify its signature
+    let prove_ov_hdr_payload = match get_and_verify_ov_header_signature(
+        &mut client,
+        &prove_ov_hdr,
+        &prove_ov_hdr_payload,
+        header_hmac,
+        to1d,
+    )
+    .await
+    {
+        Ok(payload) => payload,
+        Err(e) => match e {
+            ClientError::Request(e) => {
+                send_client_error(&mut client, e.borrow()).await;
+                bail!(e.error);
+            }
+            ClientError::Response(e) => {
+                send_client_error(&mut client, e.borrow()).await;
+                bail!(e.error);
+            }
+        },
+    };
+
+    // Key derivation
+    let (b_key_exchange, new_keys) =
+        match perform_key_derivation(prove_ov_hdr_payload, kexsuite, ciphersuite).await {
+            Ok(values) => values,
+            Err(e) => match e {
+                ClientError::Request(e) => {
+                    send_client_error(&mut client, e.borrow()).await;
+                    bail!(e.error);
+                }
+                ClientError::Response(e) => {
+                    send_client_error(&mut client, e.borrow()).await;
+                    bail!(e.error);
+                }
+            },
+        };
+
+    // Get nonce7
+    let nonce7 = match get_nonce(MessageType::TO2OVNextEntry).await {
+        Ok(nonce7) => nonce7,
+        Err(e) => match e {
+            ClientError::Request(e) => {
+                send_client_error(&mut client, e.borrow()).await;
+                bail!(e.error);
+            }
+            ClientError::Response(e) => {
+                send_client_error(&mut client, e.borrow()).await;
+                bail!(e.error);
+            }
+        },
+    };
+
+    // Send: ProveDevice, Receive: SetupDevice
+    match perform_provedevice(
+        devcred,
+        &mut client,
+        b_key_exchange,
+        &nonce6,
+        &nonce7,
+        new_keys,
+    )
+    .await
+    {
+        Ok(_) => (),
+        Err(e) => match e {
+            ClientError::Request(e) => {
+                send_client_error(&mut client, e.borrow()).await;
+                bail!(e.error);
+            }
+            ClientError::Response(e) => {
+                send_client_error(&mut client, e.borrow()).await;
+                bail!(e.error);
+            }
+        },
+    };
+
+    // Send: DeviceServiceInfoReady, Receive: OwnerServiceInfoReady
+    match perform_deviceserviceinfoready(&mut client).await {
+        Ok(_) => (),
+        Err(e) => match e {
+            ClientError::Request(e) => {
+                send_client_error(&mut client, e.borrow()).await;
+                bail!(e.error);
+            }
+            ClientError::Response(e) => {
+                send_client_error(&mut client, e.borrow()).await;
+                bail!(e.error);
+            }
+        },
+    };
+
+    // Now, the magic: performing the roundtrip! We delegated that.
+    if serviceinfo::perform_to2_serviceinfos(&mut client)
+        .await
+        .is_err()
+    {
+        let e_result = ErrorResult::new(
+            ErrorCode::InternalServerError,
+            String::from("Error performing the ServiceInfo roundtrips"),
+            MessageType::TO2OwnerServiceInfo,
+            anyhow!("Error performing the ServiceInfo roundtrips"),
+        );
+        send_client_error(&mut client, &e_result).await;
+        bail!(e_result.error);
+    }
+
+    if mark_device_onboarding_executed().is_err() {
+        let e_result = ErrorResult::new(
+            ErrorCode::InternalServerError,
+            String::from("Error creating the device onboarding executed marker file"),
+            MessageType::TO2OwnerServiceInfo,
+            anyhow!("Error creating the device onboarding executed marker file"),
+        );
+        send_client_error(&mut client, &e_result).await;
+        bail!(e_result.error);
+    }
+
+    if devcredloc.deactivate().is_err() {
+        let e_result = ErrorResult::new(
+            ErrorCode::InternalServerError,
+            String::from("Error deactivating device credential"),
+            MessageType::TO2OwnerServiceInfo,
+            anyhow!("Error deactivating device credential"),
+        );
+        send_client_error(&mut client, &e_result).await;
+        bail!(e_result.error);
+    }
+
+    // Send: Done, Receive: Done2
+    match perform_done(nonce7, nonce6, &mut client).await {
+        Ok(ok) => Ok(ok),
+        Err(e) => match e {
+            ClientError::Request(e) => {
+                send_client_error(&mut client, e.borrow()).await;
+                bail!(e.error);
+            }
+            ClientError::Response(e) => {
+                send_client_error(&mut client, e.borrow()).await;
+                bail!(e.error);
+            }
+        },
+    }
 }
 
 fn get_delay_between_retries(rv_entry_delay: u32) -> u64 {
