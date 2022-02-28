@@ -419,10 +419,6 @@ async fn perform_hellodevice(
         }
     };
 
-    // let non_interoperable_kdf_required = client
-    //     .non_interoperable_kdf_required()
-    //     .ok_or_else(|| anyhow!("Error getting non-interoperable KDF requirement"))?;
-
     // NOTE: At this moment, we have not yet validated the signature on it...
     // We can only do so after we got all of the OV parts..
     let prove_ov_hdr_payload: UnverifiedValue<TO2ProveOVHdrPayload> =
@@ -685,13 +681,13 @@ async fn perform_key_derivation(
     ciphersuite: CipherSuite,
 ) -> Result<(KeyExchange, fdo_http_wrapper::EncryptionKeys), ClientError> {
     let non_interoplerable_kdf_required = match client.non_interoperable_kdf_required() {
-        Ok(option) => option,
-        Err(e) => {
+        Some(option) => option,
+        None => {
             return Err(ClientError::Response(ErrorResult::new(
                 ErrorCode::InternalServerError,
                 String::from("Error getting non-interoperable KDF requirement"),
                 MessageType::TO2OVNextEntry,
-                anyhow!(e),
+                anyhow!("Error getting non-interoperable KDF requirement"),
             )));
         }
     };
@@ -964,20 +960,26 @@ async fn perform_to2(
     };
 
     // Key derivation
-    let (b_key_exchange, new_keys) =
-        match perform_key_derivation(prove_ov_hdr_payload, kexsuite, ciphersuite).await {
-            Ok(values) => values,
-            Err(e) => match e {
-                ClientError::Request(e) => {
-                    send_client_error(&mut client, e.borrow()).await;
-                    bail!(e.error);
-                }
-                ClientError::Response(e) => {
-                    send_client_error(&mut client, e.borrow()).await;
-                    bail!(e.error);
-                }
-            },
-        };
+    let (b_key_exchange, new_keys) = match perform_key_derivation(
+        &mut client,
+        prove_ov_hdr_payload,
+        kexsuite,
+        ciphersuite,
+    )
+    .await
+    {
+        Ok(values) => values,
+        Err(e) => match e {
+            ClientError::Request(e) => {
+                send_client_error(&mut client, e.borrow()).await;
+                bail!(e.error);
+            }
+            ClientError::Response(e) => {
+                send_client_error(&mut client, e.borrow()).await;
+                bail!(e.error);
+            }
+        },
+    };
 
     // Get nonce7
     let nonce7 = match get_nonce(MessageType::TO2OVNextEntry).await {
