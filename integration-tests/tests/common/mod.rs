@@ -62,6 +62,7 @@ pub enum Binary {
     ManufacturingClient,
     ManufacturingServer,
     OwnerOnboardingServer,
+    ServiceInfoApiDevServer,
     OwnerTool,
     RendezvousServer,
 }
@@ -73,6 +74,7 @@ impl Binary {
             Binary::ManufacturingClient => "fdo-manufacturing-client",
             Binary::ManufacturingServer => "fdo-manufacturing-server",
             Binary::OwnerOnboardingServer => "fdo-owner-onboarding-server",
+            Binary::ServiceInfoApiDevServer => "fdo-serviceinfo-api-dev-server",
             Binary::OwnerTool => "fdo-owner-tool",
             Binary::RendezvousServer => "fdo-rendezvous-server",
         }
@@ -83,6 +85,7 @@ impl Binary {
             Binary::ManufacturingServer => Some("manufacturing-server.yml"),
             Binary::OwnerOnboardingServer => Some("owner-onboarding-server.yml"),
             Binary::RendezvousServer => Some("rendezvous-server.yml"),
+            Binary::ServiceInfoApiDevServer => Some("serviceinfo-api-dev-server.yml"),
             _ => None,
         }
     }
@@ -90,7 +93,10 @@ impl Binary {
     fn is_server(&self) -> bool {
         matches!(
             self,
-            Binary::OwnerOnboardingServer | Binary::ManufacturingServer | Binary::RendezvousServer
+            Binary::OwnerOnboardingServer
+                | Binary::ManufacturingServer
+                | Binary::RendezvousServer
+                | Binary::ServiceInfoApiDevServer
         )
     }
 
@@ -739,8 +745,8 @@ impl<'a> TestServerConfigurator<'a> {
                     "bind",
                     &format!("127.0.0.1:{}", self.server_number.server_port().unwrap()),
                 );
+                cfg.insert("test_dir", &self.test_context.testpath());
                 cfg.insert("owner_port", &self.server_number.server_port().unwrap());
-                cfg.insert("rendezvous_port", &1337);
                 cfg.insert(
                     "config_dir",
                     &self.test_context.runner_path(&self.server_number),

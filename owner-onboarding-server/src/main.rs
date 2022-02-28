@@ -34,7 +34,6 @@ use fdo_store::{Store, StoreDriver};
 use fdo_util::servers::{settings_for, AbsolutePathBuf, OwnershipVoucherStoreMetadataKey};
 
 mod handlers;
-mod serviceinfo;
 
 pub(crate) struct OwnerServiceUD {
     // Trusted keys
@@ -60,8 +59,8 @@ pub(crate) struct OwnerServiceUD {
     owner2_key: PKey<Private>,
     owner2_pub: PublicKey,
 
-    // ServiceInfo
-    service_info_configuration: crate::serviceinfo::ServiceInfoConfiguration,
+    // ServiceInfo API server configuration
+    service_info_api_client: fdo_http_wrapper::client::JsonClient,
 
     owner_addresses: Vec<TO2AddressEntry>,
 }
@@ -88,8 +87,9 @@ struct Settings {
     // Bind information
     bind: String,
 
-    // Service Info
-    service_info: crate::serviceinfo::ServiceInfoSettings,
+    // Service Info API Server
+    service_info_api_url: String,
+    service_info_api_authentication: fdo_http_wrapper::client::JsonAuthentication,
 
     owner_addresses: Vec<RemoteConnection>,
 
@@ -295,7 +295,8 @@ async fn main() -> Result<()> {
     fdo_util::add_version!();
     fdo_http_wrapper::init_logging();
 
-    if !fdo_data_formats::INTEROPERABLE_KDF && std::env::var("ALLOW_NONINTEROPERABLE_KDF").is_err()
+    if !fdo_data_formats::interoperable_kdf_available()
+        && std::env::var("ALLOW_NONINTEROPERABLE_KDF").is_err()
     {
         bail!("Provide environment ALLOW_NONINTEROPERABLE_KDF=1 to enable interoperable KDF");
     }
@@ -307,11 +308,6 @@ async fn main() -> Result<()> {
     // Bind information
     let bind_addr = SocketAddr::from_str(&settings.bind)
         .with_context(|| format!("Error parsing bind string '{}'", &settings.bind))?;
-
-    // ServiceInfo settings
-    let service_info_configuration =
-        crate::serviceinfo::ServiceInfoConfiguration::from_settings(settings.service_info.clone())
-            .context("Error preparing ServiceInfo configuration")?;
 
     // Trusted keys
     let trusted_device_keys = {
@@ -368,6 +364,13 @@ async fn main() -> Result<()> {
         }
     }
 
+    // ServiceInfo API client
+    let service_info_api_client = fdo_http_wrapper::client::JsonClient::new(
+        settings.service_info_api_url,
+        settings.service_info_api_authentication,
+    )
+    .context("Error generating serviceinfo API server")?;
+
     // Initialize user data
     let user_data = Arc::new(OwnerServiceUD {
         // Stores
@@ -386,7 +389,7 @@ async fn main() -> Result<()> {
         owner2_pub,
 
         // Service Info
-        service_info_configuration,
+        service_info_api_client,
 
         // Owner addresses
         owner_addresses,

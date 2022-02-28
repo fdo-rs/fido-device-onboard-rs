@@ -69,4 +69,6 @@ pub enum Error {
     AddrError(#[from] std::net::AddrParseError),
     #[error("Unsupported version structure encountered. Version: {0:?}")]
     UnsupportedVersion(Option<crate::constants::ProtocolVersion>),
+    #[error("TPM/TSS error: {0:?}")]
+    TssError(#[from] tss_esapi::Error),
 }

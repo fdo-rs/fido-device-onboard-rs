@@ -18,5 +18,5 @@ pub trait DeviceCredential: std::fmt::Debug {
     ) -> Result<Box<dyn aws_nitro_enclaves_cose::crypto::SigningPrivateKey>, Error>;
 }
 
-mod file;
+pub mod file;
 pub use crate::devicecredential::file::FileDeviceCredential;

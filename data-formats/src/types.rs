@@ -1164,6 +1164,7 @@ impl KeyExchange {
         our_side: KeyDeriveSide,
         cipher: CipherSuite,
         other: &[u8],
+        mut use_noninteroperable_kdf: bool,
     ) -> Result<DerivedKeys, Error> {
         let (shared_secret, context_rand) = match self {
             KeyExchange::Dhkex(..) => self.derive_key_dh(other)?,
@@ -1175,21 +1176,38 @@ impl KeyExchange {
         salt.extend_from_slice(&context_rand);
         salt.extend_from_slice(&((cipher.required_keylen() * 8) as u16).to_be_bytes());
 
-        #[cfg(feature = "use_noninteroperable_kdf")]
-        log::warn!("Using non-interoperable key derivation");
+        if !crate::interoperable_kdf_available() {
+            log::warn!("Forcing use of non-interoperable key derivation");
+            use_noninteroperable_kdf = true;
+        }
 
-        let kdf_args = [
+        let interoperable_kdf_args = [
             &KdfArgument::KbMode(KdfKbMode::Counter),
             &KdfArgument::Mac(KdfMacType::Hmac(cipher.kdf_digest())),
             &KdfArgument::Salt(KEY_DERIVE_LABEL),
             &KdfArgument::KbInfo(&salt),
             &KdfArgument::Key(&shared_secret),
-            #[cfg(not(feature = "use_noninteroperable_kdf"))]
             &KdfArgument::UseL(false),
-            #[cfg(not(feature = "use_noninteroperable_kdf"))]
             &KdfArgument::R(8),
         ];
-        let key_out = perform_kdf(KdfType::KeyBased, &kdf_args, cipher.required_keylen())?;
+        let noninteroperable_kdf_args = [
+            &KdfArgument::KbMode(KdfKbMode::Counter),
+            &KdfArgument::Mac(KdfMacType::Hmac(cipher.kdf_digest())),
+            &KdfArgument::Salt(KEY_DERIVE_LABEL),
+            &KdfArgument::KbInfo(&salt),
+            &KdfArgument::Key(&shared_secret),
+        ];
+        let key_out = perform_kdf(
+            KdfType::KeyBased,
+            if use_noninteroperable_kdf {
+                log::info!("Using non-interoperable KDF");
+                &noninteroperable_kdf_args
+            } else {
+                log::trace!("Using fully interoperable KDF");
+                &interoperable_kdf_args
+            },
+            cipher.required_keylen(),
+        )?;
 
         if cipher.uses_combined_key() {
             Ok(DerivedKeys::Combined { sevk: key_out })

@@ -33,12 +33,20 @@ where
 
 pub(crate) async fn connect(
     user_data: ManufacturingServiceUDT,
-    mut ses_with_store: RequestInformation,
+    mut request_info: RequestInformation,
     msg: messages::v11::diun::Connect,
 ) -> Result<(messages::v11::diun::Accept, RequestInformation), warp::Rejection> {
     fail_if_no_diun::<messages::v11::diun::Connect>(&user_data)?;
 
-    let mut session = ses_with_store.session;
+    let mut session = request_info.session;
+
+    let use_noninteroperable_kdf =
+        if let Some(value) = request_info.headers.get("X-Non-Interoperable-KDF") {
+            log::trace!("Got a X-Non-Interoperable-KDF header: {:?}", value);
+            matches!(value.to_str(), Ok("true"))
+        } else {
+            false
+        };
 
     let b_key_exchange = KeyExchange::new(*msg.kex_suite())
         .map_err(Error::from_error::<messages::v11::diun::Connect, _>)?;
@@ -48,6 +56,7 @@ pub(crate) async fn connect(
             KeyDeriveSide::OwnerService,
             *msg.cipher_suite(),
             msg.key_exchange(),
+            use_noninteroperable_kdf,
         )
         .map_err(Error::from_error::<messages::v11::diun::Connect, _>)?;
     let new_keys = EncryptionKeys::from_derived(*msg.cipher_suite(), new_keys);
@@ -82,11 +91,11 @@ pub(crate) async fn connect(
     )
     .map_err(Error::from_error::<messages::v11::diun::Connect, _>)?;
 
-    ses_with_store.session = session;
+    request_info.session = session;
 
     Ok((
         messages::v11::diun::Accept::new(accept_payload),
-        ses_with_store,
+        request_info,
     ))
 }
 

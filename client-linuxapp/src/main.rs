@@ -419,6 +419,10 @@ async fn perform_hellodevice(
         }
     };
 
+    // let non_interoperable_kdf_required = client
+    //     .non_interoperable_kdf_required()
+    //     .ok_or_else(|| anyhow!("Error getting non-interoperable KDF requirement"))?;
+
     // NOTE: At this moment, we have not yet validated the signature on it...
     // We can only do so after we got all of the OV parts..
     let prove_ov_hdr_payload: UnverifiedValue<TO2ProveOVHdrPayload> =
@@ -675,10 +679,22 @@ async fn get_and_verify_ov_header_signature(
 }
 
 async fn perform_key_derivation(
+    client: &mut ServiceClient,
     prove_ov_hdr_payload: TO2ProveOVHdrPayload,
     kexsuite: KexSuite,
     ciphersuite: CipherSuite,
 ) -> Result<(KeyExchange, fdo_http_wrapper::EncryptionKeys), ClientError> {
+    let non_interoplerable_kdf_required = match client.non_interoperable_kdf_required() {
+        Ok(option) => option,
+        Err(e) => {
+            return Err(ClientError::Response(ErrorResult::new(
+                ErrorCode::InternalServerError,
+                String::from("Error getting non-interoperable KDF requirement"),
+                MessageType::TO2OVNextEntry,
+                anyhow!(e),
+            )));
+        }
+    };
     // Perform the key derivation
     let a_key_exchange = prove_ov_hdr_payload.a_key_exchange();
     let b_key_exchange = match KeyExchange::new(kexsuite) {
@@ -693,20 +709,24 @@ async fn perform_key_derivation(
         }
     };
 
-    let new_keys =
-        match b_key_exchange.derive_key(KeyDeriveSide::Device, ciphersuite, a_key_exchange) {
-            Ok(nk) => nk,
-            Err(e) => {
-                return Err(ClientError::Response(ErrorResult::new(
-                    ErrorCode::InternalServerError,
-                    String::from("Error performing key derivation"),
-                    MessageType::TO2OVNextEntry,
-                    anyhow!(e),
-                )));
-            }
-        };
-
+    let new_keys = match b_key_exchange.derive_key(
+        KeyDeriveSide::Device,
+        ciphersuite,
+        a_key_exchange,
+        non_interoplerable_kdf_required,
+    ) {
+        Ok(nk) => nk,
+        Err(e) => {
+            return Err(ClientError::Response(ErrorResult::new(
+                ErrorCode::InternalServerError,
+                String::from("Error performing key derivation"),
+                MessageType::TO2OVNextEntry,
+                anyhow!(e),
+            )));
+        }
+    };
     let new_keys = fdo_http_wrapper::EncryptionKeys::from_derived(ciphersuite, new_keys);
+
     Ok((b_key_exchange, new_keys))
 }
 
@@ -1094,7 +1114,8 @@ async fn main() -> Result<()> {
     fdo_util::add_version!();
     fdo_http_wrapper::init_logging();
 
-    if !fdo_data_formats::INTEROPERABLE_KDF && std::env::var("ALLOW_NONINTEROPERABLE_KDF").is_err()
+    if !fdo_data_formats::interoperable_kdf_available()
+        && std::env::var("ALLOW_NONINTEROPERABLE_KDF").is_err()
     {
         bail!("Provide environment ALLOW_NONINTEROPERABLE_KDF=1 to enable interoperable KDF");
     }

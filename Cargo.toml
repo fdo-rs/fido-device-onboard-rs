@@ -14,5 +14,6 @@ members = [
     "manufacturing-client",
     "admin-tool",
 
+    "serviceinfo-api-dev-server",
     "integration-tests",
 ]

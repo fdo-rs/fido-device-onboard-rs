@@ -14,6 +14,7 @@ use openssl::{
     x509::{X509Builder, X509NameBuilder, X509NameRef, X509},
 };
 use serde_yaml::Value;
+use tss_esapi::{structures::Public as TssPublic, traits::UnMarshall};
 
 use fdo_data_formats::{
     constants::{HashType, RendezvousVariable},
@@ -405,16 +406,18 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
     let devcred = FileDeviceCredential {
         active: true,
         protver: ProtocolVersion::Version1_1,
-        hmac_secret: hmac_key_buf.to_vec(),
         device_info: device_id.to_string(),
         guid: device_guid.clone(),
         rvinfo: rendezvous_info,
         pubkey_hash: ov_header
             .manufacturer_public_key_hash(HashType::Sha384)
             .context("Error computing manufacturer public key hash")?,
-        private_key: device_key
-            .private_key_to_der()
-            .context("Error serializing device private key")?,
+        key_storage: fdo_data_formats::devicecredential::file::KeyStorage::Plain {
+            hmac_secret: hmac_key_buf.to_vec(),
+            private_key: device_key
+                .private_key_to_der()
+                .context("Error serializing device private key")?,
+        },
     };
 
     // Compute device hash over OV Header
@@ -549,7 +552,6 @@ fn dump_devcred(matches: &ArgMatches) -> Result<(), Error> {
 
     println!("Active: {}", dc.active);
     println!("Protocol Version: {}", dc.protver);
-    println!("HMAC key: <secret>");
     println!("Device Info: {}", dc.device_info);
     println!("Device GUID: {}", dc.guid.to_string());
     println!("Rendezvous Info:");
@@ -557,9 +559,26 @@ fn dump_devcred(matches: &ArgMatches) -> Result<(), Error> {
         println!("\t- {:?}", rv_entry);
     }
     println!("Public key hash: {}", dc.pubkey_hash);
+    println!("HMAC and signing key:");
+    match dc.key_storage {
+        fdo_data_formats::devicecredential::file::KeyStorage::Plain { .. } => {
+            println!("\tHMAC key: <secret>");
+            println!("\tSigning key: <secret>");
+        }
+        fdo_data_formats::devicecredential::file::KeyStorage::Tpm {
+            signing_public,
+            hmac_public,
+            ..
+        } => {
+            let hmac_public =
+                TssPublic::unmarshall(&hmac_public).context("Error loading HMAC Public")?;
+            let signing_public =
+                TssPublic::unmarshall(&signing_public).context("Error loading Signing Public")?;
 
-    // Custom
-    println!("Private key: <secret>");
+            println!("\tHMAC key TPM public: {:?}", hmac_public);
+            println!("\tSigning key TPM public: {:?}", signing_public);
+        }
+    }
 
     Ok(())
 }

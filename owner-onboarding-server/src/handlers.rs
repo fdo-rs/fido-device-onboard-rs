@@ -1,6 +1,6 @@
-use std::str::FromStr;
+use std::{collections::HashSet, str::FromStr};
 
-use fdo_data_formats::messages;
+use fdo_data_formats::messages::{self, v11::to2::OwnerServiceInfo};
 use fdo_data_formats::{
     constants::{DeviceSigType, ErrorCode, HeaderKeys},
     messages::Message,
@@ -15,9 +15,7 @@ use fdo_http_wrapper::server::Error;
 use fdo_http_wrapper::server::RequestInformation;
 use fdo_http_wrapper::EncryptionKeys;
 use fdo_store::MetadataKey;
-use fdo_util::servers::OwnershipVoucherStoreMetadataKey;
-
-use crate::serviceinfo::perform_service_info;
+use fdo_util::servers::{OwnershipVoucherStoreMetadataKey, ServiceInfoApiReply};
 
 pub(super) async fn hello_device(
     user_data: super::OwnerServiceUDT,
@@ -162,10 +160,10 @@ pub(super) async fn get_ov_next_entry(
 
 pub(super) async fn prove_device(
     user_data: super::OwnerServiceUDT,
-    mut ses_with_store: RequestInformation,
+    mut request_info: RequestInformation,
     msg: messages::v11::to2::ProveDevice,
 ) -> Result<(messages::v11::to2::SetupDevice, RequestInformation), warp::Rejection> {
-    let mut session = ses_with_store.session;
+    let mut session = request_info.session;
 
     let device_guid: String = match session.get("device_guid") {
         Some(v) => v,
@@ -308,12 +306,21 @@ pub(super) async fn prove_device(
         .insert("nonce7", nonce7.clone())
         .map_err(Error::from_error::<messages::v11::to2::ProveDevice, _>)?;
 
+    let use_noninteroperable_kdf =
+        if let Some(value) = request_info.headers.get("X-Non-Interoperable-KDF") {
+            log::trace!("Got a X-Non-Interoperable-KDF header: {:?}", value);
+            matches!(value.to_str(), Ok("true"))
+        } else {
+            false
+        };
+
     // Derive and set the keys
     let new_keys = a_key_exchange
         .derive_key(
             KeyDeriveSide::OwnerService,
             ciphersuite,
             eat_payload.b_key_exchange(),
+            use_noninteroperable_kdf,
         )
         .map_err(Error::from_error::<messages::v11::to2::ProveDevice, _>)?;
     let new_keys = EncryptionKeys::from_derived(ciphersuite, new_keys);
@@ -339,9 +346,9 @@ pub(super) async fn prove_device(
         .insert("proven_device", true)
         .map_err(Error::from_error::<messages::v11::to2::ProveDevice, _>)?;
 
-    ses_with_store.session = session;
+    request_info.session = session;
 
-    Ok((resp, ses_with_store))
+    Ok((resp, request_info))
 }
 
 pub(super) async fn device_service_info_ready(
@@ -439,21 +446,118 @@ pub(super) async fn device_service_info(
         num_loops
     );
 
-    let resp =
-        match perform_service_info(user_data, &mut ses_with_store.session, msg, num_loops).await {
-            Ok(v) => v,
-            Err(e) => {
-                log::warn!("Error during performing service info: {:?}", e);
-                return Err(Error::new(
-                    ErrorCode::InternalServerError,
-                    messages::v11::to2::DeviceServiceInfo::message_type(),
-                    "Error handling serviceinfo",
-                )
-                .into());
-            }
-        };
+    let resp = match perform_service_info(
+        user_data,
+        &mut ses_with_store.session,
+        device_guid,
+        msg,
+        num_loops,
+    )
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            log::warn!("Error during performing service info: {:?}", e);
+            return Err(Error::new(
+                ErrorCode::InternalServerError,
+                messages::v11::to2::DeviceServiceInfo::message_type(),
+                "Error handling serviceinfo",
+            )
+            .into());
+        }
+    };
 
     Ok((resp, ses_with_store))
+}
+
+async fn perform_service_info(
+    user_data: super::OwnerServiceUDT,
+    _session: &mut fdo_http_wrapper::server::Session,
+    device_guid: Guid,
+    msg: messages::v11::to2::DeviceServiceInfo,
+    loop_num: u32,
+) -> Result<OwnerServiceInfo, anyhow::Error> {
+    if loop_num != 0 {
+        // Return DONE for now after the first loop.
+        return Ok(messages::v11::to2::OwnerServiceInfo::new(
+            false,
+            true,
+            Default::default(),
+        ));
+    }
+    let in_si = msg.service_info();
+
+    log::trace!("Received ServiceInfo loop {}: {:?}", loop_num, in_si);
+
+    let mut module_list: Option<Vec<String>> = None;
+
+    for (module, var, value) in in_si.iter() {
+        if module == "devmod" && var == "modules" {
+            let mut rawmodlist: Vec<serde_cbor::Value> = serde_cbor::value::from_value(value)?;
+            log::trace!("Received module list: {:?}", rawmodlist);
+
+            // Skip the first two items.... They are integers :()
+            let mut modlist: HashSet<String> = HashSet::new();
+            for rawmod in rawmodlist.drain(..).skip(2) {
+                modlist.insert(serde_cbor::value::from_value(rawmod)?);
+            }
+            log::trace!("Module list: {:?}", modlist);
+
+            module_list = Some(modlist.into_iter().collect());
+        }
+    }
+
+    let module_list = match module_list {
+        None => {
+            log::error!("No module list found in ServiceInfo");
+            anyhow::bail!("No module list found in ServiceInfo");
+        }
+        Some(l) => l,
+    };
+
+    let resp: ServiceInfoApiReply = user_data
+        .service_info_api_client
+        .send_get([
+            ("serviceinfo_api_version", "1"),
+            ("device_guid", &device_guid.to_string()),
+            ("modules", &module_list.join(",")),
+        ])
+        .await?;
+
+    log::trace!("ServiceInfo API reply: {:?}", resp);
+
+    let mut out_si = fdo_data_formats::types::ServiceInfo::new();
+
+    if let Some(initial_user) = resp.initial_user {
+        out_si.add("sshkey", "active", &true)?;
+        out_si.add("sshkey", "username", &initial_user.username)?;
+        for key in initial_user.ssh_keys.iter() {
+            out_si.add("sshkey", "key", &key)?;
+        }
+    }
+
+    if let Some(extra_commands) = resp.extra_commands {
+        for (module, key, value) in extra_commands {
+            if key.ends_with("|hex") {
+                let value = hex::decode(
+                    &value
+                        .as_str()
+                        .ok_or_else(|| anyhow::anyhow!("Invalid API response: non-hex"))?,
+                )?;
+                let value = serde_bytes::ByteBuf::from(value);
+                let key = key.replace("|hex", "");
+                out_si.add(&module, &key, &value)?;
+            } else {
+                out_si.add(&module, &key, &value)?;
+            }
+        }
+    }
+
+    log::trace!("Sending ServiceInfo result: {:?}", out_si);
+
+    Ok(messages::v11::to2::OwnerServiceInfo::new(
+        false, false, out_si,
+    ))
 }
 
 pub(super) async fn done(
