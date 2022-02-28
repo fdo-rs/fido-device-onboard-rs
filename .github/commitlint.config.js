@@ -7,6 +7,7 @@ const validateBodyMaxLengthIgnoringDeps = (parsedCommit) => {
   const { type, scope, body } = parsedCommit
   const isDepsCommit =
       type === 'chore'
+      && body != null
       && body.includes('Updates the requirements on');
 
   return [
