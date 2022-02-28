@@ -36,7 +36,7 @@ Untrusted Networks (DIUN) protocols.
 
 To build on Fedora/RHEL/CentOS you can do the following:
 ````
-sudo yum install -y cargo git-core openssl-devel
+sudo yum install -y cargo git-core openssl-devel tpm2-tss-devel
 git clone https://github.com/fedora-iot/fido-device-onboard-rs.git
 cd fido-device-onboard-rs
 cargo build --release
