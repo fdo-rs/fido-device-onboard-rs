@@ -10,7 +10,7 @@ If you want to suggest any changes to the process, please feel free to open a Pu
 In order to make a test build of this crate, when using Fedora, you can run:
 
 ``` bash
-sudo yum install -y cargo git-core openssl-devel
+sudo yum install -y cargo rust rust-src git-core openssl-devel clippy rustfmt golang tpm2-tss-devel
 git clone https://github.com/fedora-iot/fido-device-onboard-rs.git
 cd fido-device-onboard-rs
 cargo build --release
