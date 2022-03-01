@@ -201,17 +201,16 @@ async fn perform_hellorv(
 
     // Create EAT payload
     let eat: EATokenPayload<PayloadCreating> =
-        match new_eat::<bool>(None, nonce4.clone(), devcred.device_guid().clone()) {
-            Ok(eat) => eat,
-            Err(e) => {
-                return Err(ClientError::Request(ErrorResult::new(
+        new_eat::<bool>(None, nonce4.clone(), devcred.device_guid().clone())
+            .context("Error creating EATokenPayload")
+            .map_err(|e| {
+                ClientError::Request(ErrorResult::new(
                     ErrorCode::InternalServerError,
                     "Error creating EATokenPayload",
                     MessageType::TO1HelloRVAck,
-                    anyhow!(e),
-                )));
-            }
-        };
+                    e,
+                ))
+            })?;
 
     // Create signature over nonce4
     let signer = devcred
@@ -661,7 +660,7 @@ async fn perform_key_derivation(
     kexsuite: KexSuite,
     ciphersuite: CipherSuite,
 ) -> Result<(KeyExchange, fdo_http_wrapper::EncryptionKeys), ClientError> {
-    let non_interoplerable_kdf_required =
+    let non_interoperable_kdf_required =
         client.non_interoperable_kdf_required().ok_or_else(|| {
             ClientError::Response(ErrorResult::new(
                 ErrorCode::InternalServerError,
@@ -689,7 +688,7 @@ async fn perform_key_derivation(
             KeyDeriveSide::Device,
             ciphersuite,
             a_key_exchange,
-            non_interoplerable_kdf_required,
+            non_interoperable_kdf_required,
         )
         .context("Error performing key derivation")
         .map_err(|e| {
