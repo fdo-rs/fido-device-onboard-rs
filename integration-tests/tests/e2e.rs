@@ -84,6 +84,15 @@ async fn test_e2e() -> Result<()> {
     }
 }
 
+#[derive(Debug, serde::Serialize)]
+struct ServiceInfoApiAdminV0Request {
+    device_guid: String,
+    // This is not entirely accurate (it accepts any JSON value), but for this test sufficient
+    service_info: Vec<(String, String, String)>,
+}
+
+const CI_TESTSTRING: &str = "CI_TESTSTRING_SHOULD_BE_RETURNED_IN_SERVICEINFO";
+
 #[derive(Debug)]
 struct TestCase {
     #[allow(dead_code)]
@@ -107,9 +116,9 @@ where
             |_| Ok(()),
         )
         .context("Error creating rendezvous server")?;
-    let serviceinfo_api_dev_server = ctx
+    let serviceinfo_api_server = ctx
         .start_test_server(
-            Binary::ServiceInfoApiDevServer,
+            Binary::ServiceInfoApiServer,
             |cfg| Ok(cfg.prepare_config_file(None, |_| Ok(()))?),
             |_| Ok(()),
         )
@@ -121,7 +130,7 @@ where
                 Ok(cfg.prepare_config_file(None, |cfg| {
                     cfg.insert(
                         "serviceinfo_api_server_port",
-                        &serviceinfo_api_dev_server.server_port().unwrap(),
+                        &serviceinfo_api_server.server_port().unwrap(),
                     );
                     Ok(())
                 })?)
@@ -216,6 +225,8 @@ where
         );
     }
     L.l(format!("Ownership voucher path: {:?}", ov_file));
+    let device_guid = ov_file.file_name().to_str().unwrap().to_string();
+    L.l(format!("Device GUID: {}", device_guid));
 
     let owner_output = ctx
         .run_owner_tool(
@@ -231,8 +242,29 @@ where
     // It should have been extended to the "owner" time by the manufacturer
     owner_output.expect_stdout_line("Entry 0")?;
 
-    // Ensure TO0 is executed
     let client = reqwest::Client::new();
+    // Submit additional ServiceInfo for this device
+    client
+        .post(format!(
+            "http://localhost:{}/admin/v0",
+            serviceinfo_api_server.server_port().unwrap()
+        ))
+        .header("Authorization", "Bearer TestAdminToken")
+        .json(&ServiceInfoApiAdminV0Request {
+            device_guid: device_guid,
+            service_info: vec![(
+                "CI".to_string(),
+                "teststring".to_string(),
+                CI_TESTSTRING.to_string(),
+            )],
+        })
+        .send()
+        .await
+        .context("Error sending ServiceInfo API request")?
+        .error_for_status()
+        .context("Error from the ServiceInfo API request")?;
+
+    // Ensure TO0 is executed
     let res = client
         .post(format!(
             "http://localhost:{}/report-to-rendezvous",
@@ -271,6 +303,7 @@ where
         )
         .context("Error running client")?;
     output.expect_success().context("client failed")?;
+    output.expect_stderr_line(CI_TESTSTRING)?;
 
     pretty_assertions::assert_eq!(
         fs::read_to_string(&marker_file_path).context("Error reading marker file")?,
