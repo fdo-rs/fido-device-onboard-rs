@@ -62,7 +62,7 @@ pub enum Binary {
     ManufacturingClient,
     ManufacturingServer,
     OwnerOnboardingServer,
-    ServiceInfoApiDevServer,
+    ServiceInfoApiServer,
     OwnerTool,
     RendezvousServer,
 }
@@ -74,7 +74,7 @@ impl Binary {
             Binary::ManufacturingClient => "fdo-manufacturing-client",
             Binary::ManufacturingServer => "fdo-manufacturing-server",
             Binary::OwnerOnboardingServer => "fdo-owner-onboarding-server",
-            Binary::ServiceInfoApiDevServer => "fdo-serviceinfo-api-dev-server",
+            Binary::ServiceInfoApiServer => "fdo-serviceinfo-api-server",
             Binary::OwnerTool => "fdo-owner-tool",
             Binary::RendezvousServer => "fdo-rendezvous-server",
         }
@@ -85,7 +85,7 @@ impl Binary {
             Binary::ManufacturingServer => Some("manufacturing-server.yml"),
             Binary::OwnerOnboardingServer => Some("owner-onboarding-server.yml"),
             Binary::RendezvousServer => Some("rendezvous-server.yml"),
-            Binary::ServiceInfoApiDevServer => Some("serviceinfo-api-dev-server.yml"),
+            Binary::ServiceInfoApiServer => Some("serviceinfo-api-server.yml"),
             _ => None,
         }
     }
@@ -96,7 +96,7 @@ impl Binary {
             Binary::OwnerOnboardingServer
                 | Binary::ManufacturingServer
                 | Binary::RendezvousServer
-                | Binary::ServiceInfoApiDevServer
+                | Binary::ServiceInfoApiServer
         )
     }
 
