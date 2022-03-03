@@ -9,4 +9,5 @@ edition = "2018"
 [dependencies]
 anyhow = "1"
 openssl = "0.10"
-clap = "2"
+clap = { version = "3.1", features = ["derive"] }
+

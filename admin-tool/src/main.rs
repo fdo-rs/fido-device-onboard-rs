@@ -1,5 +1,9 @@
+use std::fs::File;
+use std::io::prelude::*;
+use std::path::PathBuf;
+
 use anyhow::{bail, Error, Result};
-use clap::{App, Arg, ArgMatches, SubCommand};
+use clap::{ArgEnum, Args, Parser, Subcommand};
 use openssl::asn1::{Asn1Integer, Asn1Time};
 use openssl::bn::BigNum;
 use openssl::ec::{EcGroup, EcKey};
@@ -8,10 +12,8 @@ use openssl::nid::Nid;
 use openssl::pkey::PKey;
 use openssl::x509::{X509Name, X509};
 use std::env;
-use std::fs::File;
-use std::io::prelude::*;
-use std::path::PathBuf;
 
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
 enum Subject {
     Diun,
     Manufacturer,
@@ -20,7 +22,7 @@ enum Subject {
 }
 
 impl Subject {
-    fn to_common_name(&self) -> &str {
+    fn common_name(&self) -> &str {
         match self {
             Subject::Diun => "DIUN",
             Subject::Manufacturer => "Manufacturer",
@@ -28,7 +30,7 @@ impl Subject {
             Subject::Owner => "Owner",
         }
     }
-    fn to_file_name(&self) -> &str {
+    fn file_name(&self) -> &str {
         match self {
             Subject::Diun => "diun",
             Subject::Manufacturer => "manufacturer",
@@ -38,21 +40,11 @@ impl Subject {
     }
 }
 
-fn match_to_subject(s: &str) -> Result<Subject> {
-    match s {
-        "diun" => Ok(Subject::Diun),
-        "manufacturer" => Ok(Subject::Manufacturer),
-        "device_ca" => Ok(Subject::DeviceCA),
-        "owner" => Ok(Subject::Owner),
-        _ => bail!("{} is not a valid subject", s),
-    }
-}
-
-fn generate_key_and_cert(matches: &ArgMatches) -> Result<(), Error> {
-    let subject = match_to_subject(matches.value_of("subject").unwrap())?;
-    let organization_name = matches.value_of("organization").unwrap();
-    let country_name = matches.value_of("country").unwrap();
-    let destination_dir = matches.value_of("destination-dir").unwrap();
+fn generate_key_and_cert(args: &GenerateKeyAndCertArguments) -> Result<(), Error> {
+    let subject = args.subject;
+    let organization_name = &args.organization;
+    let country_name = &args.country;
+    let destination_dir = &args.destination_dir;
     let mut destination_dir_path = PathBuf::from(destination_dir);
     if !destination_dir_path.is_absolute() {
         destination_dir_path = env::current_dir()?;
@@ -68,7 +60,7 @@ fn generate_key_and_cert(matches: &ArgMatches) -> Result<(), Error> {
     let pkey = PKey::from_ec_key(key.clone())?;
 
     let mut name = X509Name::builder()?;
-    name.append_entry_by_nid(Nid::COMMONNAME, subject.to_common_name())?;
+    name.append_entry_by_nid(Nid::COMMONNAME, subject.common_name())?;
     name.append_entry_by_nid(Nid::ORGANIZATIONNAME, organization_name)?;
     name.append_entry_by_nid(Nid::COUNTRYNAME, country_name)?;
     let name = name.build();
@@ -88,59 +80,49 @@ fn generate_key_and_cert(matches: &ArgMatches) -> Result<(), Error> {
     builder.sign(&pkey, MessageDigest::sha256())?;
 
     let mut der_path = destination_dir_path.clone();
-    der_path.push(format!("{}_key.der", subject.to_file_name()));
+    der_path.push(format!("{}_key.der", subject.file_name()));
     let mut file = File::create(der_path)?;
     file.write_all(&key.private_key_to_der()?)?;
 
     let mut pem_path = destination_dir_path.clone();
-    pem_path.push(format!("{}_cert.pem", subject.to_file_name()));
+    pem_path.push(format!("{}_cert.pem", subject.file_name()));
     let mut file = File::create(pem_path)?;
     file.write_all(&builder.build().to_pem()?)?;
 
     Ok(())
 }
 
-fn main() -> Result<()> {
-    let matches = App::new("admin-tool")
-        .subcommand(
-            SubCommand::with_name("generate-key-and-cert")
-                .about("Generate key and certificate")
-                .arg(
-                    Arg::with_name("subject")
-                        .required(true)
-                        .possible_values(&["diun", "manufacturer", "device_ca", "owner"])
-                        .help("Subject of the key and certificate")
-                        .index(1),
-                )
-                .arg(
-                    Arg::with_name("organization")
-                        .takes_value(true)
-                        .default_value("Example")
-                        .help("Organization name for the certificate")
-                        .long("organization"),
-                )
-                .arg(
-                    Arg::with_name("country")
-                        .takes_value(true)
-                        .default_value("US")
-                        .help("Country name for the certificate")
-                        .long("country"),
-                )
-                .arg(
-                    Arg::with_name("destination-dir")
-                        .takes_value(true)
-                        .help("Writes key and certificate to the given path")
-                        .default_value("keys")
-                        .long("destination-dir"),
-                ),
-        )
-        .get_matches();
+#[derive(Parser)]
+#[clap(author, version, about, long_about = None)]
+#[clap(propagate_version = true)]
+struct Cli {
+    #[clap(subcommand)]
+    command: Commands,
+}
 
-    match matches.subcommand() {
-        ("generate-key-and-cert", Some(sub_m)) => generate_key_and_cert(sub_m),
-        _ => {
-            println!("{}", matches.usage());
-            Ok(())
-        }
+#[derive(Subcommand)]
+enum Commands {
+    GenerateKeyAndCert(GenerateKeyAndCertArguments),
+}
+
+#[derive(Args)]
+struct GenerateKeyAndCertArguments {
+    /// Subject of the key and certificate
+    #[clap(arg_enum)]
+    subject: Subject,
+    /// Organization name for the certificate
+    #[clap(long, default_value_t = String::from("Example"))]
+    organization: String,
+    /// Country name for the certificate
+    #[clap(long, default_value_t = String::from("US"))]
+    country: String,
+    /// Writes key and certificate to the given path
+    #[clap(long, default_value_t = String::from("keys"))]
+    destination_dir: String,
+}
+
+fn main() -> Result<()> {
+    match Cli::parse().command {
+        Commands::GenerateKeyAndCert(args) => generate_key_and_cert(&args),
     }
 }
