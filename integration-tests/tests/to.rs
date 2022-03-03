@@ -64,9 +64,9 @@ async fn test_to_impl(
             |_| Ok(()),
         )
         .context("Error creating rendezvous server")?;
-    let serviceinfo_api_dev_server = ctx
+    let serviceinfo_api_server = ctx
         .start_test_server(
-            Binary::ServiceInfoApiDevServer,
+            Binary::ServiceInfoApiServer,
             |cfg| Ok(cfg.prepare_config_file(None, |_| Ok(()))?),
             |_| Ok(()),
         )
@@ -78,7 +78,7 @@ async fn test_to_impl(
                 Ok(cfg.prepare_config_file(None, |cfg| {
                     cfg.insert(
                         "serviceinfo_api_server_port",
-                        &serviceinfo_api_dev_server.server_port().unwrap(),
+                        &serviceinfo_api_server.server_port().unwrap(),
                     );
                     Ok(())
                 })?)
