@@ -1,8 +1,10 @@
 ---
-session_store_driver: Directory
-session_store_config: {{ config_dir }}/sessions/
-ownership_voucher_store_driver: Directory
-ownership_voucher_store_config: {{ test_dir }}/ownership_vouchers/
+session_store_driver:
+  Directory:
+    path: {{ config_dir }}/sessions/
+ownership_voucher_store_driver:
+  Directory:
+    path: {{ test_dir }}/ownership_vouchers/
 bind: {{ bind }}
 rendezvous_info:
 - dns: localhost

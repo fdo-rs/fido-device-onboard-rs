@@ -1,8 +1,10 @@
 ---
-session_store_driver: Directory
-session_store_config: {{ config_dir }}/sessions/
-ownership_voucher_store_driver: Directory
-ownership_voucher_store_config: {{ test_dir }}/ownership_vouchers/
+session_store_driver:
+  Directory:
+    path: {{ config_dir }}/sessions/
+ownership_voucher_store_driver:
+  Directory:
+    path: {{ test_dir }}/ownership_vouchers/
 trusted_device_keys_path: {{ keys_path }}/device_ca_cert.pem
 owner_private_key_path: {{ keys_path }}/owner_key.der
 owner_public_key_path: {{ keys_path }}/owner_cert.pem

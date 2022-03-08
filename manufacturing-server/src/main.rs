@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 use std::fs;
-use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -10,7 +9,6 @@ use openssl::{
     pkey::{PKey, Private},
     x509::X509,
 };
-use serde::Deserialize;
 use serde_yaml::Value;
 use tokio::signal::unix::{signal, SignalKind};
 use warp::Filter;
@@ -22,9 +20,10 @@ use fdo_data_formats::{
     types::{Guid, RendezvousInfo},
     ProtocolVersion,
 };
-use fdo_store::{Store, StoreDriver};
+use fdo_store::Store;
 use fdo_util::servers::{
-    settings_for, yaml_to_cbor, AbsolutePathBuf, OwnershipVoucherStoreMetadataKey,
+    configuration::manufacturing_server::{DiunSettings, ManufacturingServerSettings},
+    settings_for, yaml_to_cbor, OwnershipVoucherStoreMetadataKey,
 };
 
 const PERFORMED_DIUN_SES_KEY: &str = "mfg_global_diun_performed";
@@ -85,60 +84,6 @@ struct ManufacturingServiceUD {
 
 type ManufacturingServiceUDT = Arc<ManufacturingServiceUD>;
 
-#[derive(Debug, Deserialize, Clone, Copy)]
-enum KeyStorageTypeString {
-    FileSystem,
-    Tpm,
-}
-
-impl From<KeyStorageTypeString> for KeyStorageType {
-    fn from(key_type: KeyStorageTypeString) -> Self {
-        match key_type {
-            KeyStorageTypeString::FileSystem => KeyStorageType::FileSystem,
-            KeyStorageTypeString::Tpm => KeyStorageType::Tpm,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize, Clone, Copy)]
-enum PublicKeyTypeString {
-    SECP256R1,
-    SECP384R1,
-}
-
-impl From<PublicKeyTypeString> for PublicKeyType {
-    fn from(key_type: PublicKeyTypeString) -> Self {
-        match key_type {
-            PublicKeyTypeString::SECP256R1 => PublicKeyType::SECP256R1,
-            PublicKeyTypeString::SECP384R1 => PublicKeyType::SECP384R1,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize, Clone, Copy)]
-enum MfgStringTypeString {
-    SerialNumber,
-}
-
-impl From<MfgStringTypeString> for MfgStringType {
-    fn from(mfg_string_type: MfgStringTypeString) -> Self {
-        match mfg_string_type {
-            MfgStringTypeString::SerialNumber => MfgStringType::SerialNumber,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct DiunSettings {
-    mfg_string_type: MfgStringTypeString,
-
-    key_type: PublicKeyTypeString,
-    allowed_key_storage_types: Vec<KeyStorageTypeString>,
-
-    key_path: AbsolutePathBuf,
-    cert_path: AbsolutePathBuf,
-}
-
 impl TryFrom<DiunSettings> for DiunConfiguration {
     type Error = Error;
 
@@ -193,46 +138,6 @@ fn load_rendezvous_info(rvs: &[BTreeMap<String, Value>]) -> Result<RendezvousInf
     RendezvousInfo::new(info).context("Error serializing rendezvous info")
 }
 
-#[derive(Debug, Deserialize)]
-struct ManufacturingSettings {
-    manufacturer_cert_path: AbsolutePathBuf,
-    device_cert_ca_private_key: AbsolutePathBuf,
-    device_cert_ca_chain: AbsolutePathBuf,
-
-    owner_cert_path: Option<AbsolutePathBuf>,
-    manufacturer_private_key: Option<AbsolutePathBuf>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ProtocolSetting {
-    plain_di: Option<bool>,
-    diun: Option<DiunSettings>,
-}
-
-#[derive(Debug, Deserialize)]
-struct Settings {
-    // Session store info
-    session_store_driver: StoreDriver,
-    session_store_config: Option<config::Value>,
-
-    // Ownership Voucher store info
-    ownership_voucher_store_driver: StoreDriver,
-    ownership_voucher_store_config: Option<config::Value>,
-
-    // Public key store info
-    public_key_store_driver: Option<StoreDriver>,
-    public_key_store_config: Option<config::Value>,
-
-    // Bind information
-    bind: String,
-
-    protocols: ProtocolSetting,
-
-    rendezvous_info: Vec<BTreeMap<String, Value>>,
-
-    manufacturing: ManufacturingSettings,
-}
-
 const MAINTENANCE_INTERVAL: u64 = 60;
 
 async fn perform_maintenance(
@@ -265,29 +170,28 @@ async fn main() -> Result<()> {
     fdo_util::add_version!();
     fdo_http_wrapper::init_logging();
 
-    let settings: Settings = settings_for("manufacturing-server")?
+    let settings: ManufacturingServerSettings = settings_for("manufacturing-server")?
         .try_into()
         .context("Error parsing configuration")?;
 
     // Bind information
-    let bind_addr = SocketAddr::from_str(&settings.bind)
-        .with_context(|| format!("Error parsing bind string '{}'", &settings.bind))?;
+    let bind_addr = settings.bind.clone();
 
     // Initialize stores
     let session_store = settings
         .session_store_driver
-        .initialize(settings.session_store_config)
+        .initialize()
         .context("Error initializing session store")?;
     let session_store = fdo_http_wrapper::server::SessionStore::new(session_store);
     let ownership_voucher_store = settings
         .ownership_voucher_store_driver
-        .initialize(settings.ownership_voucher_store_config)
+        .initialize()
         .context("Error initializing ownership voucher store")?;
     let public_key_store = match settings.public_key_store_driver {
         None => None,
         Some(driver) => Some(
             driver
-                .initialize(settings.public_key_store_config)
+                .initialize()
                 .context("Error initializing public key store")?,
         ),
     };

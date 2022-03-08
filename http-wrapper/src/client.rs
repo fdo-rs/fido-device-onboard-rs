@@ -1,6 +1,6 @@
 use std::{convert::TryFrom, str::FromStr};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use aws_nitro_enclaves_cose::error::CoseError;
@@ -47,7 +47,7 @@ pub enum Error {
 
 pub type RequestResult<MT> = Result<MT, Error>;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum JsonAuthentication {
     None,
     BearerToken {
