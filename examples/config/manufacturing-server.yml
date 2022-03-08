@@ -1,8 +1,10 @@
 ---
-session_store_driver: Directory
-session_store_config: /path/to/sessions/
-ownership_voucher_store_driver: Directory
-ownership_voucher_store_config: /path/to/ownership_vouchers/
+session_store_driver:
+  Directory:
+    path: /path/to/sessions/
+ownership_voucher_store_driver:
+  Directory:
+    path: /path/to/ownership_vouchers/
 bind: 0.0.0.0:8080
 rendezvous_info:
 - dns: fdo.example.com

@@ -1,64 +1,19 @@
-use std::{
-    collections::{HashMap, HashSet},
-    net::SocketAddr,
-    str::FromStr,
-};
+use std::{collections::HashSet, str::FromStr};
 
 use anyhow::{Context, Result};
-use fdo_data_formats::{
-    constants::HashType,
-    types::{Guid, Hash},
-};
-use fdo_store::{Store, StoreDriver};
 use serde::{Deserialize, Serialize};
 use tokio::signal::unix::{signal, SignalKind};
 use warp::Filter;
 
-use fdo_util::servers::{settings_for, ServiceInfoApiReply, ServiceInfoApiReplyInitialUser};
-
-#[derive(Debug, Deserialize, Clone)]
-struct ServiceInfoFile {
-    path: String,
-    permissions: Option<String>,
-    #[serde(skip)]
-    parsed_permissions: Option<u32>,
-    #[serde(skip)]
-    contents_len: usize,
-    #[serde(skip)]
-    contents_hex: String,
-    #[serde(skip)]
-    hash_hex: String,
-    source_path: String,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-struct ServiceInfoCommand {
-    command: String,
-    args: Vec<String>,
-    #[serde(default)]
-    may_fail: bool,
-    #[serde(default)]
-    return_stdout: bool,
-    #[serde(default)]
-    return_stderr: bool,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-struct ServiceInfoInitialUser {
-    username: String,
-    sshkeys: Vec<String>,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-struct ServiceInfoSettings {
-    initial_user: Option<ServiceInfoInitialUser>,
-
-    files: Option<Vec<ServiceInfoFile>>,
-
-    commands: Option<Vec<ServiceInfoCommand>>,
-
-    additional_serviceinfo: Option<HashMap<String, Vec<(String, String)>>>,
-}
+use fdo_data_formats::{
+    constants::HashType,
+    types::{Guid, Hash},
+};
+use fdo_store::Store;
+use fdo_util::servers::{
+    configuration::serviceinfo_api_server::{ServiceInfoApiServerSettings, ServiceInfoSettings},
+    settings_for, ServiceInfoApiReply, ServiceInfoApiReplyInitialUser,
+};
 
 #[derive(Debug)]
 struct ServiceInfoConfiguration {
@@ -107,18 +62,6 @@ impl ServiceInfoConfiguration {
 
         Ok(ServiceInfoConfiguration { settings })
     }
-}
-
-#[derive(Debug, Deserialize)]
-struct Settings {
-    service_info: ServiceInfoSettings,
-    bind: String,
-
-    service_info_auth_token: String,
-    admin_auth_token: Option<String>,
-
-    device_specific_store_driver: StoreDriver,
-    device_specific_store_config: Option<config::Value>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -371,13 +314,12 @@ async fn main() -> Result<()> {
     fdo_util::add_version!();
     fdo_http_wrapper::init_logging();
 
-    let settings: Settings = settings_for("serviceinfo-api-server")?
+    let settings: ServiceInfoApiServerSettings = settings_for("serviceinfo-api-server")?
         .try_into()
         .context("Error parsing configuration")?;
 
     // Bind information
-    let bind_addr = SocketAddr::from_str(&settings.bind)
-        .with_context(|| format!("Error parsing bind string '{}'", &settings.bind))?;
+    let bind_addr = settings.bind.clone();
 
     // ServiceInfo settings
     let service_info_configuration = ServiceInfoConfiguration::from_settings(settings.service_info)
@@ -385,7 +327,7 @@ async fn main() -> Result<()> {
 
     let device_specific_store = settings
         .device_specific_store_driver
-        .initialize(settings.device_specific_store_config)
+        .initialize()
         .context("Error initializing device-specific store")?;
 
     let user_data = std::sync::Arc::new(ServiceInfoApiServerUD {

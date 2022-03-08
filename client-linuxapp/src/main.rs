@@ -1061,17 +1061,16 @@ async fn perform_to2(
 
 fn get_delay_between_retries(rv_entry_delay: u32) -> u64 {
     let mut rng = rand::thread_rng();
-    let rv_delay_sec: f32;
-    if rv_entry_delay == 0 {
-        rv_delay_sec = rng.gen_range(
+    let rv_delay_sec: f32 = if rv_entry_delay == 0 {
+        rng.gen_range(
             RV_DEFAULT_DELAY_SEC - RV_DEFAULT_DELAY_OFFSET
                 ..=RV_DEFAULT_DELAY_SEC + RV_DEFAULT_DELAY_OFFSET,
-        );
+        )
     } else {
         let lower_delay = rv_entry_delay as f32 * (1.0 - RV_USER_DEFINED_DELAY_OFFSET);
         let upper_delay = rv_entry_delay as f32 * (1.0 + RV_USER_DEFINED_DELAY_OFFSET);
-        rv_delay_sec = rng.gen_range(lower_delay..=upper_delay);
-    }
+        rng.gen_range(lower_delay..=upper_delay)
+    };
     rv_delay_sec as u64
 }
 

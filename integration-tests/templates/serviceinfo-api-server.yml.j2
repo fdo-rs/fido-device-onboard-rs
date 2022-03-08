@@ -1,7 +1,8 @@
 ---
 bind: {{ bind }}
-device_specific_store_driver: Directory
-device_specific_store_config: {{ config_dir }}/device_specific_serviceinfo
+device_specific_store_driver:
+  Directory:
+    path: {{ config_dir }}/device_specific_serviceinfo
 service_info_auth_token: TestAuthToken
 admin_auth_token: TestAdminToken
 service_info:

@@ -16,7 +16,7 @@ use super::Store;
 use super::StoreError;
 
 pub(super) fn initialize<OT, K, V, MKT>(
-    cfg: Option<config::Value>,
+    path: &Path,
 ) -> Result<Box<dyn Store<OT, K, V, MKT>>, StoreError>
 where
     OT: crate::StoreOpenMode,
@@ -24,33 +24,22 @@ where
     V: Serializable + Send + Sync + Clone + 'static,
     MKT: crate::MetadataLocalKey + 'static,
 {
-    let directory: String = match cfg {
-        None => {
-            return Err(StoreError::Configuration(
-                "No storage directory provided".to_string(),
-            ))
-        }
-        Some(v) => v.try_into(),
-    }
-    .map_err(|_| StoreError::Configuration("Storage directory invalid type".to_string()))?;
-
-    let dirpath = Path::new(&directory);
-    if !dirpath.is_absolute() {
+    if !path.is_absolute() {
         return Err(StoreError::Configuration(
             "Storage directory is not absolute".to_string(),
         ));
     }
-    fs::create_dir_all(dirpath).map_err(|e| {
+    fs::create_dir_all(path).map_err(|e| {
         StoreError::Configuration(format!(
-            "Storage directory '{}' could not be created: {}",
-            directory, e
+            "Storage directory '{:?}' could not be created: {}",
+            path, e
         ))
     })?;
 
-    let canonicalized_directory = dirpath.canonicalize().map_err(|e| {
+    let canonicalized_directory = path.canonicalize().map_err(|e| {
         StoreError::Configuration(format!(
-            "Storage directory '{}' could not be canonicalized: {}",
-            directory, e
+            "Storage directory '{:?}' could not be canonicalized: {}",
+            path, e
         ))
     })?;
 
@@ -75,7 +64,7 @@ where
     K: std::string::ToString,
 {
     fn get_path(&self, key: &K) -> PathBuf {
-        self.directory.join(key.to_string().replace("/", "_slash_"))
+        self.directory.join(key.to_string().replace('/', "_slash_"))
     }
 }
 
