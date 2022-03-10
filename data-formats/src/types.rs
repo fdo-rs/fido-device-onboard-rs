@@ -1929,6 +1929,22 @@ pub enum RemoteTransport {
     CoAPS,
 }
 
+impl Serialize for RemoteTransport {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        serializer.serialize_str(match self {
+            Self::Tcp => "tcp",
+            Self::Tls => "tls",
+            Self::Http => "http",
+            Self::CoAP => "coap",
+            Self::Https => "https",
+            Self::CoAPS => "coaps",
+        })
+    }
+}
+
 impl<'de> Deserialize<'de> for RemoteTransport {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -1968,19 +1984,29 @@ impl<'de> Deserialize<'de> for RemoteTransport {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum RemoteAddress {
     IP { ip_address: String },
     Dns { dns_name: String },
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub struct RemoteConnection {
     transport: RemoteTransport,
     addresses: Vec<RemoteAddress>,
     port: u16,
+}
+
+impl RemoteConnection {
+    pub fn new(transport: RemoteTransport, addresses: Vec<RemoteAddress>, port: u16) -> Self {
+        Self {
+            transport,
+            addresses,
+            port,
+        }
+    }
 }
 
 impl TryFrom<RemoteConnection> for Vec<TO2AddressEntry> {

@@ -13,7 +13,9 @@ use openssl::pkey::PKey;
 use openssl::x509::{X509Name, X509};
 use std::env;
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+mod aio;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
 enum Subject {
     Diun,
     Manufacturer,
@@ -96,13 +98,40 @@ fn generate_key_and_cert(args: &GenerateKeyAndCertArguments) -> Result<(), Error
 #[clap(author, version, about, long_about = None)]
 #[clap(propagate_version = true)]
 struct Cli {
+    #[clap(arg_enum, short, long, default_value_t = LogLevel::Info)]
+    log_level: LogLevel,
+
     #[clap(subcommand)]
     command: Commands,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+enum LogLevel {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+    Off,
+}
+
+impl LogLevel {
+    fn to_log(self) -> log::LevelFilter {
+        match self {
+            LogLevel::Trace => log::LevelFilter::Trace,
+            LogLevel::Debug => log::LevelFilter::Debug,
+            LogLevel::Info => log::LevelFilter::Info,
+            LogLevel::Warn => log::LevelFilter::Warn,
+            LogLevel::Error => log::LevelFilter::Error,
+            LogLevel::Off => log::LevelFilter::Off,
+        }
+    }
 }
 
 #[derive(Subcommand)]
 enum Commands {
     GenerateKeyAndCert(GenerateKeyAndCertArguments),
+    Aio(Box<crate::aio::AioArgs>),
 }
 
 #[derive(Args)]
@@ -121,8 +150,16 @@ struct GenerateKeyAndCertArguments {
     destination_dir: String,
 }
 
-fn main() -> Result<()> {
-    match Cli::parse().command {
+#[tokio::main]
+async fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    pretty_env_logger::formatted_builder()
+        .filter_level(cli.log_level.to_log())
+        .init();
+
+    match cli.command {
         Commands::GenerateKeyAndCert(args) => generate_key_and_cert(&args),
+        Commands::Aio(args) => aio::run_aio_subcommand(*args).await,
     }
 }

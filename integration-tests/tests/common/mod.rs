@@ -65,6 +65,7 @@ pub enum Binary {
     ServiceInfoApiServer,
     OwnerTool,
     RendezvousServer,
+    AdminTool,
 }
 
 impl Binary {
@@ -77,6 +78,7 @@ impl Binary {
             Binary::ServiceInfoApiServer => "fdo-serviceinfo-api-server",
             Binary::OwnerTool => "fdo-owner-tool",
             Binary::RendezvousServer => "fdo-rendezvous-server",
+            Binary::AdminTool => "fdo-admin-tool",
         }
     }
 
@@ -428,6 +430,23 @@ impl TestContext {
     ) -> Result<TestClientResult> {
         self.run_client(
             Binary::OwnerTool,
+            None,
+            |cfg| {
+                cfg.current_dir(working_dir).args(args);
+
+                Ok(())
+            },
+            MAX_WAIT_FOR_OWNER_TOOL,
+        )
+    }
+
+    pub fn run_admin_tool(
+        &mut self,
+        working_dir: &Path,
+        args: &[&str],
+    ) -> Result<TestClientResult> {
+        self.run_client(
+            Binary::AdminTool,
             None,
             |cfg| {
                 cfg.current_dir(working_dir).args(args);

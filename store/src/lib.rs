@@ -1,7 +1,7 @@
 use core::future::Future;
 use core::pin::Pin;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use fdo_data_formats::Serializable;
@@ -216,17 +216,14 @@ pub trait Store<OT: StoreOpenMode, K, V, MKT: MetadataLocalKey>: Send + Sync {
 #[cfg(feature = "directory")]
 mod directory;
 
-#[derive(Debug, Deserialize)]
-pub enum StoreDriver {
+#[derive(Debug, Serialize, Deserialize)]
+pub enum StoreConfig {
     #[cfg(feature = "directory")]
-    Directory,
+    Directory { path: std::path::PathBuf },
 }
 
-impl StoreDriver {
-    pub fn initialize<OT, K, V, MKT>(
-        &self,
-        cfg: Option<config::Value>,
-    ) -> Result<Box<dyn Store<OT, K, V, MKT>>, StoreError>
+impl StoreConfig {
+    pub fn initialize<OT, K, V, MKT>(&self) -> Result<Box<dyn Store<OT, K, V, MKT>>, StoreError>
     where
         OT: StoreOpenMode + 'static,
         // K and V are supersets of the possible requirements for the different implementations
@@ -236,7 +233,7 @@ impl StoreDriver {
     {
         match self {
             #[cfg(feature = "directory")]
-            StoreDriver::Directory => directory::initialize(cfg),
+            StoreConfig::Directory { path } => directory::initialize(path),
         }
     }
 }

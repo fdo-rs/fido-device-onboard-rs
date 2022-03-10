@@ -1,10 +1,7 @@
-use std::net::SocketAddr;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use openssl::x509::X509;
-use serde::Deserialize;
 use tokio::signal::unix::{signal, SignalKind};
 use warp::Filter;
 
@@ -15,8 +12,8 @@ use fdo_data_formats::{
     types::{COSESign, Guid},
     ProtocolVersion, Serializable,
 };
-use fdo_store::{Store, StoreDriver};
-use fdo_util::servers::{settings_for, AbsolutePathBuf};
+use fdo_store::Store;
+use fdo_util::servers::{configuration::rendezvous_server::RendezvousServerSettings, settings_for};
 
 mod handlers_to0;
 mod handlers_to1;
@@ -75,26 +72,6 @@ struct RendezvousUD {
 
 type RendezvousUDT = Arc<RendezvousUD>;
 
-#[derive(Debug, Deserialize)]
-struct Settings {
-    // Storage info
-    storage_driver: StoreDriver,
-    storage_config: Option<config::Value>,
-
-    // Session store info
-    session_store_driver: StoreDriver,
-    session_store_config: Option<config::Value>,
-
-    // Trusted keys
-    trusted_manufacturer_keys_path: Option<AbsolutePathBuf>,
-
-    // Other info
-    max_wait_seconds: Option<u32>,
-
-    // Bind information
-    bind: String,
-}
-
 const MAINTENANCE_INTERVAL: u64 = 60;
 
 async fn perform_maintenance(udt: RendezvousUDT) {
@@ -126,7 +103,7 @@ async fn main() -> Result<()> {
     fdo_util::add_version!();
     fdo_http_wrapper::init_logging();
 
-    let settings: Settings = settings_for("rendezvous-server")?
+    let settings: RendezvousServerSettings = settings_for("rendezvous-server")?
         .try_into()
         .context("Error parsing configuration")?;
 
@@ -135,17 +112,16 @@ async fn main() -> Result<()> {
         .unwrap_or(DEFAULT_MAX_WAIT_SECONDS);
 
     // Bind information
-    let bind_addr = SocketAddr::from_str(&settings.bind)
-        .with_context(|| format!("Error parsing bind string '{}'", &settings.bind))?;
+    let bind_addr = settings.bind.clone();
 
     // Initialize stores
     let store = settings
         .storage_driver
-        .initialize(settings.storage_config)
+        .initialize()
         .context("Error initializing store")?;
     let session_store = settings
         .session_store_driver
-        .initialize(settings.session_store_config)
+        .initialize()
         .context("Error initializing session store")?;
     let session_store = fdo_http_wrapper::server::SessionStore::new(session_store);
 

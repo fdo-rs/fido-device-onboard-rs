@@ -1,13 +1,11 @@
 use std::convert::{TryFrom, TryInto};
 use std::fs;
-use std::net::SocketAddr;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::{bail, Context, Result};
 use fdo_data_formats::constants::HashType;
 use fdo_data_formats::enhanced_types::RendezvousInterpreterSide;
-use fdo_data_formats::types::{COSESign, Hash, RemoteConnection, TO0Data, TO1DataPayload};
+use fdo_data_formats::types::{COSESign, Hash, TO0Data, TO1DataPayload};
 use fdo_data_formats::{messages, ProtocolVersion, Serializable};
 use fdo_http_wrapper::client::RequestResult;
 use openssl::{
@@ -19,7 +17,6 @@ use openssl::{
     pkey::{PKey, Private},
     x509::{X509Builder, X509NameBuilder, X509},
 };
-use serde::Deserialize;
 use serde_bytes::ByteBuf;
 use tokio::signal::unix::{signal, SignalKind};
 use warp::Filter;
@@ -30,8 +27,11 @@ use fdo_data_formats::{
     publickey::PublicKey,
     types::{Guid, TO2AddressEntry},
 };
-use fdo_store::{Store, StoreDriver};
-use fdo_util::servers::{settings_for, AbsolutePathBuf, OwnershipVoucherStoreMetadataKey};
+use fdo_store::Store;
+use fdo_util::servers::{
+    configuration::{owner_onboarding_server::OwnerOnboardingServerSettings, AbsolutePathBuf},
+    settings_for, OwnershipVoucherStoreMetadataKey,
+};
 
 mod handlers;
 
@@ -66,35 +66,6 @@ pub(crate) struct OwnerServiceUD {
 }
 
 pub(crate) type OwnerServiceUDT = Arc<OwnerServiceUD>;
-
-#[derive(Debug, Deserialize)]
-struct Settings {
-    // Ownership Voucher storage info
-    ownership_voucher_store_driver: StoreDriver,
-    ownership_voucher_store_config: Option<config::Value>,
-
-    // Session store info
-    session_store_driver: StoreDriver,
-    session_store_config: Option<config::Value>,
-
-    // Trusted keys
-    trusted_device_keys_path: AbsolutePathBuf,
-
-    // Our private owner key
-    owner_private_key_path: AbsolutePathBuf,
-    owner_public_key_path: AbsolutePathBuf,
-
-    // Bind information
-    bind: String,
-
-    // Service Info API Server
-    service_info_api_url: String,
-    service_info_api_authentication: fdo_http_wrapper::client::JsonAuthentication,
-
-    owner_addresses: Vec<RemoteConnection>,
-
-    report_to_rendezvous_endpoint_enabled: bool,
-}
 
 fn load_private_key(path: &AbsolutePathBuf) -> Result<PKey<Private>> {
     let contents = fs::read(path)?;
@@ -301,13 +272,12 @@ async fn main() -> Result<()> {
         bail!("Provide environment ALLOW_NONINTEROPERABLE_KDF=1 to enable interoperable KDF");
     }
 
-    let settings: Settings = settings_for("owner-onboarding-server")?
+    let settings: OwnerOnboardingServerSettings = settings_for("owner-onboarding-server")?
         .try_into()
         .context("Error parsing configuration")?;
 
     // Bind information
-    let bind_addr = SocketAddr::from_str(&settings.bind)
-        .with_context(|| format!("Error parsing bind string '{}'", &settings.bind))?;
+    let bind_addr = settings.bind.clone();
 
     // Trusted keys
     let trusted_device_keys = {
@@ -344,11 +314,11 @@ async fn main() -> Result<()> {
     // Initialize stores
     let ownership_voucher_store = settings
         .ownership_voucher_store_driver
-        .initialize(settings.ownership_voucher_store_config)
+        .initialize()
         .context("Error initializing ownership voucher datastore")?;
     let session_store = settings
         .session_store_driver
-        .initialize(settings.session_store_config)
+        .initialize()
         .context("Error initializing session store")?;
     let session_store = fdo_http_wrapper::server::SessionStore::new(session_store);
 
