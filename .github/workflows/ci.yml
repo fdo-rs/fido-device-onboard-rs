@@ -25,6 +25,20 @@ jobs:
     - name: Build containers
       uses: ./.github/actions/build_containers
 
+  check-spelling:
+    name: Check spelling
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Check spelling
+        uses: codespell-project/actions-codespell@master
+        with:
+          builtin: clear,rare,usage,code,en-GB_to_en-US
+          check_filenames: true
+          check_hidden: true
+          ignore_words_file: .github/spellcheck-ignore
+          skip: "./docs/Gemfile.lock,./docs/_config.yml,./.github,./.git"
+
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
