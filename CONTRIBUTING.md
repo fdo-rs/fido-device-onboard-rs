@@ -24,7 +24,7 @@ For filing issues with the codebase, we use the GitHub issue tracker.
 If you find an issue you'd like to work on, feel free to ask in the issue if someone is currently working on it.
 
 You will see the `Jira` tag on many issues there, this is used to sync the issues to an internal tracker some contributors use for scheduling reasons.
-The precense or absense of this tag does not mean that we will fix this, or that it has been claimed by anyone, it is purely used for some tooling.
+The presence or absence of this tag does not mean that we will fix this, or that it has been claimed by anyone, it is purely used for some tooling.
 
 ## Specifications
 

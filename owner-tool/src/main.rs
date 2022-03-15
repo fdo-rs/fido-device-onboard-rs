@@ -71,7 +71,7 @@ async fn main() -> Result<()> {
                     Arg::with_name("device-cert-ca-chain")
                         .required(true)
                         .takes_value(true)
-                        .help("Chain with CA certificates for device certifiate")
+                        .help("Chain with CA certificates for device certificate")
                         .long("device-cert-ca-chain"),
                 )
                 .arg(

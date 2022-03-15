@@ -118,7 +118,7 @@ impl Error {
         ET: std::error::Error,
     {
         log::error!(
-            "Error occured while processing message type {:?}: {:?}",
+            "Error occurred while processing message type {:?}: {:?}",
             M::message_type(),
             err
         );

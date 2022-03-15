@@ -761,7 +761,7 @@ impl ServiceInfo {
             &modules.len(),
         )?;
 
-        // We have a special case of this, becasue this is a list with different types.
+        // We have a special case of this, because this is a list with different types.
         let mut list = vec![
             serde_cbor::Value::Integer(0),
             serde_cbor::Value::Integer(modules.len() as i128),

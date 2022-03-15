@@ -22,9 +22,9 @@ The fido-fdo-rs implements all core components of the FIDO Device Onboard Specif
 - `fdo-http-wrapper`: Helpers for HTTP operations in both FDO server and client.
 - `fdo-integration-tests`: This crate contains the integration testing.
 - `fdo-libfdo-data`: C wrapper around `fdo-data-formats`, allowing code in other languages to parse Ownership Vouchers, and possibly other data formats in the future.
-- `fdo-manufacturing-client`: Client side implementation of Device Initalize and Device Initialize over
+- `fdo-manufacturing-client`: Client side implementation of Device Initialize and Device Initialize over
 Untrusted Networks (DIUN) protocols.
-- `fdo-manufacturing-server`: Server side implementation of Device Initalize protocol. It supports as well Untrusted Networks (DIUN) protocols, that can be used for local prototypes.
+- `fdo-manufacturing-server`: Server side implementation of Device Initialize protocol. It supports as well Untrusted Networks (DIUN) protocols, that can be used for local prototypes.
 - `fdo-owner-onboarding-server`: Onboarding server, server side of TO2 protocol.
 - `fdo-owner-tool`: Tool for initializing devices, dump ownership vouchers, dump device credentials, extend ownership vouchers and report the device to the rendezvous service.
 - `fdo-rendezvous-server`: Rendezvous server implementation.

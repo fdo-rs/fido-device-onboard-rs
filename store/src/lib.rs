@@ -8,7 +8,7 @@ use fdo_data_formats::Serializable;
 
 #[derive(Debug, Error)]
 pub enum StoreError {
-    #[error("Unspecified error occured: {0}")]
+    #[error("Unspecified error occurred: {0}")]
     Unspecified(String),
     #[error("Configuration error: {0}")]
     Configuration(String),
