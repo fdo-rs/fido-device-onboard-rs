@@ -15,27 +15,5 @@ owner_addresses:
     - dns_name: fdo.example.com
 report_to_rendezvous_endpoint_enabled: false
 bind: 0.0.0.0:8081
-service_info:
-  sshkey_user: admin
-  sshkey_key: "testkey"
-  files:
-  - path: /device/etc/hosts
-    permissions: 644
-    source_path: /local/etc/hosts
-  - path: /device/etc/resolv.conf
-    source_path: /local/etc/resolv.conf
-  commands:
-  - command: ls
-    args:
-    - /etc/hosts
-    return_stdout: true
-    return_stderr: true
-  - command: ls
-    args:
-    - /etc/doesnotexist/test
-    may_fail: true
-    return_stdout: true
-    return_stderr: true
-  - command: touch
-    args:
-    - /tmp/command-testfile
+service_info_api_url: "http://localhost:8089/device_info"
+service_info_api_authentication: None
