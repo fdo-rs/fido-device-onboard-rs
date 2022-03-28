@@ -1,5 +1,6 @@
 mod common;
-use std::{fs, time::Duration};
+#[allow(unused_imports)]
+use std::{fs, io::Write, process::Command, time::Duration};
 
 use common::{Binary, LogSide, TestContext};
 
@@ -58,7 +59,7 @@ async fn test_e2e() -> Result<()> {
     let mut failed = Vec::new();
 
     for (diun_verification_method_name, diun_verification_method_generator) in
-        diun_verification_methods
+        &diun_verification_methods[1..2]
     {
         for diun_key_type in &diun_key_types {
             match test_e2e_impl(diun_verification_method_generator, diun_key_type).await {
@@ -88,7 +89,7 @@ async fn test_e2e() -> Result<()> {
 struct ServiceInfoApiAdminV0Request {
     device_guid: String,
     // This is not entirely accurate (it accepts any JSON value), but for this test sufficient
-    service_info: Vec<(String, String, String)>,
+    service_info: Vec<(String, String, serde_json::Value)>,
 }
 
 const CI_TESTSTRING: &str = "CI_TESTSTRING_SHOULD_BE_RETURNED_IN_SERVICEINFO";
@@ -242,6 +243,102 @@ where
     // It should have been extended to the "owner" time by the manufacturer
     owner_output.expect_stdout_line("Entry 0")?;
 
+    let disk_loc = ctx.testpath().join("encrypted.img");
+
+    L.l("Adding disk encryption tests");
+    L.l("Creating empty disk image");
+    if !Command::new("truncate")
+        .arg("-s")
+        .arg("1G")
+        .arg(&disk_loc)
+        .status()
+        .context("Error running truncate")?
+        .success()
+    {
+        bail!("Error creating empty disk image");
+    }
+
+    L.l("Encrypting disk image");
+    let mut child = Command::new("cryptsetup")
+        .arg("luksFormat")
+        .arg(&disk_loc)
+        .arg("--force-password")
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .context("Error starting cryptsetup luksFormat")?;
+    {
+        let mut stdin = child.stdin.take().context("Error taking stdin")?;
+        writeln!(stdin, "testpassword")?;
+        stdin.flush()?;
+    }
+
+    let output = child.wait().context("Error waiting for cryptsetup")?;
+    if !output.success() {
+        bail!("Failed to call cryptsetup");
+    }
+
+    L.l("Binding disk image");
+    let mut child = Command::new("clevis")
+        .arg("luks")
+        .arg("bind")
+        .arg("-d")
+        .arg(&disk_loc)
+        .arg("test")
+        .arg("{}")
+        .env("PATH", ctx.get_path_env()?)
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .context("Error starting clevis luks bind")?;
+    {
+        let mut stdin = child.stdin.take().context("Error taking stdin")?;
+        writeln!(stdin, "testpassword")?;
+        stdin.flush()?;
+    }
+
+    let output = child.wait().context("Error waiting for clevis to bind")?;
+    if !output.success() {
+        bail!("Failed to call clevis luks bind");
+    }
+
+    #[allow(unused_mut)]
+    let mut service_info = vec![
+        (
+            "CI".to_string(),
+            "teststring".to_string(),
+            serde_json::Value::String(CI_TESTSTRING.to_string()),
+        ),
+        (
+            "org.fedoraiot.diskencryption-clevis".to_string(),
+            "disk-label".to_string(),
+            serde_json::Value::String(
+                ctx.testpath()
+                    .join("encrypted.img")
+                    .to_string_lossy()
+                    .to_string(),
+            ),
+        ),
+        (
+            "org.fedoraiot.diskencryption-clevis".to_string(),
+            "pin".to_string(),
+            serde_json::Value::String("test".to_string()),
+        ),
+        (
+            "org.fedoraiot.diskencryption-clevis".to_string(),
+            "config".to_string(),
+            serde_json::Value::String("{}".to_string()),
+        ),
+        (
+            "org.fedoraiot.diskencryption-clevis".to_string(),
+            "reencrypt".to_string(),
+            serde_json::Value::Bool(true),
+        ),
+        (
+            "org.fedoraiot.diskencryption-clevis".to_string(),
+            "execute".to_string(),
+            serde_json::Value::Null,
+        ),
+    ];
+
     let client = reqwest::Client::new();
     // Submit additional ServiceInfo for this device
     client
@@ -252,11 +349,7 @@ where
         .header("Authorization", "Bearer TestAdminToken")
         .json(&ServiceInfoApiAdminV0Request {
             device_guid: device_guid,
-            service_info: vec![(
-                "CI".to_string(),
-                "teststring".to_string(),
-                CI_TESTSTRING.to_string(),
-            )],
+            service_info: service_info,
         })
         .send()
         .await
@@ -299,7 +392,7 @@ where
                     .env("ALLOW_NONINTEROPERABLE_KDF", &"1");
                 Ok(())
             },
-            Duration::from_secs(5),
+            Duration::from_secs(60),
         )
         .context("Error running client")?;
     output.expect_success().context("client failed")?;
@@ -318,6 +411,37 @@ testkey
 # End of FIDO Device Onboarding keys
 "
     );
+
+    L.l("Checking encrypted disk image");
+    let output = Command::new("cryptsetup")
+        .arg("luksDump")
+        .arg(ctx.testpath().join("encrypted.img"))
+        .output()
+        .context("Error running cryptsetup")?;
+    if !output.status.success() {
+        bail!("Failed to call cryptsetup");
+    }
+    let luksdump_stdout =
+        String::from_utf8(output.stdout).context("Error reading luksDump stdout")?;
+    L.l(format!("Cryptsetup luksDump output: {:?}", luksdump_stdout));
+    let mut found_ds_backup_final = false;
+    let mut found_reencrypt_unbound = false;
+    for stdout_line in luksdump_stdout.split('\n') {
+        if stdout_line.contains("flags") && stdout_line.contains("backup-final") {
+            found_ds_backup_final = true;
+            continue;
+        }
+        if stdout_line.contains("reencrypt (unbound)") {
+            found_reencrypt_unbound = true;
+            continue;
+        }
+    }
+    if !found_ds_backup_final {
+        bail!("Failed to find backup-final flag in cryptsetup output");
+    }
+    if !found_reencrypt_unbound {
+        bail!("Failed to find reencrypt (unbound) flag in cryptsetup output");
+    }
 
     Ok(())
 }

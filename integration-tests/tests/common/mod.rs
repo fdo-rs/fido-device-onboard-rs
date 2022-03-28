@@ -29,6 +29,7 @@ lazy_static::lazy_static! {
 }
 
 const TARGET_TMPDIR: &str = env!("CARGO_TARGET_TMPDIR");
+const MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 const KEY_NAMES: &[&str] = &[
     "manufacturer",
     "device_ca",
@@ -373,6 +374,10 @@ impl TestContext {
         cmd.current_dir(&server_path)
             .env("LOG_LEVEL", "trace")
             .env(
+                "PATH",
+                self.get_path_env().context("Error getting path env")?,
+            )
+            .env(
                 format_conf_env(&String::from(binary.target_name()).replace("fdo-", "")),
                 config_path,
             )
@@ -457,6 +462,14 @@ impl TestContext {
         )
     }
 
+    pub fn get_path_env(&self) -> Result<String> {
+        Ok(format!(
+            "{}:{}/util_bins",
+            std::env::var("PATH").context("Error getting original PATH")?,
+            MANIFEST_DIR
+        ))
+    }
+
     pub fn run_client<F>(
         &mut self,
         binary: Binary,
@@ -491,6 +504,10 @@ impl TestContext {
         // Do initial configuration: everything can be overridden by the configurator
         cmd.current_dir(&client_path)
             .env("LOG_LEVEL", "trace")
+            .env(
+                "PATH",
+                self.get_path_env().context("Error getting path env")?,
+            )
             .stdout(File::create(&stdout_path).context("Error creating stdout")?)
             .stderr(File::create(&stderr_path).context("Error creating stderr")?);
 
