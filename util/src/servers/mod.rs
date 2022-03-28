@@ -1,3 +1,4 @@
+use fdo_data_formats::constants::ServiceInfoModule;
 use glob::glob;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -118,5 +119,5 @@ pub struct ServiceInfoApiReply {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub initial_user: Option<ServiceInfoApiReplyInitialUser>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub extra_commands: Option<Vec<(String, String, serde_json::Value)>>,
+    pub extra_commands: Option<Vec<(ServiceInfoModule, String, serde_json::Value)>>,
 }
