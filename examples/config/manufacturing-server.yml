@@ -12,8 +12,8 @@ rendezvous_info:
   owner_port: 8082
   protocol: http
 - ip: 127.0.0.1
-  device_port: 8083
-  owner_port: 8083
+  device_port: 8084
+  owner_port: 8084
   protocol: http
 protocols:
   diun:

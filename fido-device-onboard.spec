@@ -4,7 +4,7 @@
 %global __cargo_is_lib() false
 %global forgeurl https://github.com/fedora-iot/fido-device-onboard-rs
 
-Version:        0.4.0
+Version:        0.4.5
 
 %forgemeta
 
@@ -12,7 +12,7 @@ Name:           fido-device-onboard
 Release:        1%{?dist}
 Summary:        An implementation of the FIDO Device Onboard Specification written in rust
 
-License:        BSD 3
+License:        BSD
 URL:            %{forgeurl}
 Source:         %{forgesource}
 %if 0%{?rhel} && !0%{?eln}
@@ -33,7 +33,9 @@ BuildRequires:  rust-toolset
 BuildRequires:  rust-packaging
 %endif
 BuildRequires: systemd-rpm-macros
-BuildRequires: openssl-devel
+BuildRequires: openssl-devel >= 3.0.1-12
+BuildRequires: golang
+BuildRequires: tpm2-tss-devel
 
 %description
 %{summary}.
@@ -55,9 +57,15 @@ install -D -m 0755 -t %{buildroot}%{_libexecdir}/fdo target/release/fdo-manufact
 install -D -m 0755 -t %{buildroot}%{_libexecdir}/fdo target/release/fdo-manufacturing-server
 install -D -m 0755 -t %{buildroot}%{_libexecdir}/fdo target/release/fdo-owner-onboarding-server
 install -D -m 0755 -t %{buildroot}%{_libexecdir}/fdo target/release/fdo-rendezvous-server
+install -D -m 0755 -t %{buildroot}%{_libexecdir}/fdo target/release/fdo-serviceinfo-api-server
+# duplicates as needed by AIO command
+install -D -m 0755 -t %{buildroot}%{_libexecdir}/fdo target/release/fdo-owner-tool
+install -D -m 0755 -t %{buildroot}%{_libexecdir}/fdo target/release/fdo-admin-tool
 install -D -m 0755 -t %{buildroot}%{_bindir} target/release/fdo-owner-tool
+install -D -m 0755 -t %{buildroot}%{_bindir} target/release/fdo-admin-tool
 install -D -m 0644 -t %{buildroot}%{_unitdir} examples/systemd/*
 install -D -m 0644 -t %{buildroot}%{_docdir}/fdo examples/config/*
+mkdir -p %{buildroot}%{_sysconfdir}/fdo
 # 52fdo
 install -D -m 0755 -t %{buildroot}%{dracutlibdir}/modules.d/52fdo dracut/52fdo/module-setup.sh
 install -D -m 0755 -t %{buildroot}%{dracutlibdir}/modules.d/52fdo dracut/52fdo/manufacturing-client-generator
@@ -66,6 +74,7 @@ install -D -m 0755 -t %{buildroot}%{dracutlibdir}/modules.d/52fdo dracut/52fdo/m
 
 %package -n fdo-init
 Summary: dracut module for device initialization
+Requires: openssl-libs >= 3.0.1-12
 %description -n fdo-init
 %{summary}
 
@@ -76,23 +85,30 @@ Summary: dracut module for device initialization
 
 %package -n fdo-owner-onboarding-server
 Summary: FDO Owner Onboarding Server implementation
+Requires: openssl-libs >= 3.0.1-12
 %description -n fdo-owner-onboarding-server
 %{summary}
 
 %files -n fdo-owner-onboarding-server
 %license LICENSE
 %{_libexecdir}/fdo/fdo-owner-onboarding-server
+%{_libexecdir}/fdo/fdo-serviceinfo-api-server
 %{_docdir}/fdo/owner-onboarding-server.yml
+%{_docdir}/fdo/serviceinfo-api-server.yml
 %{_unitdir}/fdo-owner-onboarding-server.service
+%{_unitdir}/fdo-serviceinfo-api-server.service
 
 %post -n fdo-owner-onboarding-server
 %systemd_post fdo-owner-onboarding-server.service
+%systemd_post fdo-serviceinfo-api-server.service
 
 %preun -n fdo-owner-onboarding-server
 %systemd_preun fdo-owner-onboarding-server.service
+%systemd_preun fdo-serviceinfo-api-server.service
 
 %postun -n fdo-owner-onboarding-server
 %systemd_postun_with_restart fdo-owner-onboarding-server.service
+%systemd_postun_with_restart fdo-serviceinfo-api-server.service
 
 %package -n fdo-rendezvous-server
 Summary: FDO Rendezvous Server implementation
@@ -116,6 +132,7 @@ Summary: FDO Rendezvous Server implementation
 
 %package -n fdo-manufacturing-server
 Summary: FDO Manufacturing Server implementation
+Requires: openssl-libs >= 3.0.1-12
 %description -n fdo-manufacturing-server
 %{summary}
 
@@ -123,7 +140,6 @@ Summary: FDO Manufacturing Server implementation
 %license LICENSE
 %{_libexecdir}/fdo/fdo-manufacturing-server
 %{_docdir}/fdo/manufacturing-server.yml
-%{_docdir}/fdo/rendezvous-info.yml
 %{_unitdir}/fdo-manufacturing-server.service
 
 %post -n fdo-manufacturing-server
@@ -137,6 +153,7 @@ Summary: FDO Manufacturing Server implementation
 
 %package -n fdo-client
 Summary: FDO Client implementation
+Requires: openssl-libs >= 3.0.1-12
 %description -n fdo-client
 %{summary}
 
@@ -152,7 +169,7 @@ Summary: FDO Client implementation
 %systemd_preun fdo-client-linuxapp.service
 
 %postun -n fdo-client
-%systemd_postun_with_restart fdo-client.linuxapp.service
+%systemd_postun_with_restart fdo-client-linuxapp.service
 
 %package -n fdo-owner-cli
 Summary: FDO Owner tools implementation
@@ -162,9 +179,39 @@ Summary: FDO Owner tools implementation
 %files -n fdo-owner-cli
 %license LICENSE
 %{_bindir}/fdo-owner-tool
-%{_docdir}/fdo/owner-addresses.yml
+%{_libexecdir}/fdo/fdo-owner-tool
+
+%package -n fdo-admin-cli
+Summary: FDO admin tools implementation
+Requires: fdo-manufacturing-server
+Requires: fdo-init
+Requires: fdo-client
+Requires: fdo-rendezvous-server
+Requires: fdo-owner-onboarding-server
+Requires: fdo-owner-cli
+%description -n fdo-admin-cli
+%{summary}
+
+%files -n fdo-admin-cli
+%license LICENSE
+%dir %{_sysconfdir}/fdo
+%{_bindir}/fdo-admin-tool
+%{_libexecdir}/fdo/fdo-admin-tool
+%{_unitdir}/fdo-aio.service
+
+%post -n fdo-admin-cli
+%systemd_post fdo-aio.service
+
+%preun -n fdo-admin-cli
+%systemd_preun fdo-aio.service
+
+%postun -n fdo-admin-cli
+%systemd_postun_with_restart fdo-aio.service
 
 %changelog
+* Tue Mar 15 2022 Antonio Murdaca <runcom@linux.com> - 0.4.5-1
+- Rebase to 0.4.5
+
 * Thu Feb 24 2022 Patrick Uiterwijk <patrick@puiterwijk.org> - 0.4.0-1
 - Rebase to 0.4.0
 
