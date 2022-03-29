@@ -110,6 +110,8 @@ where
 {
     let mut ctx = TestContext::new().context("Error building test context")?;
 
+    let encrypted_disk_loc = ctx.testpath().join("encrypted.img");
+
     let rendezvous_server = ctx
         .start_test_server(
             Binary::RendezvousServer,
@@ -120,7 +122,15 @@ where
     let serviceinfo_api_server = ctx
         .start_test_server(
             Binary::ServiceInfoApiServer,
-            |cfg| Ok(cfg.prepare_config_file(None, |_| Ok(()))?),
+            |cfg| {
+                Ok(cfg.prepare_config_file(None, |cfg| {
+                    cfg.insert(
+                        "encrypted_disk_label",
+                        &encrypted_disk_loc.to_string_lossy(),
+                    );
+                    Ok(())
+                })?)
+            },
             |_| Ok(()),
         )
         .context("Error creating serviceinfo API dev server")?;
@@ -243,14 +253,12 @@ where
     // It should have been extended to the "owner" time by the manufacturer
     owner_output.expect_stdout_line("Entry 0")?;
 
-    let disk_loc = ctx.testpath().join("encrypted.img");
-
     L.l("Adding disk encryption tests");
     L.l("Creating empty disk image");
     if !Command::new("truncate")
         .arg("-s")
         .arg("1G")
-        .arg(&disk_loc)
+        .arg(&encrypted_disk_loc)
         .status()
         .context("Error running truncate")?
         .success()
@@ -261,7 +269,7 @@ where
     L.l("Encrypting disk image");
     let mut child = Command::new("cryptsetup")
         .arg("luksFormat")
-        .arg(&disk_loc)
+        .arg(&encrypted_disk_loc)
         .arg("--force-password")
         .stdin(std::process::Stdio::piped())
         .spawn()
@@ -282,7 +290,7 @@ where
         .arg("luks")
         .arg("bind")
         .arg("-d")
-        .arg(&disk_loc)
+        .arg(&encrypted_disk_loc)
         .arg("test")
         .arg("{}")
         .env("PATH", ctx.get_path_env()?)
@@ -301,43 +309,11 @@ where
     }
 
     #[allow(unused_mut)]
-    let mut service_info = vec![
-        (
-            "CI".to_string(),
-            "teststring".to_string(),
-            serde_json::Value::String(CI_TESTSTRING.to_string()),
-        ),
-        (
-            "org.fedoraiot.diskencryption-clevis".to_string(),
-            "disk-label".to_string(),
-            serde_json::Value::String(
-                ctx.testpath()
-                    .join("encrypted.img")
-                    .to_string_lossy()
-                    .to_string(),
-            ),
-        ),
-        (
-            "org.fedoraiot.diskencryption-clevis".to_string(),
-            "pin".to_string(),
-            serde_json::Value::String("test".to_string()),
-        ),
-        (
-            "org.fedoraiot.diskencryption-clevis".to_string(),
-            "config".to_string(),
-            serde_json::Value::String("{}".to_string()),
-        ),
-        (
-            "org.fedoraiot.diskencryption-clevis".to_string(),
-            "reencrypt".to_string(),
-            serde_json::Value::Bool(true),
-        ),
-        (
-            "org.fedoraiot.diskencryption-clevis".to_string(),
-            "execute".to_string(),
-            serde_json::Value::Null,
-        ),
-    ];
+    let mut service_info = vec![(
+        "CI".to_string(),
+        "teststring".to_string(),
+        serde_json::Value::String(CI_TESTSTRING.to_string()),
+    )];
 
     let client = reqwest::Client::new();
     // Submit additional ServiceInfo for this device
@@ -415,7 +391,7 @@ testkey
     L.l("Checking encrypted disk image");
     let output = Command::new("cryptsetup")
         .arg("luksDump")
-        .arg(ctx.testpath().join("encrypted.img"))
+        .arg(encrypted_disk_loc)
         .output()
         .context("Error running cryptsetup")?;
     if !output.status.success() {
