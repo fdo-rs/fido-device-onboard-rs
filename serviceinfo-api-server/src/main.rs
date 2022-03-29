@@ -290,6 +290,45 @@ async fn serviceinfo_handler(
         }
     }
 
+    if query_info
+        .modules
+        .contains(&FedoraIotServiceInfoModule::DiskEncryptionClevis.into())
+    {
+        if let Some(disk_encryptions) = &user_data
+            .service_info_configuration
+            .settings
+            .diskencryption_clevis
+        {
+            for encryption in disk_encryptions {
+                reply.add_extra(
+                    FedoraIotServiceInfoModule::DiskEncryptionClevis,
+                    "disk-label",
+                    &encryption.disk_label,
+                );
+                reply.add_extra(
+                    FedoraIotServiceInfoModule::DiskEncryptionClevis,
+                    "pin",
+                    &encryption.binding.pin,
+                );
+                reply.add_extra(
+                    FedoraIotServiceInfoModule::DiskEncryptionClevis,
+                    "config",
+                    &encryption.binding.config,
+                );
+                reply.add_extra(
+                    FedoraIotServiceInfoModule::DiskEncryptionClevis,
+                    "reencrypt",
+                    &encryption.reencrypt,
+                );
+                reply.add_extra(
+                    FedoraIotServiceInfoModule::DiskEncryptionClevis,
+                    "execute",
+                    &serde_json::Value::Null,
+                );
+            }
+        }
+    }
+
     if let Some(additional_serviceinfo) = &user_data
         .service_info_configuration
         .settings

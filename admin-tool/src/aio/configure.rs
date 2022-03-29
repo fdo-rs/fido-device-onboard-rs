@@ -163,6 +163,7 @@ impl Configuration {
             initial_user: None,
             files: None,
             commands: None,
+            diskencryption_clevis: None,
             additional_serviceinfo: None,
         })
     }
