@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use fdo_data_formats::constants::ServiceInfoModule;
 use fdo_store::StoreConfig;
 use serde::{Deserialize, Serialize};
 
@@ -24,7 +25,7 @@ pub struct ServiceInfoSettings {
 
     pub commands: Option<Vec<ServiceInfoCommand>>,
 
-    pub additional_serviceinfo: Option<HashMap<String, Vec<(String, String)>>>,
+    pub additional_serviceinfo: Option<HashMap<ServiceInfoModule, Vec<(String, String)>>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

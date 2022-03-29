@@ -6,7 +6,7 @@ use tokio::signal::unix::{signal, SignalKind};
 use warp::Filter;
 
 use fdo_data_formats::{
-    constants::HashType,
+    constants::{FedoraIotServiceInfoModule, HashType, ServiceInfoModule},
     types::{Guid, Hash},
 };
 use fdo_store::Store;
@@ -74,7 +74,7 @@ impl fdo_store::MetadataLocalKey for ServiceInfoMetadataKey {
     }
 }
 
-type ServiceInfoStoreData = Vec<(String, String, serde_json::Value)>;
+type ServiceInfoStoreData = Vec<(ServiceInfoModule, String, serde_json::Value)>;
 
 struct ServiceInfoApiServerUD {
     // Stores
@@ -94,29 +94,32 @@ type ServiceInfoApiServerUDT = std::sync::Arc<ServiceInfoApiServerUD>;
 
 #[derive(Debug, Default)]
 struct ServiceInfoApiReplyBuilder {
-    enabled_modules: std::collections::HashSet<String>,
+    enabled_modules: std::collections::HashSet<ServiceInfoModule>,
     reply: ServiceInfoApiReply,
 }
 
 impl ServiceInfoApiReplyBuilder {
-    fn add_extra<T>(&mut self, module: &str, command: &str, argument: &T)
+    fn add_extra<T, MT>(&mut self, module: MT, command: &str, argument: &T)
     where
         T: serde::Serialize,
+        MT: Into<ServiceInfoModule>,
     {
+        let module: ServiceInfoModule = module.into();
+
         if self.reply.extra_commands.is_none() {
             self.reply.extra_commands = Some(Vec::new());
         }
-        if !self.enabled_modules.contains(module) {
-            self.enabled_modules.insert(module.to_string());
+        if !self.enabled_modules.contains(&module) {
+            self.enabled_modules.insert(module.clone());
             self.reply.extra_commands.as_mut().unwrap().push((
-                module.to_string(),
+                module.clone(),
                 "active".to_string(),
                 serde_json::Value::Bool(true),
             ));
         }
 
         self.reply.extra_commands.as_mut().unwrap().push((
-            module.to_string(),
+            module,
             command.to_string(),
             serde_json::to_value(argument).expect("Error converting to json value"),
         ));
@@ -147,7 +150,7 @@ async fn admin_auth_handler(
 struct AdminV0Request {
     #[serde(deserialize_with = "deserialize_from_str")]
     device_guid: fdo_data_formats::types::Guid,
-    service_info: Vec<(String, String, serde_json::Value)>,
+    service_info: Vec<(ServiceInfoModule, String, serde_json::Value)>,
 }
 
 #[derive(Debug, Serialize)]
@@ -210,7 +213,10 @@ async fn serviceinfo_handler(
 
     let mut reply: ServiceInfoApiReplyBuilder = Default::default();
 
-    if query_info.modules.contains("sshkey") {
+    if query_info
+        .modules
+        .contains(&FedoraIotServiceInfoModule::SSHKey.into())
+    {
         if let Some(initial_user) = &user_data.service_info_configuration.settings.initial_user {
             reply.reply.initial_user = Some(ServiceInfoApiReplyInitialUser {
                 username: initial_user.username.clone(),
@@ -219,29 +225,67 @@ async fn serviceinfo_handler(
         }
     }
 
-    if query_info.modules.contains("binaryfile") {
+    if query_info
+        .modules
+        .contains(&FedoraIotServiceInfoModule::BinaryFile.into())
+    {
         if let Some(files) = &user_data.service_info_configuration.settings.files {
             for file in files {
-                reply.add_extra("binaryfile", "name", &file.path);
-                reply.add_extra("binaryfile", "length", &file.contents_len);
+                reply.add_extra(FedoraIotServiceInfoModule::BinaryFile, "name", &file.path);
+                reply.add_extra(
+                    FedoraIotServiceInfoModule::BinaryFile,
+                    "length",
+                    &file.contents_len,
+                );
                 if let Some(parsed_permissions) = &file.parsed_permissions {
-                    reply.add_extra("binaryfile", "mode", &parsed_permissions);
+                    reply.add_extra(
+                        FedoraIotServiceInfoModule::BinaryFile,
+                        "mode",
+                        &parsed_permissions,
+                    );
                 }
-                reply.add_extra("binaryfile", "data001|hex", &file.contents_hex);
-                reply.add_extra("binaryfile", "sha-384|hex", &file.hash_hex);
+                reply.add_extra(
+                    FedoraIotServiceInfoModule::BinaryFile,
+                    "data001|hex",
+                    &file.contents_hex,
+                );
+                reply.add_extra(
+                    FedoraIotServiceInfoModule::BinaryFile,
+                    "sha-384|hex",
+                    &file.hash_hex,
+                );
             }
         }
     }
 
-    if query_info.modules.contains("command") {
+    if query_info
+        .modules
+        .contains(&FedoraIotServiceInfoModule::Command.into())
+    {
         if let Some(commands) = &user_data.service_info_configuration.settings.commands {
             for command in commands {
-                reply.add_extra("command", "command", &command.command);
-                reply.add_extra("command", "args", &command.args);
-                reply.add_extra("command", "may_fail", &command.may_fail);
-                reply.add_extra("command", "return_stdout", &command.return_stdout);
-                reply.add_extra("command", "return_stderr", &command.return_stderr);
-                reply.add_extra("command", "execute", &true);
+                reply.add_extra(
+                    FedoraIotServiceInfoModule::Command,
+                    "command",
+                    &command.command,
+                );
+                reply.add_extra(FedoraIotServiceInfoModule::Command, "args", &command.args);
+                reply.add_extra(
+                    FedoraIotServiceInfoModule::Command,
+                    "may_fail",
+                    &command.may_fail,
+                );
+                reply.add_extra(
+                    FedoraIotServiceInfoModule::Command,
+                    "return_stdout",
+                    &command.return_stdout,
+                );
+                reply.add_extra(
+                    FedoraIotServiceInfoModule::Command,
+                    "return_stderr",
+                    &command.return_stderr,
+                );
+                reply.add_extra(FedoraIotServiceInfoModule::Command, "execute", &true);
             }
         }
     }
@@ -254,7 +298,7 @@ async fn serviceinfo_handler(
         for (module, serviceinfo_lines) in additional_serviceinfo {
             if query_info.modules.contains(module) {
                 for (key, value) in serviceinfo_lines {
-                    reply.add_extra(module, key, value);
+                    reply.add_extra(module.clone(), key, value);
                 }
             }
         }
@@ -274,7 +318,7 @@ async fn serviceinfo_handler(
     if let Some(device_specific_info) = device_specific_info {
         log::trace!("Loaded device-specific information");
         for (module, key, value) in device_specific_info {
-            reply.add_extra(&module, &key, &value);
+            reply.add_extra(module, &key, &value);
         }
     }
 
@@ -291,12 +335,14 @@ where
 
 fn deserialize_from_comma_separated_strings<'de, D>(
     deserializer: D,
-) -> Result<HashSet<String>, D::Error>
+) -> Result<HashSet<ServiceInfoModule>, D::Error>
 where
     D: serde::de::Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
-    Ok(s.split(',').map(|s| s.to_string()).collect())
+    Ok(s.split(',')
+        .map(|s| ServiceInfoModule::from_str(s).unwrap())
+        .collect())
 }
 
 #[derive(Debug, Deserialize)]
@@ -306,7 +352,7 @@ struct QueryInfo {
     #[serde(deserialize_with = "deserialize_from_str")]
     device_guid: fdo_data_formats::types::Guid,
     #[serde(deserialize_with = "deserialize_from_comma_separated_strings")]
-    modules: HashSet<String>,
+    modules: HashSet<ServiceInfoModule>,
 }
 
 #[tokio::main]

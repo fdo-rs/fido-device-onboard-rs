@@ -14,7 +14,10 @@ use serde_tuple::Serialize_tuple;
 
 use crate::{
     cborparser::{ParsedArray, ParsedArrayBuilder},
-    constants::{DeviceSigType, HashType, HeaderKeys, RendezvousVariable, TransportProtocol},
+    constants::{
+        DeviceSigType, HashType, HeaderKeys, RendezvousVariable, ServiceInfoModule,
+        StandardServiceInfoModule, TransportProtocol,
+    },
     errors::Error,
     ownershipvoucher::OwnershipVoucher,
     publickey::PublicKey,
@@ -737,10 +740,13 @@ impl ServiceInfo {
         ServiceInfo(vec![])
     }
 
-    pub fn add<T>(&mut self, module: &str, key: &str, value: &T) -> Result<(), Error>
+    pub fn add<M, T>(&mut self, module: M, key: &str, value: &T) -> Result<(), Error>
     where
+        M: Into<ServiceInfoModule>,
         T: serde::Serialize,
     {
+        let module: ServiceInfoModule = module.into();
+
         let mut buffer = Vec::new();
         ciborium::ser::into_writer(&value, &mut buffer)?;
         let value = ByteBuf::from(buffer);
@@ -748,8 +754,12 @@ impl ServiceInfo {
         Ok(())
     }
 
-    pub fn add_modules(&mut self, modules: &[String]) -> Result<(), Error> {
-        self.add("devmod", "nummodules", &modules.len())?;
+    pub fn add_modules(&mut self, modules: &[ServiceInfoModule]) -> Result<(), Error> {
+        self.add(
+            StandardServiceInfoModule::DevMod,
+            "nummodules",
+            &modules.len(),
+        )?;
 
         // We have a special case of this, becasue this is a list with different types.
         let mut list = vec![
@@ -761,7 +771,7 @@ impl ServiceInfo {
             list.push(serde_cbor::Value::Text(module.to_string()));
         }
 
-        self.add("devmod", "modules", &list)
+        self.add(StandardServiceInfoModule::DevMod, "modules", &list)
     }
 
     pub fn iter(&self) -> ServiceInfoIter {
@@ -792,7 +802,7 @@ pub struct ServiceInfoIter<'a> {
 }
 
 impl Iterator for ServiceInfoIter<'_> {
-    type Item = (String, String, CborSimpleType);
+    type Item = (ServiceInfoModule, String, CborSimpleType);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.pos >= self.info.0.len() {
@@ -818,7 +828,8 @@ impl Iterator for ServiceInfoIter<'_> {
                 return None;
             }
         };
-        Some((module.to_string(), key[1..].to_string(), value))
+        let module = ServiceInfoModule::from_str(module).unwrap();
+        Some((module, key[1..].to_string(), value))
     }
 }
 

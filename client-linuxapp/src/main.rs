@@ -1,6 +1,8 @@
 use std::{borrow::Borrow, env, fs, path::PathBuf, thread, time};
 
 use anyhow::{anyhow, bail, Context, Result};
+use rand::Rng;
+use thiserror::Error;
 
 use fdo_data_formats::{
     cborparser::ParsedArray,
@@ -19,14 +21,11 @@ use fdo_data_formats::{
     DeviceCredential, ProtocolVersion, Serializable,
 };
 use fdo_http_wrapper::client::{RequestResult, ServiceClient};
-
-use thiserror::Error;
-
-mod serviceinfo;
-
 use fdo_util::device_credential_locations;
 use fdo_util::device_credential_locations::UsableDeviceCredentialLocation;
-use rand::Rng;
+
+mod reencrypt;
+mod serviceinfo;
 
 const DEVICE_ONBOARDING_EXECUTED_MARKER_FILE: &str = "/etc/device_onboarding_performed";
 
@@ -1007,10 +1006,8 @@ async fn perform_to2(
     };
 
     // Now, the magic: performing the roundtrip! We delegated that.
-    if serviceinfo::perform_to2_serviceinfos(&mut client)
-        .await
-        .is_err()
-    {
+    if let Err(serviceinfo_err) = serviceinfo::perform_to2_serviceinfos(&mut client).await {
+        log::info!("ServiceInfo failed, error: {:?}", serviceinfo_err);
         let e_result = ErrorResult::new(
             ErrorCode::InternalServerError,
             "Error performing the ServiceInfo roundtrips",
@@ -1095,9 +1092,11 @@ async fn main() -> Result<()> {
     let marker_file = marker_file_location();
     if marker_file.exists() {
         log::info!(
-            "Device Onboarding marker file {:?} exists, not rerunning",
+            "Device Onboarding marker file {:?} exists, not rerunning FDO onboarding",
             marker_file
         );
+        reencrypt::perform_required_reencrypts()
+            .context("Error performing required re-encrypts")?;
         return Ok(());
     }
 
