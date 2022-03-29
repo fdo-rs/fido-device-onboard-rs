@@ -48,10 +48,24 @@ The following keys are defined for the response to this endpoint:
 - `initial_user`: a JSON object containing information about an initial user to be configured. Supported sub-keys are:
   - `username`: the username of the user to configure.
   - `ssh_keys`: a list of strings containing SSH keys to configure for this user.
+- `extra_commands`: a JSON list containing additional ServiceInfo commands that the Owner Onboarding Server does not have special support for. For further explanation, see the next section.
+
+##### `extra_commands`
+
+The `extra_commands` list can be used to send ServiceInfo commands to the Device that the Owner Onboarding Server does not have explicit support for.
+
+The entries of this list are lists themselves, with the following fields:
+
+- Module name: JSON string
+- Command name: JSON string
+- Value: any JSON value
+
+There is one special handling of this: if the `command` value ends in `|hex`, the value should be a hex-encoded string, which will be converted to binary data before being sent to the Device.
+This is to overcome the lack of support for binary strings in JSON.
 
 #### Examples
 
-This assumes the URL is configured as `/device_info?serviceinfo_api_version={{api_version}}&device_guid={{device_guid}}&modules=&{{modules}}`.
+This assumes the URL is configured as `/device_info?serviceinfo_api_version=*api_version*&device_guid=*device_guid*&modules=*modules*`.
 
 ##### Request
 
@@ -65,10 +79,31 @@ Accept: application/json
 
 ##### Successful response
 
+The JSON in this example is broken up in multiple lines for visibility, the server should handle either with or without this breaking.
+
 ``` HTTP
 HTTP/1.1 200 OK
 Content-Type: application/json
 Server: FDO-ServiceInfo-Server/1.0
 
-{"com.redhat.subscription_identity_certificate": "-----BEGIN CERTIFICATE-----\n......\n-----END CERTIFICATE-----", "initial_user": {"username": "root", "ssh_keys": ["ssh-rsa ...."]}, "undefined": "something_ignored"}
+{
+  "com.redhat.subscription_identity_certificate": "-----BEGIN CERTIFICATE-----\n......\n-----END CERTIFICATE-----",
+  "initial_user": {
+    "username": "root",
+    "ssh_keys": ["ssh-rsa ...."]
+  },
+  "undefined": "something_ignored",
+  "extra_commands": [
+    ["binaryfile", "active", "true"],
+    ["binaryfile", "name", "/etc/foo"],
+    ["binaryfile", "length", 40],
+    ["binaryfile", "mode", "0644"],
+    ["binaryfile", "data001|hex", "39582abcd...."],
+    ["binaryfile", "sha-384|hex", "48204bdef...."],
+    ["command", "active", "true"],
+    ["command", "command", "/usr/bin/touch"],
+    ["command", "args", ["/etc/bar"]],
+    ...
+  ]
+}
 ```

@@ -28,7 +28,7 @@ tss-esapi = "7.0"
 http = "0.2"
 hyper = "0.14"
 
-openssl-kdf = { version = "0.4", features = ["allow_custom"] }
+openssl-kdf = { version = "0.4.1", features = ["allow_custom"] }
 
 [features]
 # Whether to use a non-interoperable KDF.

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use fdo_data_formats::constants::ServiceInfoModule;
 use fdo_store::StoreConfig;
 use serde::{Deserialize, Serialize};
 
@@ -24,7 +25,22 @@ pub struct ServiceInfoSettings {
 
     pub commands: Option<Vec<ServiceInfoCommand>>,
 
-    pub additional_serviceinfo: Option<HashMap<String, Vec<(String, String)>>>,
+    pub diskencryption_clevis: Option<Vec<ServiceInfoDiskEncryptionClevis>>,
+
+    pub additional_serviceinfo: Option<HashMap<ServiceInfoModule, Vec<(String, String)>>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ServiceInfoDiskEncryptionClevisBinding {
+    pub pin: String,
+    pub config: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ServiceInfoDiskEncryptionClevis {
+    pub disk_label: String,
+    pub binding: ServiceInfoDiskEncryptionClevisBinding,
+    pub reencrypt: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

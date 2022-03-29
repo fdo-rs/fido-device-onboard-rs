@@ -1,6 +1,5 @@
 use std::{collections::HashSet, str::FromStr};
 
-use fdo_data_formats::messages::{self, v11::to2::OwnerServiceInfo};
 use fdo_data_formats::{
     constants::{DeviceSigType, ErrorCode, HeaderKeys},
     messages::Message,
@@ -9,6 +8,10 @@ use fdo_data_formats::{
         RendezvousInfo, SigInfo, TO2ProveDevicePayload, TO2ProveOVHdrPayload,
         TO2SetupDevicePayload,
     },
+};
+use fdo_data_formats::{
+    constants::{FedoraIotServiceInfoModule, StandardServiceInfoModule},
+    messages::{self, v11::to2::OwnerServiceInfo},
 };
 
 use fdo_http_wrapper::server::Error;
@@ -492,7 +495,7 @@ async fn perform_service_info(
     let mut module_list: Option<Vec<String>> = None;
 
     for (module, var, value) in in_si.iter() {
-        if module == "devmod" && var == "modules" {
+        if module == StandardServiceInfoModule::DevMod.into() && var == "modules" {
             let mut rawmodlist: Vec<serde_cbor::Value> = serde_cbor::value::from_value(value)?;
             log::trace!("Received module list: {:?}", rawmodlist);
 
@@ -529,10 +532,14 @@ async fn perform_service_info(
     let mut out_si = fdo_data_formats::types::ServiceInfo::new();
 
     if let Some(initial_user) = resp.initial_user {
-        out_si.add("sshkey", "active", &true)?;
-        out_si.add("sshkey", "username", &initial_user.username)?;
+        out_si.add(FedoraIotServiceInfoModule::SSHKey, "active", &true)?;
+        out_si.add(
+            FedoraIotServiceInfoModule::SSHKey,
+            "username",
+            &initial_user.username,
+        )?;
         for key in initial_user.ssh_keys.iter() {
-            out_si.add("sshkey", "key", &key)?;
+            out_si.add(FedoraIotServiceInfoModule::SSHKey, "key", &key)?;
         }
     }
 
@@ -546,9 +553,9 @@ async fn perform_service_info(
                 )?;
                 let value = serde_bytes::ByteBuf::from(value);
                 let key = key.replace("|hex", "");
-                out_si.add(&module, &key, &value)?;
+                out_si.add(module, &key, &value)?;
             } else {
-                out_si.add(&module, &key, &value)?;
+                out_si.add(module, &key, &value)?;
             }
         }
     }

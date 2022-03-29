@@ -11,7 +11,10 @@ use std::{os::unix::fs::PermissionsExt, path::PathBuf};
 use anyhow::{anyhow, bail, Context, Result};
 
 use fdo_data_formats::{
-    constants::HashType,
+    constants::{
+        FedoraIotServiceInfoModule, HashType, RedHatComServiceInfoModule, ServiceInfoModule,
+        StandardServiceInfoModule,
+    },
     messages::v11::to2::{DeviceServiceInfo, OwnerServiceInfo},
     types::{CborSimpleTypeExt, Hash, ServiceInfo},
 };
@@ -19,18 +22,22 @@ use fdo_http_wrapper::client::{RequestResult, ServiceClient};
 
 const MAX_SERVICE_INFO_LOOPS: u32 = 1000;
 
-fn find_available_modules() -> Result<Vec<String>> {
+fn find_available_modules() -> Result<Vec<ServiceInfoModule>> {
     let mut module_list = vec![
         // These modules are always here
-        "devmod".to_string(),
-        "sshkey".to_string(),
-        "binaryfile".to_string(),
-        "command".to_string(),
+        StandardServiceInfoModule::DevMod.into(),
+        FedoraIotServiceInfoModule::SSHKey.into(),
+        FedoraIotServiceInfoModule::BinaryFile.into(),
+        FedoraIotServiceInfoModule::Command.into(),
     ];
 
     // See if we add RHSM
     if Path::new("/usr/sbin/subscription-manager").exists() {
-        module_list.push("rhsm".to_string());
+        module_list.push(RedHatComServiceInfoModule::SubscriptionManager.into());
+    }
+
+    if Path::new("/usr/bin/clevis").exists() {
+        module_list.push(FedoraIotServiceInfoModule::DiskEncryptionClevis.into());
     }
 
     Ok(module_list)
@@ -175,6 +182,105 @@ impl BinaryFileInProgress {
 }
 
 #[derive(Debug)]
+struct DiskEncryptionInProgress {
+    disk_label: Option<String>,
+    pin: Option<String>,
+    config: Option<String>,
+    reencrypt: bool,
+}
+
+impl DiskEncryptionInProgress {
+    fn new() -> Self {
+        Self {
+            disk_label: None,
+            pin: None,
+            config: None,
+            reencrypt: false,
+        }
+    }
+
+    fn execute_with_values(
+        si_out: &mut ServiceInfo,
+        disk_label: &str,
+        pin: &str,
+        config: &str,
+        reencrypt: bool,
+    ) -> Result<()> {
+        log::info!(
+            "Initiating disk re-encryption, disk-label: {}, pin: {}, config: {}, reencrypt: {}",
+            disk_label,
+            pin,
+            config,
+            reencrypt
+        );
+
+        let mut dev = if disk_label.starts_with('/') {
+            libcryptsetup_rs::CryptInit::init(&std::path::PathBuf::from(disk_label))
+        } else {
+            libcryptsetup_rs::CryptInit::init_by_name_and_header(disk_label, None)
+        }
+        .with_context(|| format!("Error opening device {}", disk_label))?;
+
+        log::debug!("Device initiated");
+
+        dev.context_handle()
+            .load::<libcryptsetup_rs::CryptParamsLuks2>(None, None)
+            .context("Error loading device context")?;
+
+        log::debug!("Device information loaded");
+
+        si_out.add(
+            FedoraIotServiceInfoModule::DiskEncryptionClevis,
+            "disk-label",
+            &disk_label,
+        )?;
+
+        log::debug!("Rebinding clevis");
+        crate::reencrypt::rebind::rebind_clevis(&mut dev, pin, config)
+            .context("Error rebinding clevis")?;
+        si_out.add(
+            FedoraIotServiceInfoModule::DiskEncryptionClevis,
+            "bound",
+            &true,
+        )?;
+        if reencrypt {
+            log::debug!("Initiating re-encryption");
+            crate::reencrypt::initiate_reencrypt(dev).context("Error initiating reencryption")?;
+        }
+        log::debug!("Re-encryption initiated");
+        si_out.add(
+            FedoraIotServiceInfoModule::DiskEncryptionClevis,
+            "reencrypt-initiated",
+            &reencrypt,
+        )?;
+
+        Ok(())
+    }
+
+    fn execute(self, si_out: &mut ServiceInfo) -> Result<()> {
+        let disk_label = self
+            .disk_label
+            .ok_or_else(|| anyhow!("Disk label not set"))?;
+        let pin = self
+            .pin
+            .ok_or_else(|| anyhow!("Disk encryption PIN not set"))?;
+        let config = self
+            .config
+            .ok_or_else(|| anyhow!("Disk encryption config not set"))?;
+        let reencrypt = self.reencrypt;
+
+        Self::execute_with_values(si_out, &disk_label, &pin, &config, reencrypt).with_context(
+            || {
+                format!(
+                    "Error executing disk encryption for disk label {}",
+                    disk_label
+                )
+            },
+        )
+    }
+}
+
+#[derive(Debug)]
 struct CommandInProgress {
     command: Option<String>,
     args: Vec<String>,
@@ -195,8 +301,12 @@ impl CommandInProgress {
     }
 
     fn execute(self, si_out: &mut ServiceInfo) -> Result<()> {
-        si_out.add("command", "command", self.command.as_ref().unwrap())?;
-        si_out.add("args", "args", &self.args)?;
+        si_out.add(
+            FedoraIotServiceInfoModule::Command,
+            "command",
+            self.command.as_ref().unwrap(),
+        )?;
+        si_out.add(FedoraIotServiceInfoModule::Command, "args", &self.args)?;
 
         let mut cmd = Command::new(self.command.as_ref().unwrap());
         cmd.args(&self.args);
@@ -212,19 +322,23 @@ impl CommandInProgress {
 
         if self.return_stdout {
             si_out.add(
-                "command",
+                FedoraIotServiceInfoModule::Command,
                 "stdout",
                 &serde_bytes::Bytes::new(&output.stdout),
             )?;
         }
         if self.return_stderr {
             si_out.add(
-                "command",
+                FedoraIotServiceInfoModule::Command,
                 "stderr",
                 &serde_bytes::Bytes::new(&output.stderr),
             )?;
         }
-        si_out.add("command", "exit_code", &output.status.code())?;
+        si_out.add(
+            FedoraIotServiceInfoModule::Command,
+            "exit_code",
+            &output.status.code(),
+        )?;
 
         if self.may_fail || output.status.success() {
             Ok(())
@@ -235,7 +349,7 @@ impl CommandInProgress {
 }
 
 async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -> Result<()> {
-    let mut active_modules: HashSet<String> = HashSet::new();
+    let mut active_modules: HashSet<ServiceInfoModule> = HashSet::new();
 
     let mut sshkey_user: Option<String> = None;
     let mut sshkey_key: Option<String> = None;
@@ -246,6 +360,7 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
 
     let mut binary_file_in_progress = BinaryFileInProgress::new();
     let mut command_in_progress = CommandInProgress::new();
+    let mut disk_encryption_in_progress = DiskEncryptionInProgress::new();
 
     for (module, key, value) in si_in.iter() {
         log::trace!("Got module {}, command {}, value {:?}", module, key, value);
@@ -253,7 +368,7 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
             let value = value.as_bool().context("Error parsing active value")?;
             if value {
                 log::trace!("Activating module {}", module);
-                active_modules.insert(module.to_string());
+                active_modules.insert(module);
             } else {
                 log::trace!("Deactivating module {}", module);
                 active_modules.remove(&module);
@@ -264,14 +379,14 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
             log::trace!("Skipping non-activated module {}", module);
             bail!("Non-activated module {} got request", module);
         }
-        if module == "sshkey" {
+        if module == FedoraIotServiceInfoModule::SSHKey.into() {
             let value = value.as_str().context("Error parsing sshkey value")?;
             if key == "username" {
                 sshkey_user = Some(value.to_string());
             } else if key == "key" {
                 sshkey_key = Some(value.to_string());
             }
-        } else if module == "rhsm" {
+        } else if module == RedHatComServiceInfoModule::SubscriptionManager.into() {
             if key == "organization_id" {
                 let value = value
                     .as_str()
@@ -288,7 +403,7 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
                     .with_context(|| format!("Error parsing rhsm {} value", key))?;
                 rhsm_perform_insights = Some(value);
             }
-        } else if module == "binaryfile" {
+        } else if module == FedoraIotServiceInfoModule::BinaryFile.into() {
             if key == "name" {
                 if binary_file_in_progress.path.is_some() {
                     bail!(
@@ -384,7 +499,7 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
                     .context("Error deploying binary file")?;
                 binary_file_in_progress = BinaryFileInProgress::new();
             }
-        } else if module == "command" {
+        } else if module == FedoraIotServiceInfoModule::Command.into() {
             if key == "command" {
                 if command_in_progress.command.is_some() {
                     bail!(
@@ -415,11 +530,63 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
                     .context("Error executing command")?;
                 command_in_progress = CommandInProgress::new();
             }
+        } else if module == FedoraIotServiceInfoModule::DiskEncryptionClevis.into() {
+            if key == "disk-label" {
+                if disk_encryption_in_progress.disk_label.is_some() {
+                    bail!(
+                        "Got clevis disk-label {:?} after disk-label {:?}",
+                        value,
+                        disk_encryption_in_progress.disk_label
+                    );
+                }
+                disk_encryption_in_progress.disk_label = Some(
+                    value
+                        .as_str()
+                        .context("Error parsing clevis disk-label")?
+                        .to_string(),
+                );
+            } else if key == "pin" {
+                if disk_encryption_in_progress.pin.is_some() {
+                    bail!(
+                        "Got clevis pin {:?} after pin {:?}",
+                        value,
+                        disk_encryption_in_progress.pin
+                    );
+                }
+                disk_encryption_in_progress.pin = Some(
+                    value
+                        .as_str()
+                        .context("Error parsing clevis pin")?
+                        .to_string(),
+                );
+            } else if key == "config" {
+                if disk_encryption_in_progress.config.is_some() {
+                    bail!(
+                        "Got clevis config {:?} after config {:?}",
+                        value,
+                        disk_encryption_in_progress.config
+                    );
+                }
+                disk_encryption_in_progress.config = Some(
+                    value
+                        .as_str()
+                        .context("Error parsing clevis pin config")?
+                        .to_string(),
+                );
+            } else if key == "reencrypt" {
+                disk_encryption_in_progress.reencrypt =
+                    value.as_bool().context("Error parsing clevis reencrypt")?;
+            } else if key == "execute" {
+                disk_encryption_in_progress
+                    .execute(si_out)
+                    .context("Error executing clevis")?;
+                disk_encryption_in_progress = DiskEncryptionInProgress::new();
+            }
         }
     }
 
     // Do SSH
-    if active_modules.contains("sshkey") {
+    if active_modules.contains(&FedoraIotServiceInfoModule::SSHKey.into()) {
         log::debug!("SSHkey module was active, installing SSH key");
         if sshkey_user.is_none() || sshkey_key.is_none() {
             bail!("SSHkey module missing username or key");
@@ -429,7 +596,7 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
     }
 
     // Perform RHSM
-    if active_modules.contains("rhsm") {
+    if active_modules.contains(&RedHatComServiceInfoModule::SubscriptionManager.into()) {
         log::debug!("RHSM module was active, running RHSM");
         if rhsm_organization_id.is_none()
             || rhsm_activation_key.is_none()
@@ -459,13 +626,29 @@ pub(crate) async fn perform_to2_serviceinfos(client: &mut ServiceClient) -> Resu
                 .context("Error getting operating system information")?;
 
             // We just blindly send the devmod module
-            out_si.add("devmod", "active", &true)?;
-            out_si.add("devmod", "os", &std::env::consts::OS)?;
-            out_si.add("devmod", "arch", &std::env::consts::ARCH)?;
-            out_si.add("devmod", "version", &sysinfo.pretty_name.unwrap())?;
-            out_si.add("devmod", "device", &"unused")?;
-            out_si.add("devmod", "sep", &":")?;
-            out_si.add("devmod", "bin", &std::env::consts::ARCH)?;
+            out_si.add(StandardServiceInfoModule::DevMod, "active", &true)?;
+            out_si.add(
+                StandardServiceInfoModule::DevMod,
+                "os",
+                &std::env::consts::OS,
+            )?;
+            out_si.add(
+                StandardServiceInfoModule::DevMod,
+                "arch",
+                &std::env::consts::ARCH,
+            )?;
+            out_si.add(
+                StandardServiceInfoModule::DevMod,
+                "version",
+                &sysinfo.pretty_name.unwrap(),
+            )?;
+            out_si.add(StandardServiceInfoModule::DevMod, "device", &"unused")?;
+            out_si.add(StandardServiceInfoModule::DevMod, "sep", &":")?;
+            out_si.add(
+                StandardServiceInfoModule::DevMod,
+                "bin",
+                &std::env::consts::ARCH,
+            )?;
             out_si.add_modules(&modules)?;
         }
 

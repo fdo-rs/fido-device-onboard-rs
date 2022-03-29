@@ -8,6 +8,13 @@ use num_traits::FromPrimitive;
 use openssl::hash::MessageDigest;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
+mod serviceinfo_names;
+
+pub use serviceinfo_names::{
+    FedoraIotServiceInfoModule, RedHatComServiceInfoModule, ServiceInfoModule,
+    StandardServiceInfoModule,
+};
+
 #[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, PartialEq, Eq, PartialOrd)]
 #[repr(u16)]
 #[non_exhaustive]

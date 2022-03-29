@@ -31,3 +31,11 @@ service_info:
   - command: touch
     args:
     - {{ keys_path }}/command-testfile
+{% if encrypted_disk_label %}
+  diskencryption_clevis:
+  - disk_label: {{ encrypted_disk_label }}
+    binding:
+      pin: test
+      config: "{}"
+    reencrypt: true
+{% endif %}
