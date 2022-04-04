@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 fdo-data-formats = { path = "../data-formats", version = "0.4.5" }
 
-config = "0.11"
+config = "0.13"
 futures = "0.3"
 thiserror = "1"
 async-trait = "0.1"
