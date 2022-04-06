@@ -1,0 +1,7 @@
+FROM quay.io/centos/centos:stream9
+ARG BUILDID
+COPY --from=fdo-build:${BUILDID} /usr/src/target/release/fdo-rendezvous-server /usr/local/bin
+RUN mkdir -p /etc/fdo/sessions
+RUN mkdir -p /etc/fdo/rendezvous-server.conf.d
+ENV LOG_LEVEL=trace
+ENTRYPOINT ["fdo-rendezvous-server"]
