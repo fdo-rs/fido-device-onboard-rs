@@ -11,6 +11,7 @@ mod execute;
 
 const POSSIBLE_BINARY_PATHS: &[&str] = &[
     "/usr/bin",
+    "/usr/libexec/fdo",
     #[cfg(debug_assertions)]
     "./target/debug",
     #[cfg(debug_assertions)]
