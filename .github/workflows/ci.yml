@@ -17,6 +17,14 @@ jobs:
           source: ./docs
           verbose: true
 
+  containers:
+    name: Build containers
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build containers
+      uses: ./.github/actions/build_containers
+
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
