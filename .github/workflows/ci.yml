@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - run: if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then exit 1; fi
+      - run: if [ "$(gofmt -d -s -l . | tee /dev/stderr | wc -l)" -gt 0 ]; then exit 1; fi
 
   clippy:
     name: Clippy
