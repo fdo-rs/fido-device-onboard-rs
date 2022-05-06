@@ -16,7 +16,7 @@ fn main() {
         .with_crate(MANIFEST_DIR)
         .with_parse_deps(true)
         .with_parse_include(&["fdo-data-formats"])
-        .with_include_version(true)
+        .with_include_version(false)
         .with_include_guard("FDO_DATA_H")
         .with_after_include(format!(
             "\n#define FDO_DATA_MAJOR {}\n#define FDO_DATA_MINOR {}\n#define FDO_DATA_PATCH {}",
