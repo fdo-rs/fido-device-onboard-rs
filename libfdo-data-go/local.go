@@ -1,3 +1,4 @@
+//go:build localbuild
 // +build localbuild
 
 package libfdo_data

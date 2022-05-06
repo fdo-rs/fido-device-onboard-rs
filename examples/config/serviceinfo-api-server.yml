@@ -1,13 +1,13 @@
 ---
-bind: {{ bind }}
+bind: 0.0.0.0:8083
 device_specific_store_driver:
   Directory:
-    path: {{ config_dir }}/device_specific_serviceinfo
+    path: /path/to/device_specific_serviceinfo
 service_info_auth_token: TestAuthToken
 admin_auth_token: TestAdminToken
 service_info:
   initial_user:
-    username: {{ user }}
+    username: admin
     sshkeys:
     - "testkey"
   files:
@@ -30,12 +30,10 @@ service_info:
     return_stderr: true
   - command: touch
     args:
-    - {{ keys_path }}/command-testfile
-{% if encrypted_disk_label %}
+    - /etc/command-testfile
   diskencryption_clevis:
-  - disk_label: {{ encrypted_disk_label }}
+  - disk_label: /dev/vda
     binding:
       pin: test
       config: "{}"
     reencrypt: true
-{% endif %}
