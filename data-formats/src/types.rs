@@ -149,7 +149,7 @@ mod test_hash {
 
     #[test]
     fn test_hash_fromstr_no_splitloc() {
-        let data = "8a2235cbccf8f70f55d5f610053685eefc153983eb9867f556976115fb9a1692";
+        let data = "8a2235cbccf8f70f55d5f610053685eefc153983eb9867f556976115fb9a1692"; //DevSkim: ignore DS173237
         let result = Hash::from_str(data).unwrap_err();
         assert!(matches!(
             result,
@@ -159,7 +159,7 @@ mod test_hash {
 
     #[test]
     fn test_hash_fromstr_invalid_type_name() {
-        let data = "foo:8a2235cbccf8f70f55d5f610053685eefc153983eb9867f556976115fb9a1692";
+        let data = "foo:8a2235cbccf8f70f55d5f610053685eefc153983eb9867f556976115fb9a1692"; //DevSkim: ignore DS173237
         let result = Hash::from_str(data).unwrap_err();
         assert!(matches!(
             result,
