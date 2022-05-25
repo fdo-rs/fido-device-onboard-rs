@@ -97,7 +97,7 @@ async fn manufacture_device(
     .env(
         "MANUFACTURING_SERVER_URL",
         format!(
-            "http://localhost:{}",
+            "http://localhost:{}", //DevSkim: ignore DS137138
             configuration.listen_port_manufacturing_server
         ),
     )
