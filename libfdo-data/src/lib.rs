@@ -35,7 +35,7 @@ pub unsafe extern "C" fn fdo_free_string(s: *mut c_char) {
     drop(CString::from_raw(s));
 }
 
-/// Returns a string describing the last error that occured
+/// Returns a string describing the last error that occurred
 ///
 /// Note: The returned string ownership is transferred to the caller, and should
 /// be freed with `fdo_free_string`

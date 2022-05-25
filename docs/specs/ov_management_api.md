@@ -42,8 +42,8 @@ How the server determines a `username` for this authentication method is outside
 
 #### Responses
 
-Requests that got parsed and executed succesfully will have a Status code in the Succesful range ([section 6.3, RFC 7231](https://datatracker.ietf.org/doc/html/rfc7231#section-6.3)).
-If an error occured during processing, a Status code in either the Client Error ([section 6.5, RFC 7231](https://datatracker.ietf.org/doc/html/rfc7231#section-6.5)) or Server Error ([section 6.6, RFC 7231](https://datatracker.ietf.org/doc/html/rfc7231#section-6.6)) will be returned.
+Requests that got parsed and executed successfully will have a Status code in the Successful range ([section 6.3, RFC 7231](https://datatracker.ietf.org/doc/html/rfc7231#section-6.3)).
+If an error occurred during processing, a Status code in either the Client Error ([section 6.5, RFC 7231](https://datatracker.ietf.org/doc/html/rfc7231#section-6.5)) or Server Error ([section 6.6, RFC 7231](https://datatracker.ietf.org/doc/html/rfc7231#section-6.6)) will be returned.
 
 Responses will have `Content-Type: application/json` and consist of JSON strings.
 
@@ -72,8 +72,8 @@ A successful response will contain a JSON list containing objects, which each ha
 
 #### Error codes
 
-- `incomplete_voucher`: when an uploaded voucher was incomplete. `error_details` contains at least the key `parsed_correctly`, containing the number of Ownership Vouchers succesfully parsed.
-- `parse_error`: when an Ownership Voucher was uploaded that is structurally invalid. `error_details` contains the key `parsed_correctly`, containing the number of Ownership Vouchers succesfully parsed, and the key `description`, containing a string with a description of the parse failure.
+- `incomplete_voucher`: when an uploaded voucher was incomplete. `error_details` contains at least the key `parsed_correctly`, containing the number of Ownership Vouchers successfully parsed.
+- `parse_error`: when an Ownership Voucher was uploaded that is structurally invalid. `error_details` contains the key `parsed_correctly`, containing the number of Ownership Vouchers successfully parsed, and the key `description`, containing a string with a description of the parse failure.
 - `invalid_number_of_vouchers`: when the value of `X-Number-Of-Vouchers` does not match the number of parsed Ownership Vouchers. `error_details` contains the key `parsed`, with an integer containing the number of Ownership Vouhcers that were encountered.
 - `unowned_voucher`: when an Ownership Voucher was uploaded for which the current Owner is not the Owner key of the server. `error_details` contains the key `unowned`, which is a list of indexes of Ownership Vouchers that have invalid ownership.
 - `invalid_voucher_signatures`: when an Ownership Voucher was uploaded for which one of the cryptographic verifications failed. `error_details` contains the key `invalid`, which contains a list of objects with the key `index` describing the index of the failing voucher, and `description` containing a string description of what failed to verify on the voucher.
@@ -131,10 +131,10 @@ Server: FDO-Owner-Server/1.0
 
 HTTP Request context: `POST $base/v1/ownership_voucher/delete`.
 
-This endpoint can be used to request the Owner Onboarding Server to delete a set of Ownership Vouchers, and to stop taking ownerhsip of the devices.
+This endpoint can be used to request the Owner Onboarding Server to delete a set of Ownership Vouchers, and to stop taking ownership of the devices.
 The request body consists of a JSON list of GUIDs for which the Ownership Vouchers should get deleted.
 
-A succesful response contains an empty body.
+A successful response contains an empty body.
 
 #### Error codes
 

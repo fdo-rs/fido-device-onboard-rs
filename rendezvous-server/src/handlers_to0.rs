@@ -145,7 +145,7 @@ pub(super) async fn ownersign(
         .compare(&to0d_hash)
         .map_err(Error::from_error::<messages::v11::to0::OwnerSign, _>)?;
 
-    // Okay, wew! We can now trust the to1d payload, and the other data!
+    // Okay, wow! We can now trust the to1d payload, and the other data!
     // First, verify the device certificate chain
     let device_cert_chain = match to0d.ownership_voucher().device_certificate_chain() {
         None => {

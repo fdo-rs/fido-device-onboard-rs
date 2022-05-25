@@ -11,7 +11,7 @@ parent: Specifications
 
 The FIDO Device Onboarding specification specifies the Device Initialize Protocol (section 5.2).
 This protocol does not by itself provide enough information to initialize a device without prior agreement: it assumes the Manufacturer has received the public key of the device prior to the start of the protocol.
-Additionally, the protocol has no security features other than possible transport security, which means that an attacker with local network access could man-in-the-middle the protocol.
+Additionally, the protocol has no security features other than possible transport security, which means that an attacker with local network access could attack the protocol.
 
 To alleviate these issues, this specification adds some extra steps to the protocol to add the protections and information required.
 Note specifically that after the extra steps from this protocol have been executed, the standard Device Initialization Protocol gets executed.
@@ -23,7 +23,7 @@ This protocol also implements support for proving in-band that a device private 
 
 ### Preparations
 
-The Device ROE can be seeded with a hash of a public key to trust for the Device Initialize Protocol, `DIUNPubKeyHash`, or a list of trusted certificates `DIUNPubKeyRootCerts`, this is strongly adviced to perform.
+The Device ROE can be seeded with a hash of a public key to trust for the Device Initialize Protocol, `DIUNPubKeyHash`, or a list of trusted certificates `DIUNPubKeyRootCerts`, this is strongly advised to perform.
 This could also be left unconfigured, in which case the device operates under Trust On First Use.
 
 
