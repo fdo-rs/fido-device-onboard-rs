@@ -8,3 +8,11 @@ updates:
       prefix: "chore: "
     reviewers:
     - "fedora-iot/fdo-rs-maintainers"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    commit-message:
+      prefix: "chore: "
+    reviewers:
+    - "fedora-iot/fdo-rs-maintainers"
