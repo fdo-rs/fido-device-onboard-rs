@@ -27,7 +27,7 @@ typedef struct FdoOwnershipVoucherList FdoOwnershipVoucherList;
 void fdo_free_string(char *s);
 
 /**
- * Returns a string describing the last error that occured
+ * Returns a string describing the last error that occurred
  *
  * Note: The returned string ownership is transferred to the caller, and should
  * be freed with `fdo_free_string`

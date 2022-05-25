@@ -229,7 +229,7 @@ impl RendezvousVariable {
 
     pub fn value_from_human_to_machine(&self, val: serde_cbor::Value) -> Result<serde_cbor::Value> {
         Ok(match self {
-            // These are just markers: their existance means they're true
+            // These are just markers: their existence means they're true
             RendezvousVariable::DeviceOnly
             | RendezvousVariable::OwnerOnly
             | RendezvousVariable::UserInput

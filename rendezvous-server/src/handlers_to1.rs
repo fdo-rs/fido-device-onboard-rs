@@ -136,7 +136,7 @@ pub(super) async fn prove_to_rv(
         Error::new(
             ErrorCode::InvalidMessageError,
             messages::v11::to1::ProveToRV::message_type(),
-            "Token invaid",
+            "Token invalid",
         )
     })?;
 
@@ -146,7 +146,7 @@ pub(super) async fn prove_to_rv(
         return Err(Error::new(
             ErrorCode::InvalidMessageError,
             messages::v11::to1::ProveToRV::message_type(),
-            "Nonce invaid",
+            "Nonce invalid",
         )
         .into());
     }

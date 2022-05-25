@@ -103,7 +103,10 @@ impl RunningAioContext {
                 daemon
             );
 
-            let url = format!("http://localhost:{}/ping", daemon.port(&self.configuration));
+            let url = format!(
+                "http://localhost:{}/ping", //DevSkim: ignore DS137138
+                daemon.port(&self.configuration),
+            );
 
             loop {
                 let res = client.post(&url).send().await;

@@ -204,7 +204,7 @@ async fn test_to_impl(
     let client = reqwest::Client::new();
     let res = client
         .post(format!(
-            "http://localhost:{}/report-to-rendezvous",
+            "http://localhost:{}/report-to-rendezvous", //DevSkim: ignore DS137138
             owner_onboarding_server.server_port().unwrap()
         ))
         .send()
