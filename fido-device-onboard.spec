@@ -36,6 +36,8 @@ BuildRequires: systemd-rpm-macros
 BuildRequires: openssl-devel >= 3.0.1-12
 BuildRequires: golang
 BuildRequires: tpm2-tss-devel
+BuildRequires: cryptsetup-devel
+BuildRequires: clang-devel
 
 %description
 %{summary}.
@@ -154,6 +156,9 @@ Requires: openssl-libs >= 3.0.1-12
 %package -n fdo-client
 Summary: FDO Client implementation
 Requires: openssl-libs >= 3.0.1-12
+Requires: clevis
+Requires: clevis-luks
+Requires: cryptsetup
 %description -n fdo-client
 %{summary}
 

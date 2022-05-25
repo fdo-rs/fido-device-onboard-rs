@@ -11,11 +11,11 @@ service_info:
     sshkeys:
     - "testkey"
   files:
-  - path: hosts
+  - path: /device/etc/hosts
     permissions: 644
-    source_path: /etc/hosts
-  - path: resolv.conf
-    source_path: /etc/resolv.conf
+    source_path: /server/local/etc/hosts
+  - path: /device/etc/resolv.conf
+    source_path: /server/local/etc/resolv.conf
   commands:
   - command: ls
     args:
