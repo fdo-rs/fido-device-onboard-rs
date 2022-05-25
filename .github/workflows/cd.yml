@@ -2,6 +2,7 @@ on:
   push:
     branches:
     - main
+    - "*.*.x"
     tags:
     - v*
   schedule:
