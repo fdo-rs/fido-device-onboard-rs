@@ -11,7 +11,7 @@ jobs:
     name: Test docs building
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions/jekyll-build-pages@main
         with:
           source: ./docs
@@ -21,7 +21,7 @@ jobs:
     name: Build containers
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Build containers
       uses: ./.github/actions/build_containers
 
@@ -29,7 +29,7 @@ jobs:
     name: Check spelling
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Check spelling
         uses: codespell-project/actions-codespell@master
         with:
@@ -43,7 +43,7 @@ jobs:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -59,7 +59,7 @@ jobs:
     name: Gofmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - run: if [ "$(gofmt -d -s -l . | tee /dev/stderr | wc -l)" -gt 0 ]; then exit 1; fi
 
   clippy:
@@ -67,7 +67,7 @@ jobs:
     runs-on: ubuntu-latest
     container: fedora:latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Cache
         uses: actions/cache@v3
         with:
@@ -126,7 +126,7 @@ jobs:
   commitlint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
       - uses: actions/setup-node@v3
