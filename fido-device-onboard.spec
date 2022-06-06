@@ -3,6 +3,7 @@
 %global __cargo_skip_build 0
 %global __cargo_is_lib() false
 %global forgeurl https://github.com/fedora-iot/fido-device-onboard-rs
+%global rpmdocsdir docs-rpms
 
 Version:        0.4.5
 
@@ -38,6 +39,8 @@ BuildRequires: golang
 BuildRequires: tpm2-tss-devel
 BuildRequires: cryptsetup-devel
 BuildRequires: clang-devel
+BuildRequires: make
+BuildRequires: python3-docutils
 
 %description
 %{summary}.
@@ -52,6 +55,7 @@ BuildRequires: clang-devel
 
 %build
 %cargo_build
+make man
 
 %install
 install -D -m 0755 -t %{buildroot}%{_libexecdir}/fdo target/release/fdo-client-linuxapp
@@ -73,6 +77,8 @@ install -D -m 0755 -t %{buildroot}%{dracutlibdir}/modules.d/52fdo dracut/52fdo/m
 install -D -m 0755 -t %{buildroot}%{dracutlibdir}/modules.d/52fdo dracut/52fdo/manufacturing-client-generator
 install -D -m 0755 -t %{buildroot}%{dracutlibdir}/modules.d/52fdo dracut/52fdo/manufacturing-client-service
 install -D -m 0755 -t %{buildroot}%{dracutlibdir}/modules.d/52fdo dracut/52fdo/manufacturing-client.service
+# man pages
+install -D -m 0644 -t %{buildroot}%{_mandir}/man1 %{rpmdocsdir}/*.1
 
 %package -n fdo-init
 Summary: dracut module for device initialization
@@ -82,6 +88,7 @@ Requires: openssl-libs >= 3.0.1-12
 
 %files -n fdo-init
 %license LICENSE
+%{_mandir}/man1/fdo-init.1*
 %{dracutlibdir}/modules.d/52fdo/*
 %{_libexecdir}/fdo/fdo-manufacturing-client
 
@@ -93,6 +100,7 @@ Requires: openssl-libs >= 3.0.1-12
 
 %files -n fdo-owner-onboarding-server
 %license LICENSE
+%{_mandir}/man1/fdo-owner-onboarding-server.1*
 %{_libexecdir}/fdo/fdo-owner-onboarding-server
 %{_libexecdir}/fdo/fdo-serviceinfo-api-server
 %{_docdir}/fdo/owner-onboarding-server.yml
@@ -119,6 +127,7 @@ Summary: FDO Rendezvous Server implementation
 
 %files -n fdo-rendezvous-server
 %license LICENSE
+%{_mandir}/man1/fdo-rendezvous-server.1*
 %{_libexecdir}/fdo/fdo-rendezvous-server
 %{_docdir}/fdo/rendezvous-server.yml
 %{_unitdir}/fdo-rendezvous-server.service
@@ -140,6 +149,7 @@ Requires: openssl-libs >= 3.0.1-12
 
 %files -n fdo-manufacturing-server
 %license LICENSE
+%{_mandir}/man1/fdo-manufacturing-server.1*
 %{_libexecdir}/fdo/fdo-manufacturing-server
 %{_docdir}/fdo/manufacturing-server.yml
 %{_unitdir}/fdo-manufacturing-server.service
@@ -164,6 +174,7 @@ Requires: cryptsetup
 
 %files -n fdo-client
 %license LICENSE
+%{_mandir}/man1/fdo-client.1*
 %{_libexecdir}/fdo/fdo-client-linuxapp
 %{_unitdir}/fdo-client-linuxapp.service
 
@@ -183,6 +194,7 @@ Summary: FDO Owner tools implementation
 
 %files -n fdo-owner-cli
 %license LICENSE
+%{_mandir}/man1/fdo-owner-cli.1*
 %{_bindir}/fdo-owner-tool
 %{_libexecdir}/fdo/fdo-owner-tool
 
@@ -199,6 +211,7 @@ Requires: fdo-owner-cli
 
 %files -n fdo-admin-cli
 %license LICENSE
+%{_mandir}/man1/fdo-admin-cli.1*
 %dir %{_sysconfdir}/fdo
 %{_bindir}/fdo-admin-tool
 %{_libexecdir}/fdo/fdo-admin-tool
