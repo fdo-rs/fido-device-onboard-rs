@@ -140,3 +140,15 @@ jobs:
         with:
           configFile: .github/commitlint.config.js
           failOnWarnings: true
+
+  manpages:
+    name: Test man page generation
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: install deps
+        run: |
+          dnf install -y make python3-docutils
+      - name: generate man pages
+        run: make man

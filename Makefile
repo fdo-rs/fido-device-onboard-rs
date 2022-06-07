@@ -21,7 +21,8 @@ help:
 	@echo "The following targets are available:"
 	@echo
 	@echo "    help:               Print this usage information."
-	@echo "    rpm:                Generate RPM"
+	@echo "    rpm:                Generate RPM."
+	@echo "    man:                Generate man pages."
 
 #
 # Building packages
@@ -63,3 +64,18 @@ rpm: $(RPM_SPECFILE) $(RPM_TARBALL) $(VENDOR_TARBALL)
 	rpmbuild -bb \
 		--define "_topdir $(CURDIR)/rpmbuild" \
 		$(RPM_SPECFILE)
+
+#
+# Generating man pages
+#
+
+RST_DIR = docs-rpms
+RST_MAN_DIR=$(SRCDIR)/$(RST_DIR)
+RST_FILES=$(shell find $(RST_MAN_DIR) -name '*.rst')
+MAN_FILES=$(addprefix ,$(RST_FILES:%.rst=%.1))
+
+.PHONY: man
+man: $(MAN_FILES)
+
+$(RST_DIR)/%.1: $(RST_DIR)/%.rst
+	rst2man $< > $@
