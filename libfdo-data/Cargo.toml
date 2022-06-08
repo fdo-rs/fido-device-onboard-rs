@@ -13,7 +13,7 @@ fdo-data-formats = { path = "../data-formats", version = "0.4.5" }
 libc = "0.2"
 
 [build-dependencies]
-cbindgen = "0.23.0"
+cbindgen = "0.24.2"
 
 [dev-dependencies]
 tempfile = "3.2.0"
