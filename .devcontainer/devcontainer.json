@@ -20,5 +20,8 @@
 		"tamasfe.even-better-toml",
 		"serayuzgur.crates"
 	],
+	"hostRequirements": {
+		"memory": "4gb"
+	},
 	"remoteUser": "vscode"
 }
