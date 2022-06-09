@@ -23,5 +23,10 @@
 	"hostRequirements": {
 		"memory": "4gb"
 	},
-	"remoteUser": "vscode"
+	"remoteUser": "vscode",
+	"updateContentCommand": [
+		"cargo",
+		"build"
+	],
+	"waitFor": "onCreateCommand"
 }
