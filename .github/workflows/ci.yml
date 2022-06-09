@@ -152,3 +152,15 @@ jobs:
           dnf install -y make python3-docutils
       - name: generate man pages
         run: make man
+
+  devcontainer_test:
+    name: Test Devcontainer Creation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install devcontainer CLI
+        run: npm install -g @vscode/dev-container-cli
+      - name: Build devcontainer
+        run: devcontainer build --image-name devcontainer-fdo-rs .
+      - name: Test building in devcontainer
+        run: docker run --rm -v `pwd`:/code:z --workdir /code --user root devcontainer-fdo-rs cargo build --verbose
