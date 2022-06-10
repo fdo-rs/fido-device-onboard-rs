@@ -20,5 +20,13 @@
 		"tamasfe.even-better-toml",
 		"serayuzgur.crates"
 	],
-	"remoteUser": "vscode"
+	"hostRequirements": {
+		"memory": "4gb"
+	},
+	"remoteUser": "vscode",
+	"updateContentCommand": [
+		"cargo",
+		"build"
+	],
+	"waitFor": "onCreateCommand"
 }
