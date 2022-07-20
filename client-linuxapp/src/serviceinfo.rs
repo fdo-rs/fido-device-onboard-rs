@@ -129,18 +129,20 @@ fn perform_rhsm(organization_id: &str, activation_key: &str, perform_insights: b
 }
 
 #[derive(Debug)]
-struct BinaryFileInProgress {
+struct BinaryFileInProgress<'a> {
     path: Option<String>,
+    prefix: Option<&'a str>,
     length: Option<u64>,
     contents: Option<Vec<u8>>,
     mode: Option<u32>,
     digest: Option<Hash>,
 }
 
-impl BinaryFileInProgress {
-    fn new() -> Self {
+impl<'a> BinaryFileInProgress<'a> {
+    fn new(prefix: Option<&'a str>) -> Self {
         BinaryFileInProgress {
             path: None,
+            prefix,
             length: None,
             contents: None,
             mode: None,
@@ -148,18 +150,26 @@ impl BinaryFileInProgress {
         }
     }
 
-    fn deploy(self) -> Result<()> {
-        let path = self.path.as_ref().unwrap();
-
-        let path = if let Ok(val) = env::var("BINARYFILE_PATH_PREFIX") {
-            PathBuf::from(&val).join(path)
-        } else {
-            PathBuf::from(path)
-        };
+    #[cfg(not(unix))]
+    compile_error!("This root splitting would need to get fixed for non-unix systems");
+    fn destination_path(path_str: &str, prefix: Option<&str>) -> Result<PathBuf> {
+        let path = PathBuf::from(path_str);
 
         if !path.is_absolute() {
             bail!("Binary file path must be absolute");
         }
+
+        if let Some(val) = prefix {
+            // make sure we drop the first slash or PathBuf returns the join'ed absolute path
+            Ok(PathBuf::from(val).join(&path_str[1..path_str.len()]))
+        } else {
+            Ok(path)
+        }
+    }
+
+    fn deploy(self) -> Result<()> {
+        let path =
+            BinaryFileInProgress::destination_path(self.path.as_ref().unwrap(), self.prefix)?;
 
         let contents = self.contents.as_ref().unwrap();
         let mode = self.mode.unwrap_or(0o600);
@@ -170,6 +180,8 @@ impl BinaryFileInProgress {
             self.length.unwrap(),
             mode
         );
+
+        fs::create_dir_all(path.parent().unwrap()).context("Error creating file's directory")?;
 
         let mut file = File::create(path).context("Error creating file")?;
         file.write_all(contents).context("Error writing file")?;
@@ -358,7 +370,9 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
     let mut rhsm_activation_key: Option<String> = None;
     let mut rhsm_perform_insights: Option<bool> = None;
 
-    let mut binary_file_in_progress = BinaryFileInProgress::new();
+    let binary_file_prefix_owned = env::var("BINARYFILE_PATH_PREFIX").ok();
+    let mut binary_file_in_progress =
+        BinaryFileInProgress::new(binary_file_prefix_owned.as_deref());
     let mut command_in_progress = CommandInProgress::new();
     let mut disk_encryption_in_progress = DiskEncryptionInProgress::new();
 
@@ -497,7 +511,8 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
                 binary_file_in_progress
                     .deploy()
                     .context("Error deploying binary file")?;
-                binary_file_in_progress = BinaryFileInProgress::new();
+                binary_file_in_progress =
+                    BinaryFileInProgress::new(binary_file_prefix_owned.as_deref());
             }
         } else if module == FedoraIotServiceInfoModule::Command.into() {
             if key == "command" {
@@ -681,4 +696,27 @@ pub(crate) async fn perform_to2_serviceinfos(client: &mut ServiceClient) -> Resu
         "Maximum number of ServiceInfo loops ({}) exceeded",
         MAX_SERVICE_INFO_LOOPS
     ))
+}
+
+#[cfg(test)]
+mod test {
+    use std::path::PathBuf;
+
+    use super::BinaryFileInProgress;
+
+    #[test]
+    fn test_binaryfileinprogress_destination_path() {
+        assert_eq!(
+            BinaryFileInProgress::destination_path(
+                &String::from("/etc/something"),
+                Some("/usr/prefix")
+            )
+            .unwrap(),
+            PathBuf::from("/usr/prefix/etc/something")
+        );
+        assert_eq!(
+            BinaryFileInProgress::destination_path(&String::from("/etc/something"), None).unwrap(),
+            PathBuf::from("/etc/something")
+        );
+    }
 }
