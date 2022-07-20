@@ -268,15 +268,15 @@ testkey
 "
     );
 
-    assert!(binary_file_path_prefix.join("resolv.conf").exists());
+    assert!(binary_file_path_prefix.join("etc/resolv.conf").exists());
     let resolv_conf_metadata = binary_file_path_prefix
-        .join("resolv.conf")
+        .join("etc/resolv.conf")
         .metadata()
         .context("Error reading hosts file")?;
     assert_eq!(resolv_conf_metadata.permissions().mode() & 0o777, 0o600);
-    assert!(binary_file_path_prefix.join("hosts").exists());
+    assert!(binary_file_path_prefix.join("etc/hosts").exists());
     let hosts_metadata = binary_file_path_prefix
-        .join("hosts")
+        .join("etc/hosts")
         .metadata()
         .context("Error reading hosts file")?;
     assert_eq!(hosts_metadata.permissions().mode() & 0o777, 0o644);

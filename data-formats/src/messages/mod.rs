@@ -63,6 +63,7 @@ pub trait Message: Send + Serializable + Sized {
     }
 }
 
+#[allow(clippy::crate_in_macro_def)]
 #[macro_export]
 macro_rules! simple_message_serializable {
     ($name:ident, $inner_type:ident) => {
