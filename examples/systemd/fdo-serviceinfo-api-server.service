@@ -1,0 +1,11 @@
+[Unit]
+Description=FDO service info API server
+After=network-online.target
+
+[Service]
+Environment=LOG_LEVEL=info
+ExecStart=/usr/libexec/fdo/fdo-serviceinfo-api-server
+# restart and failure condition
+
+[Install]
+WantedBy=multi-user.target

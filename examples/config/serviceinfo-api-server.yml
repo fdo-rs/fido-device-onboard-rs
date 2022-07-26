@@ -1,0 +1,39 @@
+---
+bind: 0.0.0.0:8083
+device_specific_store_driver:
+  Directory:
+    path: /path/to/device_specific_serviceinfo
+service_info_auth_token: TestAuthToken
+admin_auth_token: TestAdminToken
+service_info:
+  initial_user:
+    username: admin
+    sshkeys:
+    - "testkey"
+  files:
+  - path: /device/etc/hosts
+    permissions: 644
+    source_path: /server/local/etc/hosts
+  - path: /device/etc/resolv.conf
+    source_path: /server/local/etc/resolv.conf
+  commands:
+  - command: ls
+    args:
+    - /etc/hosts
+    return_stdout: true
+    return_stderr: true
+  - command: ls
+    args:
+    - /etc/doesnotexist/whatever.foo
+    may_fail: true
+    return_stdout: true
+    return_stderr: true
+  - command: touch
+    args:
+    - /etc/command-testfile
+  diskencryption_clevis:
+  - disk_label: /dev/vda
+    binding:
+      pin: test
+      config: "{}"
+    reencrypt: true

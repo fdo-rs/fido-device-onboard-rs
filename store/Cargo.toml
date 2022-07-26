@@ -1,0 +1,27 @@
+[package]
+name = "fdo-store"
+version = "0.4.5"
+authors = ["Patrick Uiterwijk <patrick@puiterwijk.org>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+fdo-data-formats = { path = "../data-formats", version = "0.4.5" }
+
+config = "0.11"
+futures = "0.3"
+thiserror = "1"
+async-trait = "0.1"
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+tokio = "1"
+time = "0.3"
+
+# feature-specific dependencies
+# directory
+xattr = { version = "0.2", default-features = false, optional = true }  # We *need* xattrs to store TTL
+serde_cbor = { version = "0.11", optional = true }
+
+[features]
+directory = ["xattr", "serde_cbor"]

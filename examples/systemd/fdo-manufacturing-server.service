@@ -1,0 +1,11 @@
+[Unit]
+Description=FDO manufacturing server
+After=network-online.target
+
+[Service]
+Environment=LOG_LEVEL=info
+ExecStart=/usr/libexec/fdo/fdo-manufacturing-server
+# restart and failure condition
+
+[Install]
+WantedBy=multi-user.target

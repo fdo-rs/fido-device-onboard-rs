@@ -1,0 +1,9 @@
+---
+storage_driver:
+  Directory:
+    path: {{ config_dir }}/rendezvous_registered/
+session_store_driver:
+  Directory:
+    path: {{ config_dir }}/sessions/
+trusted_manufacturer_keys_path: {{ keys_path }}/manufacturer_cert.pem
+bind: {{ bind }}

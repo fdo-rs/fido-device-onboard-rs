@@ -1,0 +1,9 @@
+---
+storage_driver:
+  Directory:
+    path: /path/to/rendezvous_registered/
+session_store_driver: Directory
+session_store_config: /path/to/sessions/
+trusted_manufacturer_keys_path: /path/to/keys/manufacturer_cert.pem
+trusted_device_keys_path: /path/to/keys/device_ca_cert.pem
+bind: 0.0.0.0:8082

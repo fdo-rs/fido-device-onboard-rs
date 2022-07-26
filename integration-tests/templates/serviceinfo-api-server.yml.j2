@@ -1,0 +1,41 @@
+---
+bind: {{ bind }}
+device_specific_store_driver:
+  Directory:
+    path: {{ config_dir }}/device_specific_serviceinfo
+service_info_auth_token: TestAuthToken
+admin_auth_token: TestAdminToken
+service_info:
+  initial_user:
+    username: {{ user }}
+    sshkeys:
+    - "testkey"
+  files:
+  - path: /etc/hosts
+    permissions: 644
+    source_path: /etc/hosts
+  - path: /etc/resolv.conf
+    source_path: /etc/resolv.conf
+  commands:
+  - command: ls
+    args:
+    - /etc/hosts
+    return_stdout: true
+    return_stderr: true
+  - command: ls
+    args:
+    - /etc/doesnotexist/whatever.foo
+    may_fail: true
+    return_stdout: true
+    return_stderr: true
+  - command: touch
+    args:
+    - {{ keys_path }}/command-testfile
+{% if encrypted_disk_label %}
+  diskencryption_clevis:
+  - disk_label: {{ encrypted_disk_label }}
+    binding:
+      pin: test
+      config: "{}"
+    reencrypt: true
+{% endif %}

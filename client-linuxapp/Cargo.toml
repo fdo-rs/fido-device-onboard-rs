@@ -1,0 +1,27 @@
+[package]
+name = "fdo-client-linuxapp"
+version = "0.4.5"
+authors = ["Patrick Uiterwijk <patrick@puiterwijk.org>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1"
+log = "0.4"
+openssl = "0.10.35"
+tokio = { version = "1", features = ["full"] }
+sys-info = "0.9"
+serde_bytes = "0.11"
+passwd = "0.0.1"
+rand = "0.8.4"
+nix = "0.23.0"
+uuid = "1.0"
+thiserror = "1"
+libcryptsetup-rs = { version = "0.5.0", features = ["mutex"] }
+secrecy = "0.8"
+devicemapper = "0.32"
+
+fdo-data-formats = { path = "../data-formats", version = "0.4.5" }
+fdo-http-wrapper = { path = "../http-wrapper", version = "0.4.5", features = ["client"] }
+fdo-util = { path = "../util", version = "0.4.5" }

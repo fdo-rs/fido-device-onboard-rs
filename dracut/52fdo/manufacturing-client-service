@@ -1,0 +1,13 @@
+#!/bin/bash
+
+set -e
+
+/usr/bin/fdo-manufacturing-client
+mkdir -p /bootmount
+udevadm settle
+TYPE=$(blkid -p /dev/disk/by-label/boot -s TYPE -o value)
+mount -t ${TYPE} /dev/disk/by-label/boot /bootmount
+cp -a /etc/device-credentials /bootmount/device-credentials
+cat >"/bootmount/fdo-client-env" <<EOF
+DEVICE_CREDENTIAL="/boot/device-credentials"
+EOF
