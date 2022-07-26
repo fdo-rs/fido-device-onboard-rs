@@ -34,6 +34,8 @@ use fdo_util::servers::{
 };
 
 mod handlers;
+mod ov_management;
+use crate::ov_management::ov_filter;
 
 pub(crate) struct OwnerServiceUD {
     // Trusted keys
@@ -426,7 +428,8 @@ async fn main() -> Result<()> {
                 .or(handler_to2_prove_device)
                 .or(handler_to2_device_service_info_ready)
                 .or(handler_to2_device_service_info)
-                .or(handler_to2_done),
+                .or(handler_to2_done)
+                .or(ov_filter(user_data.clone())),
         )
         .recover(fdo_http_wrapper::server::handle_rejection)
         .with(warp::log("owner-onboarding-service"));
