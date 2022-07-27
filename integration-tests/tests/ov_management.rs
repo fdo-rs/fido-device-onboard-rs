@@ -32,11 +32,10 @@ async fn test_ov_management() -> Result<()> {
         ))
         .header("Authorization", "Bearer TestAdminToken")
         .header("X-Number-Of-Vouchers", "1")
-        .header("Content-Type", "application/x-pem-file")
+        .header("content-type", "application/x-pem-file")
         .body("THIS IS A INVALID BODY")
         .send()
         .await?;
-
     let mut failed = Vec::new();
     if add_ov.status() != 400 {
         failed.push(TestCase {
@@ -48,14 +47,12 @@ async fn test_ov_management() -> Result<()> {
     let ov_list: [&str; 1] = ["89cb17fd-95e7-4de8-a36a-686926a7f88f"];
     let delete_ov = client
         .post(format!(
-            "http://localhost:{}/management/v1/ownership_voucher/delete", //DevSkim: ignore DS137138
+            "http://localhost:{}/management/v1/ownership_voucher/delete",
             owner_onboarding_server.server_port().unwrap()
         ))
-        .header("Content-Type", "Application/json")
         .json(&ov_list)
         .send()
         .await?;
-
     if delete_ov.status() != 400 {
         failed.push(TestCase {
             action: "Delete OV",

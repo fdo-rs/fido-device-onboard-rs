@@ -21,20 +21,19 @@ pub(crate) fn ov_filter(
         .and(warp::path("ownership_voucher"))
         .and(warp::path::end())
         .and(warp::header::value("X-Number-Of-Vouchers"))
-        .and(warp::header::value("Content-Type"))
+        .and(warp::header::value("content-type"))
         .and(warp::body::content_length_limit(1024 * 32))
         .and(warp::body::bytes())
         .map(move |count, content_type, body| (count, content_type, body, session_store.clone()))
         .untuple_one()
-        .and_then(add_ov)
-        .recover(recover_err);
+        .and_then(add_ov);
 
     let delete = baseurl
         .and(warp::post())
         .and(warp::path("ownership_voucher"))
         .and(warp::path("delete"))
         .and(warp::path::end())
-        .and(warp::header::exact("Content-Type", "Application/json"))
+        .and(warp::header::exact("content-type", "application/json"))
         .and(warp::body::content_length_limit(1024 * 32))
         .and(warp::body::json())
         .map(move |uuids: Vec<String>| (uuids, store1.clone()))
