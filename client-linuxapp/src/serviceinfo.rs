@@ -323,13 +323,6 @@ impl CommandInProgress {
         let mut cmd = Command::new(self.command.as_ref().unwrap());
         cmd.args(&self.args);
 
-        if !self.return_stdout {
-            cmd.stdout(std::process::Stdio::null());
-        }
-        if !self.return_stderr {
-            cmd.stderr(std::process::Stdio::null());
-        }
-
         let output = cmd.output().context("Error running command")?;
 
         if self.return_stdout {
@@ -355,7 +348,12 @@ impl CommandInProgress {
         if self.may_fail || output.status.success() {
             Ok(())
         } else {
-            bail!("Command failed")
+            bail!(
+                "Command failed {} {:?} stderr: {}",
+                self.command.as_ref().unwrap(),
+                self.args,
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
     }
 }
