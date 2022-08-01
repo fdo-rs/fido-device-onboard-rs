@@ -1132,13 +1132,12 @@ async fn main() -> Result<()> {
 
     // Get rv entries
     let rv_info = get_rv_info(dc.as_ref())?;
-    let rv_info_it = rv_info.iter();
 
     let mut onboarding_performed = false;
     let mut rv_entry_delay = 0;
 
     loop {
-        for rv_entry in rv_info_it.clone() {
+        for rv_entry in rv_info.iter() {
             rv_entry_delay = rv_entry.delay;
 
             let client_list = match get_client_list(rv_entry).await {
