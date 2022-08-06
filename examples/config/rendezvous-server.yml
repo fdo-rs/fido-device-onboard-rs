@@ -1,9 +1,10 @@
 ---
 storage_driver:
   Directory:
-    path: /path/to/rendezvous_registered/
-session_store_driver: Directory
-session_store_config: /path/to/sessions/
+    path: /path/to/stores/rendezvous_registered
+session_store_driver:
+  Directory:
+    path: /path/to/stores/rendezvous_sessions
 trusted_manufacturer_keys_path: /path/to/keys/manufacturer_cert.pem
-trusted_device_keys_path: /path/to/keys/device_ca_cert.pem
-bind: 0.0.0.0:8082
+max_wait_seconds: ~
+bind: "0.0.0.0:8082"
