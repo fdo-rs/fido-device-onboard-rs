@@ -8,6 +8,14 @@ containers.
  mkdir keys
  for i in "diun" "manufacturer" "device-ca" "owner"; do fdo-admin-tool generate-key-and-cert $i; done
 ```
+# Copy and edit the configuration files
+
+Copy the configuration file from the examples provided and edit as needed. 
+
+- [manufacturing-server.yml] (https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/config/manufacturing-server.yml)
+- [owner-onboarding-server.yml] (https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/config/owner-onboarding-server.yml)
+- [rendezvous-server.yml] (https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/config/owner-onboarding-server.yml)
+- [serviceinfo-api-server.yml] (https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/config/owner-onboarding-server.yml) 
 
 ## Running the FDO containers
 ### manufacturing-server 
