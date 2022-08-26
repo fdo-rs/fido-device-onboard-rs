@@ -2,6 +2,7 @@ FROM quay.io/centos/centos:stream9
 ARG BUILDID
 COPY --from=fdo-build:${BUILDID} /usr/src/target/release/fdo-manufacturing-server /usr/local/bin
 RUN mkdir -p /etc/fdo/sessions
+RUN mkdir -p /etc/fdo/keys
 RUN mkdir -p /etc/fdo/manufacturing-server.conf.d
 ENV LOG_LEVEL=trace
 ENTRYPOINT ["fdo-manufacturing-server"]
