@@ -5,6 +5,9 @@ session_store_driver:
 ownership_voucher_store_driver:
   Directory:
     path: /path/to/ownership_vouchers/
+public_key_store_driver:
+  Directory:
+    path: /path/to/manufacturer_keys/
 bind: 0.0.0.0:8080
 rendezvous_info:
 - dns: fdo.example.com
