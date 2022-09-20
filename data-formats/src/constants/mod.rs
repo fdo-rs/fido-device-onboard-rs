@@ -347,7 +347,7 @@ impl RendezvousProtocolValue {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, FromPrimitive, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, FromPrimitive, PartialEq, Eq)]
 #[repr(u8)]
 #[non_exhaustive]
 pub enum MessageType {
