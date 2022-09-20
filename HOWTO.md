@@ -7,7 +7,7 @@
     (Device Initialization)
   - How to get information about an OV
   - How to extend an OV with the Owner's Certificate
-  - How to convert a plain-text format OV to a COSE format OV
+  - How to convert a PEM (plain-text) format OV to a COSE (binary) format OV
 - Configuration Files
   - `manufacturing_server.yml`
     - `rendezvous_info` field and `rendezvous_info.yml`
@@ -19,6 +19,7 @@
   - Owner Onboarding Server
   - Rendezvous Server
   - Service Info API Server
+- How to run the Client
 
 ## Pre-requisites
 
@@ -100,8 +101,8 @@ Where the arguments for `--device-cert-ca-chain`,
 seen in [How To Generate Keys and
 Certificates](#how-to-generate-keys-and-certificates) and the argument for
 `--rendezvous-info` is a YAML file containing a list of contact information for the
-different Rendezvous Servers (see[Configuration
-Files/rendezvous_info.yml](#configuration-files)).
+different Rendezvous Servers (see [Configuration
+Files/rendezvous_info.yml](#rendezvous_info-field-and-rendezvous_infoyml)).
 
 ```bash
   $ fdo-owner-tool initialize-device \
@@ -116,14 +117,14 @@ Files/rendezvous_info.yml](#configuration-files)).
   Created ownership voucher for device 2466056e-b71d-4a09-fb57-8aa49f003686
   ```
 
-The generated OV is in plain-text format, but if you are using this OV in the
+The generated OV is in PEM (plain-text) format, but if you are using this OV in the
 `owner-onboarding-server` you will need to convert it to COSE format, plus the
 OV will need to be extended with the Owner's Certificate.
 
 ### How to get information about an OV
 
 Use `fdo-owner-tool dump-ownership-voucher` to get all the available
-information about an OV. The input OV can be in plain-text or COSE format.
+information about an OV. The input OV can be in PEM or COSE format.
 
 ```
 USAGE:
@@ -203,7 +204,7 @@ Entries:
 		Public key: Public key (SECP256R1): [48, 89, 48, 19, 6, 7, 42, 134, 72, 206, 61, 2, 1, 6, 8, 42, 134, 72, 206, 61, 3, 1, 7, 3, 66, 0, 4, 8, 127, 162, 248, 37, 134, 145, 249, 198, 77, 184, 125, 223, 41, 164, 83, 143, 100, 175, 69, 104, 128, 53, 36, 195, 196, 100, 105, 206, 49, 205, 190, 233, 111, 168, 2, 90, 82, 187, 84, 91, 98, 37, 103, 138, 202, 148, 99, 6, 144, 227, 45, 102, 248, 252, 88, 232, 66, 232, 138, 79, 222, 253, 10] (chain: None)
 ```
 
-### How to convert a plain-text format OV to a COSE format OV
+### How to convert a PEM (plain-text) format OV to a COSE (binary) format OV
 
 Use `fdo-owner-tool dump-ownership-voucher`:
 
@@ -290,21 +291,21 @@ Where:
     - `pub_cert_path`: path to the diun certificate.
 - `rendezvous_info`: indicates how the Device and the Owner will find the
   Rendezvous Server.
-      - `ip`/`ipaddress`/`ip_address` or `dns`: IP address or DNS url.
-      - `device_port`/`deviceport`: [OPTIONAL] port for the Device.
-      - `owner_port`/`ownerport`: [OPTIONAL] port for the Owner.
-      - `protocol`: [OPTIONAL] transport protocol: `tcp`, `tls`, `http`,
-        `coap`, ` https` or `coaps` (default `tls`).
-      - `device_only`/`deviceonly`: [OPTIONAL]
-      - `owner_only`/`owneronly`: [OPTIONAL]
-      - `server_cert_hash`/`servercerthash`: [NOT IMPLEMENTED]
-      - `ca_cert_hash`/`cacerthash`: [NOT IMPLEMENTED]
-      - `user_input`/`userinput`: [OPTIONAL]
-      - `wifi_ssid`/`wifissid`: [OPTIONAL]
-      - `wifi_pw`/`wifipw`: [OPTIONAL]
-      - `medium`: [NOT IMPLEMENTED]
-      - `delay_sec`/`delaysec`: [OPTIONAL] default 0.
-      - `bypass`: [OPTIONAL]
+  - `ip`/`ipaddress`/`ip_address` or `dns`: IP address or DNS url.
+  - `device_port`/`deviceport`: [OPTIONAL] port for the Device.
+  - `owner_port`/`ownerport`: [OPTIONAL] port for the Owner.
+  - `protocol`: [OPTIONAL] transport protocol: `tcp`, `tls`, `http`, `coap`,
+    `https` or `coaps` (default `tls`).
+  - `device_only`/`deviceonly`: [OPTIONAL]
+  - `owner_only`/`owneronly`: [OPTIONAL]
+  - `server_cert_hash`/`servercerthash`: [NOT IMPLEMENTED]
+  - `ca_cert_hash`/`cacerthash`: [NOT IMPLEMENTED]
+  - `user_input`/`userinput`: [OPTIONAL]
+  - `wifi_ssid`/`wifissid`: [OPTIONAL]
+  - `wifi_pw`/`wifipw`: [OPTIONAL]
+  - `medium`: [NOT IMPLEMENTED]
+  - `delay_sec`/`delaysec`: [OPTIONAL] default 0.
+  - `bypass`: [OPTIONAL]
 - `manufacturing`: extra settings for this Manufacturing Server :
   - `manufacturer_cert_path`: path to the Manufacturer's certificate.
   - `manufacturer_private_key`: [OPTIONAL] path to the Manufacturer's private
@@ -379,7 +380,8 @@ Where:
 - `service_info_api_url`: url to the Service Info API server.
 - `service_info_api_authentication`: if the Service Info API server needs
   authentication (JSON authentication) provide a `BearerToken` or a
-  `ClientCertificate`:
+  `ClientCertificate` (both fields explained below); if it doesn't need
+  authentication place `None` in this field.
   - `BearerToken`:
     - `token`: bearer token.
   - `ClientCertificate`:
@@ -466,9 +468,11 @@ service_info:
 
 Where:
 - `bind`: IP address and port that the Service Info API Server will take.
-- `service_info_auth_token`: Authorization token.
-- `admin_auth_token`: [OPTIONAL]
-- `device_specific_store_driver`:
+- `service_info_auth_token`: Authorization token, `None` if no authentication
+  is needed.
+- `admin_auth_token`: [OPTIONAL] Admin's authorization token.
+- `device_specific_store_driver`: path to a directory that will hold
+  device-specific info.
 - `service_info`: list of settings for the `service_info` optional
   modules. Each module provides an specific functionality and their
   configuration are a series of key-values. These specific `service_info`
@@ -502,16 +506,19 @@ Where:
 
 ## How to run the servers
 
+Please mind how the configuration file must be specifically named (e.g. `-` VS
+`_`).
+
 ### Manufacturing Server
 
 1. Generate the required keys/certificates for the Manufacturing Server, see
-   [How to generate keys and certificates](#).
+   [How to generate keys and certificates](#how-to-generate-keys-and-certificates).
 
    You will need the Manufacturers private key and certificate, the Owner's
    certificate and the Device's private key and certificate.
 
-2. Configure `manufacturing_server.yml`, see [Configuration
-   Files/manufacturing_server.yml](#) and place it either in
+2. Configure `manufacturing-server.yml`, see [Configuration
+   Files/manufacturing_server.yml](#manufacturing_serveryml) and place it either in
    `/usr/share/fdo`, `/etc/fdo/` or
    `/etc/fdo/manufacturing-serverr.conf.d/`. The paths will be checked in that
    same order.
@@ -523,44 +530,64 @@ Where:
 ### Owner Onboarding Server
 
 1. Generate the required keys/certificates for the Owner, see [How to generate
-   keys and certificates](#). 
+   keys and certificates](#how-to-generate-keys-and-certificates).
 
-2. Configure `owner_onboarding_server.yml`, see [Configuration
-   Files/owner_onboarding_server.yml](#) and place it either in
-   `/usr/share/fdo`, `/etc/fdo/` or
+2. Configure `owner-onboarding-server.yml`, see [Configuration
+   Files/owner_onboarding_server.yml](#owner_onboarding_serveryml) and place it
+   either in `/usr/share/fdo`, `/etc/fdo/` or
    `/etc/fdo/owner-onboarding-server.conf.d/`. The paths will be checked in
    that same order.
 
 3. Generate an Ownership Voucher (see [How to generate an Ownership
-   Voucher](#)), extend it with the Owner's Certificate (see [How to extend an
-   OV with the Owner's Certificate](#)) and convert it to COSE format (see [How
-   to convert a plain-text format OV to a COSE format OV](#)).
+   Voucher](#how-to-generate-an-ownership-voucher-ov-and-credential-for-a-device-device-initialization)),
+   extend it with the Owner's Certificate (see [How to extend an OV with the
+   Owner's Certificate](#how-to-extend-an-ov-with-the-owners-certificate)) and
+   convert it to COSE format (see [How to convert a PEM (plain-text) format OV
+   to a COSE (binary) format OV](#how-to-convert-a-pem-plain-text-format-ov-to-a-cose-binary-format-ov)).
    
    Rename the generated OV to its Device GUID (see [How to get information about an
-   OV](#) to identify its Device GUID) and store it in the path given to the
-   `ownership_voucher_store_driver` field in the `owner_onboarding_server.yml`
-   of the previous step.
+   OV](#how-to-get-information-about-an-ov) to identify its Device GUID) and
+   store it in the path given to the `ownership_voucher_store_driver` field in
+   the `owner_onboarding_server.yml` of the previous step.
 
 4. Execute `fdo-owner-onboarding-server` or run it as a service, see sample
    file in [examples/systemd](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/systemd/fdo-owner-onboarding-server.service).
 
 ### Rendezvous Server
 
-1. Configure `rendezvous_server.yml`, see [Configuration
-   Files/rendezvous_server.yml](#) and place it either in `/usr/share/fdo`,
-   `/etc/fdo/` or `/etc/fdo/rendezvous-server.conf.d/`. The paths will be
-   checked in that same order.
+1. Configure `rendezvous-server.yml`, see [Configuration
+   Files/rendezvous_server.yml](#rendezvous_serveryml) and place it either in
+   `/usr/share/fdo`, `/etc/fdo/` or `/etc/fdo/rendezvous-server.conf.d/`. The
+   paths will be checked in that same order.
 
 2. Execute `fdo-rendezvous-server` or run it as a service, see sample file in
    [examples/systemd](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/systemd/fdo-rendezvous-server.service).
 
 ### Service Info API Server
 
-1. Configure `serviceinfo_api_server.yml`, see [Configuration
-   Files/serviceinfo_api_server.yml](#), and place it either in
+1. Configure `serviceinfo-api-server.yml`, see [Configuration
+   Files/serviceinfo_api_server.yml](#serviceinfo_api_serveryml), and place it either in
    `/usr/share/fdo`, `/etc/fdo/` or `/etc/fdo/serviceinfo-api-server.conf.d/`. The
    paths will be checked in that same order.
 
 2. Execute `fdo-serviceinfo-api-server` or run it as a service, see sample file
    in
    [examples/systemd](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/systemd/fdo-serviceinfo-api-server.service).
+
+## How to run the Client
+
+1. Initialize the Device, see [How to generate an Ownership Voucher (OV) and
+    Credential for a Device (Device
+    Initialization)](#how-to-generate-an-ownership-voucher-ov-and-credential-for-a-device-device-initialization).
+
+2. The client will look for the Device Credential created during the previous
+  step. It will look for in on
+  `/sys/firmware/qemu_fw_cfg/by_name/opt/device_onboarding/devicecredential/raw`
+  or in the location specified by the `DEVICE_CREDENCIAL` environment variable,
+  in that order.
+
+    ```bash
+    export DEVICE_CREDENTIAL=/path/to/device_credential
+    ```
+
+3. Run the client: `fdo-client-linuxappp`
