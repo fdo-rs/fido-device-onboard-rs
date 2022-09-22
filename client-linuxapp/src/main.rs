@@ -1007,7 +1007,7 @@ async fn perform_to2(
 
     // Now, the magic: performing the roundtrip! We delegated that.
     if let Err(serviceinfo_err) = serviceinfo::perform_to2_serviceinfos(&mut client).await {
-        log::info!("ServiceInfo failed, error: {:?}", serviceinfo_err);
+        log::error!("ServiceInfo failed, error: {:?}", serviceinfo_err);
         let e_result = ErrorResult::new(
             ErrorCode::InternalServerError,
             "Error performing the ServiceInfo roundtrips",
@@ -1202,7 +1202,7 @@ async fn main() -> Result<()> {
                         break;
                     }
                     Err(e) => {
-                        log::trace!("{:?} with TO2 address {}", e, to2_address);
+                        log::error!("{:?} with TO2 address {}", e, to2_address);
                         continue;
                     }
                 }
