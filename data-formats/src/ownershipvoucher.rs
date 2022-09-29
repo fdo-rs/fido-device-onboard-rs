@@ -405,8 +405,8 @@ impl<'a> EntryIter<'a> {
         match entry.hash_header_info.compare(&hdr_info_hash) {
             Ok(_) => {}
             Err(e) => {
-                println!("Header hash: {:?}", hdr_info_hash);
-                println!("Entry hash:  {:?}", entry.hash_header_info);
+                log::info!("Header hash: {:?}", hdr_info_hash);
+                log::info!("Entry hash:  {:?}", entry.hash_header_info);
                 log::error!("Error verifying header hash");
                 return Err(e);
             }
