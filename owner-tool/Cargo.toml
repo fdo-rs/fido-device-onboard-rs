@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
-clap = "2"
+clap = "4"
 log = "0.4"
 openssl = "0.10.35"
 serde = { version = "1", features = ["derive"] }
