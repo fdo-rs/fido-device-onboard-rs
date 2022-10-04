@@ -17,6 +17,7 @@ log = "0.4"
 serde = { version = "1", features = ["derive"] }
 tokio = "1"
 time = "0.3"
+regex = "1.6.0"
 
 # feature-specific dependencies
 # directory

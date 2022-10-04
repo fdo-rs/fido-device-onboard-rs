@@ -1,7 +1,9 @@
 use core::future::Future;
 use core::pin::Pin;
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use thiserror::Error;
 
 use fdo_data_formats::Serializable;
@@ -76,7 +78,7 @@ pub enum MetadataKey<T: MetadataLocalKey> {
 }
 
 impl<T: MetadataLocalKey> MetadataKey<T> {
-    fn to_key(&self) -> &str {
+    pub fn to_key(&self) -> &str {
         match self {
             MetadataKey::Ttl => "store_ttl",
             MetadataKey::Local(k) => k.to_key(),
@@ -216,10 +218,55 @@ pub trait Store<OT: StoreOpenMode, K, V, MKT: MetadataLocalKey>: Send + Sync {
 #[cfg(feature = "directory")]
 mod directory;
 
+pub fn format_xattr(key: &str) -> String {
+    format!("user.{}", key)
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum StoreConfig {
     #[cfg(feature = "directory")]
     Directory { path: std::path::PathBuf },
+}
+
+/// Storage modes for the Directory, xattrs or metadata files
+pub enum DirectoryStorageMode {
+    Xattr,
+    MetadataFile,
+}
+
+/// Format of FDOmetadata
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FdoMetadata {
+    pub map: HashMap<String, Vec<u8>>,
+}
+
+/// extension used in our metadata files
+pub const FDO_METADATA_EX: &str = "fdo-md";
+
+/// Adds FDO_METADATA_EX extension to a file in the given path
+pub fn set_metadata_extension_to_path(path: &PathBuf) -> Result<PathBuf, StoreError> {
+    match path.as_path().file_name() {
+        Some(_) => (),
+        None => {
+            return Err(StoreError::Unspecified(format!(
+                "Cannot add extension if no file is provided"
+            )))
+        }
+    };
+    match path.as_path().extension() {
+        None => {
+            let npath = path.as_path().with_extension(FDO_METADATA_EX);
+            Ok(PathBuf::from(npath))
+        }
+        Some(re) => {
+            if re == FDO_METADATA_EX {
+                Ok(path.to_path_buf())
+            } else {
+                let npath = path.as_path().with_extension(FDO_METADATA_EX);
+                Ok(PathBuf::from(npath))
+            }
+        }
+    }
 }
 
 impl StoreConfig {
@@ -234,6 +281,23 @@ impl StoreConfig {
         match self {
             #[cfg(feature = "directory")]
             StoreConfig::Directory { path } => directory::initialize(path),
+        }
+    }
+
+    pub fn initialize_explicit_mode<OT, K, V, MKT>(
+        &self,
+        mode: DirectoryStorageMode,
+    ) -> Result<Box<dyn Store<OT, K, V, MKT>>, StoreError>
+    where
+        OT: StoreOpenMode + 'static,
+        // K and V are supersets of the possible requirements for the different implementations
+        K: Eq + std::hash::Hash + Send + Sync + std::string::ToString + std::str::FromStr + 'static,
+        V: Send + Sync + Clone + Serializable + 'static,
+        MKT: crate::MetadataLocalKey + 'static,
+    {
+        match self {
+            #[cfg(feature = "directory")]
+            StoreConfig::Directory { path } => directory::initialize_explicit_mode(path, mode),
         }
     }
 }
