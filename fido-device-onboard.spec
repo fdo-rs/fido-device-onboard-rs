@@ -5,7 +5,7 @@
 %global forgeurl https://github.com/fedora-iot/fido-device-onboard-rs
 %global rpmdocsdir docs-rpms
 
-Version:        0.4.5
+Version:        0.4.6
 
 %forgemeta
 
@@ -227,6 +227,9 @@ Requires: fdo-owner-cli
 %systemd_postun_with_restart fdo-aio.service
 
 %changelog
+* Thu Oct 06 2022 Peter Robinson <pbrobinson@fedoraproject.org> - 0.4.6-1
+- Update to 0.4.6
+
 * Tue Mar 15 2022 Antonio Murdaca <runcom@linux.com> - 0.4.5-1
 - Rebase to 0.4.5
 

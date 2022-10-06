@@ -1,6 +1,6 @@
 [package]
 name = "fdo-admin-tool"
-version = "0.4.5"
+version = "0.4.6"
 authors = ["Antonio Murdaca <runcom@linux.com>"]
 edition = "2018"
 
@@ -22,7 +22,7 @@ pretty_env_logger = "0.4"
 nix = "0.23"
 tokio = { version = "1", features = ["full"] }
 
-fdo-data-formats = { path = "../data-formats", version = "0.4.5" }
-fdo-http-wrapper = { path = "../http-wrapper", version = "0.4.5", features = ["server", "client"] }
-fdo-store = { path = "../store", version = "0.4.5", features = ["directory"] }
-fdo-util = { path = "../util", version = "0.4.5" }
+fdo-data-formats = { path = "../data-formats", version = "0.4.6" }
+fdo-http-wrapper = { path = "../http-wrapper", version = "0.4.6", features = ["server", "client"] }
+fdo-store = { path = "../store", version = "0.4.6", features = ["directory"] }
+fdo-util = { path = "../util", version = "0.4.6" }
