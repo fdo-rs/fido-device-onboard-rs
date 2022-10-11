@@ -7,6 +7,7 @@ use tokio::{
 };
 
 use super::{configure::Configuration, ChildBinary};
+use time::OffsetDateTime;
 
 const ALL_DAEMON_BINARIES: &[ChildBinary] = &[
     ChildBinary::ManufacturingServer,
@@ -19,7 +20,7 @@ const WAIT_BETWEEN_READY_TESTS: Duration = Duration::from_millis(500);
 
 #[derive(Debug)]
 struct RunningAioContext {
-    starttime: chrono::DateTime<chrono::offset::Utc>,
+    starttime: time::OffsetDateTime,
 
     configuration: Configuration,
 
@@ -37,7 +38,7 @@ impl RunningAioContext {
             binary_path,
             configuration,
             childs: Vec::new(),
-            starttime: chrono::offset::Utc::now(),
+            starttime: OffsetDateTime::now_utc(),
         })
     }
 
