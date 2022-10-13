@@ -46,14 +46,14 @@ runs:
       allimages=""
       alltags=""
       allimagetags=""
-      for container in admin-cli manufacturing-server rendezvous-server serviceinfo-api-server owner-onboarding-server
+      for container in admin-cli manufacturing-server rendezvous-server serviceinfo-api-server owner-onboarding-server aio
       do
         allimages="$allimages $container"
       done
       for tag in "$rawtags"
       do
         alltags="$alltags ${tag//imagename:/}"
-        for container in admin-cli manufacturing-server rendezvous-server serviceinfo-api-server owner-onboarding-server
+        for container in admin-cli manufacturing-server rendezvous-server serviceinfo-api-server owner-onboarding-server aio
         do
           allimagetags="$allimagetags ${tag//imagename/"$container"}"
         done
@@ -86,6 +86,17 @@ runs:
       tags: |
         ${{ format(steps.container-metadata.outputs.tags, 'manufacturing-server') }}
         manufacturing-server:${{ steps.buildid.outputs.buildid }}
+      labels: ${{ steps.container-metadata.outputs.labels }}
+      build-args: |
+        BUILDID=${{ steps.buildid.outputs.buildid }}
+
+  - name: Create aio container
+    uses: redhat-actions/buildah-build@v2
+    with:
+      containerfiles: contrib/containers/aio
+      tags: |
+        ${{ format(steps.container-metadata.outputs.tags, 'aio') }}
+        aio:${{ steps.buildid.outputs.buildid }}
       labels: ${{ steps.container-metadata.outputs.labels }}
       build-args: |
         BUILDID=${{ steps.buildid.outputs.buildid }}
@@ -126,7 +137,7 @@ runs:
   - name: Test containers
     shell: bash
     run: |
-      for container in admin-cli manufacturing-server rendezvous-server serviceinfo-api-server owner-onboarding-server
+      for container in admin-cli manufacturing-server rendezvous-server serviceinfo-api-server owner-onboarding-server aio
       do
         podman run --rm $container:${{ steps.buildid.outputs.buildid }} --version
       done
