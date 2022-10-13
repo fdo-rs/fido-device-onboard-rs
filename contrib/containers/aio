@@ -1,0 +1,11 @@
+FROM quay.io/centos/centos:stream9
+ARG BUILDID
+COPY --from=fdo-build:${BUILDID} /usr/src/target/release/fdo-admin-tool /usr/bin
+COPY --from=fdo-build:${BUILDID} /usr/src/target/release/fdo-manufacturing-server /usr/bin
+COPY --from=fdo-build:${BUILDID} /usr/src/target/release/fdo-owner-onboarding-server /usr/bin
+COPY --from=fdo-build:${BUILDID} /usr/src/target/release/fdo-rendezvous-server /usr/bin
+COPY --from=fdo-build:${BUILDID} /usr/src/target/release/fdo-serviceinfo-api-server /usr/bin
+COPY --from=fdo-build:${BUILDID} /usr/src/target/release/fdo-client-linuxapp /usr/bin
+COPY --from=fdo-build:${BUILDID} /usr/src/target/release/fdo-owner-tool /usr/bin
+COPY --from=fdo-build:${BUILDID} /usr/src/target/release/fdo-manufacturing-client /usr/bin
+ENTRYPOINT ["fdo-admin-tool"]
