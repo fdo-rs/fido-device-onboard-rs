@@ -104,7 +104,7 @@ async fn main() -> Result<()> {
     fdo_http_wrapper::init_logging();
 
     let settings: RendezvousServerSettings = settings_for("rendezvous-server")?
-        .try_into()
+        .try_deserialize()
         .context("Error parsing configuration")?;
 
     let max_wait_seconds = settings

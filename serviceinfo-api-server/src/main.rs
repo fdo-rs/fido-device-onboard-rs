@@ -400,7 +400,7 @@ async fn main() -> Result<()> {
     fdo_http_wrapper::init_logging();
 
     let settings: ServiceInfoApiServerSettings = settings_for("serviceinfo-api-server")?
-        .try_into()
+        .try_deserialize()
         .context("Error parsing configuration")?;
 
     // Bind information
