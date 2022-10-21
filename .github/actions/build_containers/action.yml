@@ -20,7 +20,7 @@ runs:
   - name: Set unique build ID
     id: buildid
     shell: bash
-    run: echo '::set-output name=buildid::build-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}'
+    run: echo 'buildid=build-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' >> $GITHUB_OUTPUT
 
   - name: Container Metadata
     id: container-metadata
@@ -58,9 +58,9 @@ runs:
           allimagetags="$allimagetags ${tag//imagename/"$container"}"
         done
       done
-      echo "::set-output name=images::${allimages:1}"
-      echo "::set-output name=tags::${alltags:1}"
-      echo "::set-output name=imagetags::${allimagetags:1}"
+      echo "images=${allimages:1}" >> $GITHUB_OUTPUT
+      echo "tags=${alltags:1}" >> $GITHUB_OUTPUT
+      echo "imagetags=${allimagetags:1}" >> $GITHUB_OUTPUT
 
   - name: Perform build in container
     uses: redhat-actions/buildah-build@v2
