@@ -16,6 +16,10 @@ pub fn find() -> Option<Result<Box<dyn UsableDeviceCredentialLocation>>> {
         Box::new(FileSystemPathEnv {
             env_var: "DEVICE_CREDENTIAL".to_string(),
         }),
+        Box::new(FileSystemPath {
+            path: "/etc/device-credentials".to_string(),
+            deactivation_method: DeactivationMethod::Deactivate,
+        }),
     ];
 
     for devcredloc in device_credential_locations {
