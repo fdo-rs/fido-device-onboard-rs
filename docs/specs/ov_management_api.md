@@ -62,7 +62,7 @@ This endpoint can be used to upload a batch of new ownership vouchers.
 A header is sent with the number of vouchers to be uploaded, so the Owner Onboarding Service can verify that it did in fact receive (and process) every ownership voucher.
 This endpoint will accept either raw ownership vouchers (CBOR encoding), or PEM wrapper ownership vouchers, with the `OWNERSHIP VOUCHER` type, which one will be parsed/expected is determined by the `Content-Type` request header: `application/cbor` for CBOR, and `application/x-pem-file` for PEM.
 In the case of CBOR encoded vouchers, they should just be appended to each other as a byte stream.
-In the case of PEM encoded vouchers, vouchers should be appended to each other, adding a newline between the different entries.
+In the case of PEM encoded vouchers, vouchers should be appended to each other, adding a newline between the different entries or separating them by begin and end tags.
 The request SHOULD contain a header `X-Number-Of-Vouchers`, containing the number of Ownership Vouchers being uploaded.
 If this number diverges from the number of vouchers the server parsed, they should refuse the entire request.
 
