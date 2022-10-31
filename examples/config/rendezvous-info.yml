@@ -1,5 +1,5 @@
 ---
-deviceport: 8082
-ip_address: 192.168.122.1
-ownerport: 8082
-protocol: http
+- deviceport: 8082
+  ip_address: 127.0.0.1
+  ownerport: 8082
+  protocol: http
