@@ -582,9 +582,9 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
 
 2. The client will look for the Device Credential created during the previous
   step. It will look for in on
-  `/sys/firmware/qemu_fw_cfg/by_name/opt/device_onboarding/devicecredential/raw`
-  or in the location specified by the `DEVICE_CREDENCIAL` environment variable,
-  in that order.
+  `/sys/firmware/qemu_fw_cfg/by_name/opt/device_onboarding/devicecredential/raw`,
+  in the location specified by the `DEVICE_CREDENCIAL` environment variable, or
+  in `/etc/device-credentials`, in that order.
 
     ```bash
     export DEVICE_CREDENTIAL=/path/to/device_credential
