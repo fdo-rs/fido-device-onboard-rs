@@ -1,3 +1,4 @@
+use config::Config;
 use fdo_data_formats::constants::ServiceInfoModule;
 use glob::glob;
 use serde::{Deserialize, Serialize};
@@ -31,21 +32,9 @@ impl fdo_store::MetadataLocalKey for OwnershipVoucherStoreMetadataKey {
 }
 
 pub fn settings_for(component: &str) -> Result<config::Config> {
-    Ok(config::Config::default()
-        .merge(
-            config::File::from(Path::new(&format!("/usr/share/fdo/{}.yml", component)))
-                .required(false),
-        )
-        .context("Loading configuration file from /usr/share/fdo")?
-        .merge(
-            config::File::from(Path::new(
-                &conf_dir_from_env(&format_conf_env(component))
-                    .unwrap_or_else(|| format!("/etc/fdo/{}.yml", component)),
-            ))
-            .required(false),
-        )
-        .context("Loading configuration file from /etc/fdo")?
-        .merge(
+    // the last added source (if available) will be the one being used
+    Config::builder()
+        .add_source(
             glob(
                 &conf_dir_from_env(&format_conf_dir_env(component))
                     .unwrap_or_else(|| format!("/etc/fdo/{}.conf.d/*.yml", component)),
@@ -53,8 +42,19 @@ pub fn settings_for(component: &str) -> Result<config::Config> {
             .map(|path| config::File::from(path.unwrap()))
             .collect::<Vec<_>>(),
         )
-        .context("Loading configuration files from conf.d")?
-        .clone())
+        .add_source(
+            config::File::from(Path::new(
+                &conf_dir_from_env(&format_conf_env(component))
+                    .unwrap_or_else(|| format!("/etc/fdo/{}.yml", component)),
+            ))
+            .required(false),
+        )
+        .add_source(
+            config::File::from(Path::new(&format!("/usr/share/fdo/{}.yml", component)))
+                .required(false),
+        )
+        .build()
+        .context(format!("Loading configuration for {}", component))
 }
 
 pub fn format_conf_env(component: &str) -> String {

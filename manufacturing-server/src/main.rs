@@ -171,7 +171,7 @@ async fn main() -> Result<()> {
     fdo_http_wrapper::init_logging();
 
     let settings: ManufacturingServerSettings = settings_for("manufacturing-server")?
-        .try_into()
+        .try_deserialize()
         .context("Error parsing configuration")?;
 
     // Bind information

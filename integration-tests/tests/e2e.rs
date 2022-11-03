@@ -1,4 +1,5 @@
 mod common;
+use std::env;
 #[allow(unused_imports)]
 use std::{fs, io::Write, process::Command, time::Duration};
 
@@ -108,10 +109,10 @@ async fn test_e2e_impl<F>(verification_generator: F, diun_key_type: &str) -> Res
 where
     F: Fn(&TestContext) -> Result<(&'static str, String, &'static str)>,
 {
+    let ci = env::var("FDO_PRIVILEGED").is_ok();
     let mut ctx = TestContext::new().context("Error building test context")?;
-
+    let new_user: &str = "testuser"; //new user to be created during onboarding
     let encrypted_disk_loc = ctx.testpath().join("encrypted.img");
-
     let rendezvous_server = ctx
         .start_test_server(
             Binary::RendezvousServer,
@@ -128,6 +129,9 @@ where
                         "encrypted_disk_label",
                         &encrypted_disk_loc.to_string_lossy(),
                     );
+                    if ci {
+                        cfg.insert("user", new_user)
+                    };
                     Ok(())
                 })?)
             },
@@ -387,6 +391,18 @@ testkey
 # End of FIDO Device Onboarding keys
 "
     );
+    if ci {
+        L.l("Running create initial user validation");
+        pretty_assertions::assert_eq!(
+            passwd::Passwd::from_name(new_user).is_some(),
+            true,
+            "User: {} is not created during onboarding",
+            &new_user
+        );
+    } else {
+        L.l("Skipped create initial user validation
+        To validate set env variable FDO_PRIVILEGED and run test as superuser");
+    }
 
     L.l("Checking encrypted disk image");
     let output = Command::new("cryptsetup")

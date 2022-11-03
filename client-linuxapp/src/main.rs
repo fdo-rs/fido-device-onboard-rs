@@ -326,7 +326,7 @@ async fn get_to1d(
                 return Ok(to1);
             }
             Err(e) => {
-                log::trace!("{} with {:?}", e, client);
+                log::error!("{} with {:?}", e, client);
                 continue;
             }
         }
@@ -1143,7 +1143,7 @@ async fn main() -> Result<()> {
             let client_list = match get_client_list(rv_entry).await {
                 Ok(client_list) => client_list,
                 Err(e) => {
-                    log::trace!(
+                    log::error!(
                         "Error {:?} getting usable rendezvous client list from rv_entry {:?}",
                         e,
                         rv_entry
@@ -1157,7 +1157,7 @@ async fn main() -> Result<()> {
             let to1d = match to1d {
                 Ok(to1d) => to1d,
                 Err(e) => {
-                    log::trace!(
+                    log::error!(
                         "Error {:?} getting usable To1d from rv_entry {:?}",
                         e,
                         rv_entry

@@ -114,6 +114,8 @@ jobs:
           command: build
       - name: Run tests
         uses: actions-rs/cargo@v1
+        env:
+          FDO_PRIVILEGED: true
         with:
           command: test
       # This is primarily to ensure that changes to fdo_data.h are committed,

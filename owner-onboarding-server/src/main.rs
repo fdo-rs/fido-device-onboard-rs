@@ -273,7 +273,7 @@ async fn main() -> Result<()> {
     }
 
     let settings: OwnerOnboardingServerSettings = settings_for("owner-onboarding-server")?
-        .try_into()
+        .try_deserialize()
         .context("Error parsing configuration")?;
 
     // Bind information

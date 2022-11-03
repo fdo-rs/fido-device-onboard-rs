@@ -52,6 +52,23 @@ fn set_perm_mode(path: &Path, mode: u32) -> Result<()> {
     Ok(())
 }
 
+fn create_user(user: &str) -> Result<()> {
+    let user_info = passwd::Passwd::from_name(user);
+    if user_info.is_some() {
+        log::info!("User: {} already present", user);
+        return Ok(());
+    }
+    log::info!("Creating user: {}", user);
+    Command::new("useradd")
+        .arg("-m")
+        .arg(user)
+        .spawn()
+        .context("Error spawning new user command")?
+        .wait()
+        .context("Error creating new user")?;
+    Ok(())
+}
+
 fn install_ssh_key(user: &str, key: &str) -> Result<()> {
     let user_info = passwd::Passwd::from_name(user);
     if user_info.is_none() {
@@ -604,6 +621,10 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
         if sshkey_user.is_none() || sshkey_key.is_none() {
             bail!("SSHkey module missing username or key");
         }
+        create_user(sshkey_user.as_ref().unwrap()).context(format!(
+            "Error creating new user: {}",
+            sshkey_user.as_ref().unwrap()
+        ))?;
         install_ssh_key(sshkey_user.as_ref().unwrap(), sshkey_key.as_ref().unwrap())
             .context("Error installing SSH key")?;
     }
