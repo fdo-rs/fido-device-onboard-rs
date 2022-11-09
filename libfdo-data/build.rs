@@ -35,7 +35,7 @@ fn main() {
     // Generate the Go bindings documentation
     let manifest_dir = std::path::PathBuf::from(MANIFEST_DIR);
     let godoc = Command::new("go")
-        .args(&["doc", "-all"])
+        .args(["doc", "-all"])
         .current_dir(
             manifest_dir
                 .join("../libfdo-data-go")

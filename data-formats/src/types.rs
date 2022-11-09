@@ -1674,7 +1674,7 @@ where
 {
     let payload = match payload {
         None => None,
-        Some(payload) => Some(serde_cbor::value::to_value(&payload)?),
+        Some(payload) => Some(serde_cbor::value::to_value(payload)?),
     };
     Ok(EATokenPayload {
         _phantom_state: std::marker::PhantomData,
