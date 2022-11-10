@@ -547,7 +547,7 @@ async fn perform_service_info(
         for (module, key, value) in extra_commands {
             if key.ends_with("|hex") {
                 let value = hex::decode(
-                    &value
+                    value
                         .as_str()
                         .ok_or_else(|| anyhow::anyhow!("Invalid API response: non-hex"))?,
                 )?;

@@ -44,11 +44,11 @@ fn find_available_modules() -> Result<Vec<ServiceInfoModule>> {
 }
 
 fn set_perm_mode(path: &Path, mode: u32) -> Result<()> {
-    let mut perms = fs::metadata(&path)
+    let mut perms = fs::metadata(path)
         .context("Error getting directory metadata")?
         .permissions();
     perms.set_mode(mode);
-    fs::set_permissions(&path, perms).context("Error setting permissions")?;
+    fs::set_permissions(path, perms).context("Error setting permissions")?;
     Ok(())
 }
 
