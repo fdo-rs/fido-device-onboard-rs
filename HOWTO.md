@@ -93,7 +93,7 @@ OPTIONS:
 ARGS:
     <device-id>                Identifier of the device
     <ownershipvoucher-out>     Output path for ownership voucher
-    <device-credential-out>    Output path for device credential
+    <device-credentials-out>   Output path for device credentials
 ```
 
 Where the arguments for `--device-cert-ca-chain`,
@@ -108,7 +108,7 @@ Files/rendezvous_info.yml](#rendezvous_info-field-and-rendezvous_infoyml)).
   $ fdo-owner-tool initialize-device \
   1234 \
   /path/to/resulting/ownership_voucher \
-  /path/to/resulting/device_credential \
+  /path/to/resulting/device-credentials \
   --device-cert-ca-chain ./keys/device_ca_cert.pem \
   --device-cert-ca-private-key ./keys/device_ca_key.der \
   --manufacturer-cert ./keys/manufacturer_cert.pem \
@@ -587,7 +587,7 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
   in `/etc/device-credentials`, in that order.
 
     ```bash
-    export DEVICE_CREDENTIAL=/path/to/device_credential
+    export DEVICE_CREDENTIAL=/path/to/device-credentials
     ```
 
 3. Run the client: `fdo-client-linuxappp`
