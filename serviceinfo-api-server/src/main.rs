@@ -45,7 +45,7 @@ impl ServiceInfoConfiguration {
                 let contents = std::fs::read(&file.source_path)
                     .with_context(|| format!("Failed to read file {}", file.source_path))?;
                 file.hash_hex = hex::encode(
-                    &Hash::from_data(HashType::Sha384, &contents)
+                    Hash::from_data(HashType::Sha384, &contents)
                         .with_context(|| format!("Failed to hash file {}", file.source_path))?
                         .value_bytes(),
                 );
