@@ -16,7 +16,7 @@ openssl = "0.10.35"
 warp = "0.3"
 log = "0.4"
 hex = "0.4"
-serde_yaml = "0.8"
+serde_yaml = "0.9"
 
 fdo-data-formats = { path = "../data-formats", version = "0.4.7" }
 fdo-http-wrapper = { path = "../http-wrapper", version = "0.4.7", features = ["server"] }
