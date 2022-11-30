@@ -1,6 +1,6 @@
 [package]
 name = "fdo-client-linuxapp"
-version = "0.4.6"
+version = "0.4.7"
 authors = ["Patrick Uiterwijk <patrick@puiterwijk.org>"]
 edition = "2018"
 
@@ -21,6 +21,6 @@ libcryptsetup-rs = { version = "0.5.1", features = ["mutex"] }
 secrecy = "0.8"
 devicemapper = "0.32"
 
-fdo-data-formats = { path = "../data-formats", version = "0.4.6" }
-fdo-http-wrapper = { path = "../http-wrapper", version = "0.4.6", features = ["client"] }
-fdo-util = { path = "../util", version = "0.4.6" }
+fdo-data-formats = { path = "../data-formats", version = "0.4.7" }
+fdo-http-wrapper = { path = "../http-wrapper", version = "0.4.7", features = ["client"] }
+fdo-util = { path = "../util", version = "0.4.7" }
