@@ -3,7 +3,7 @@ use std::io::prelude::*;
 use std::path::PathBuf;
 
 use anyhow::{bail, Error, Result};
-use clap::{ArgEnum, Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use openssl::asn1::{Asn1Integer, Asn1Time};
 use openssl::bn::BigNum;
 use openssl::ec::{EcGroup, EcKey};
@@ -15,7 +15,7 @@ use std::env;
 
 mod aio;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 enum Subject {
     Diun,
     Manufacturer,
@@ -98,14 +98,14 @@ fn generate_key_and_cert(args: &GenerateKeyAndCertArguments) -> Result<(), Error
 #[clap(author, version, about, long_about = None)]
 #[clap(propagate_version = true)]
 struct Cli {
-    #[clap(arg_enum, short, long, default_value_t = LogLevel::Info)]
+    #[clap(value_enum, short, long, default_value_t = LogLevel::Info)]
     log_level: LogLevel,
 
     #[clap(subcommand)]
     command: Commands,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 enum LogLevel {
     Trace,
     Debug,
@@ -137,7 +137,7 @@ enum Commands {
 #[derive(Args)]
 struct GenerateKeyAndCertArguments {
     /// Subject of the key and certificate
-    #[clap(arg_enum)]
+    #[clap(value_enum)]
     subject: Subject,
     /// Organization name for the certificate
     #[clap(long, default_value_t = String::from("Example"))]
