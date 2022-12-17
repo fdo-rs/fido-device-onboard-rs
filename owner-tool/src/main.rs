@@ -1,7 +1,7 @@
 use std::{convert::TryFrom, fs, io::Write, path::Path, str::FromStr};
 
 use anyhow::{bail, Context, Error, Result};
-use clap::{App, Arg, ArgMatches, SubCommand};
+use clap::{ArgEnum, Args, Parser, Subcommand};
 use openssl::{
     asn1::{Asn1Integer, Asn1Time},
     bn::BigNum,
@@ -25,126 +25,90 @@ use fdo_data_formats::{
     ProtocolVersion, Serializable,
 };
 
+#[derive(Parser)]
+#[clap(version = "0.1")]
+struct Cli {
+    #[clap(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Initializes device token
+    InitializeDevice(InitializeDeviceArguments),
+    /// Prints ownership voucher contents
+    DumpOwnershipVoucher(DumpOwnershipVoucherArguments),
+    /// Prints device credential contents
+    DumpDeviceCredential(DumpDeviceCredentialArguments),
+    /// Extends an ownership voucher for a new owner
+    ExtendOwnershipVoucher(ExtendOwnershipVoucherArguments),
+}
+
+#[derive(Args)]
+struct InitializeDeviceArguments {
+    /// Identifier of the device
+    device_id: String,
+    /// Output path for ownership voucher
+    ownershipvoucher_out: String,
+    /// Output path for device credential
+    device_credential_out: String,
+    /// Path to the certificate for the manufacturer
+    #[clap(long, takes_value = true)]
+    manufacturer_cert: String,
+    /// Private key for the device certificate CA
+    #[clap(long, takes_value = true)]
+    device_cert_ca_private_key: String,
+    /// Chain with CA certificates for device certificate
+    #[clap(long, takes_value = true)]
+    device_cert_ca_chain: String,
+    /// Path to a TOML file containing the rendezvous information
+    #[clap(long, takes_value = true)]
+    rendezvous_info: String,
+}
+
+#[derive(Copy, Clone, ArgEnum)]
+enum OutputFormat {
+    Pem,
+    Cose,
+}
+
+#[derive(Args)]
+struct DumpOwnershipVoucherArguments {
+    /// Path to the ownership voucher
+    path: String,
+    /// Output format
+    #[clap(arg_enum, long, required = false, takes_value = true)]
+    outform: Option<OutputFormat>,
+}
+
+#[derive(Args)]
+struct DumpDeviceCredentialArguments {
+    /// Path to the device credential
+    path: String,
+}
+
+#[derive(Args)]
+struct ExtendOwnershipVoucherArguments {
+    /// Path to the ownership voucher
+    path: String,
+    /// Path to the current owner private key
+    #[clap(long, takes_value = true)]
+    current_owner_private_key: String,
+    /// Path to the new owner certificate
+    #[clap(long, takes_value = true)]
+    new_owner_cert: String,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     fdo_util::add_version!();
     fdo_http_wrapper::init_logging();
 
-    let matches = App::new("owner_tool")
-        .version("0.1")
-        .subcommand(
-            SubCommand::with_name("initialize-device")
-                .about("Initializes device token")
-                .arg(
-                    Arg::with_name("device-id")
-                        .required(true)
-                        .help("Identifier of the device")
-                        .index(1),
-                )
-                .arg(
-                    Arg::with_name("ownershipvoucher-out")
-                        .required(true)
-                        .help("Output path for ownership voucher")
-                        .index(2),
-                )
-                .arg(
-                    Arg::with_name("device-credential-out")
-                        .required(true)
-                        .help("Output path for device credential")
-                        .index(3),
-                )
-                .arg(
-                    Arg::with_name("manufacturer-cert")
-                        .required(true)
-                        .takes_value(true)
-                        .help("Path to the certificate for the manufacturer")
-                        .long("manufacturer-cert"),
-                )
-                .arg(
-                    Arg::with_name("device-cert-ca-private-key")
-                        .required(true)
-                        .takes_value(true)
-                        .help("Private key for the device certificate CA")
-                        .long("device-cert-ca-private-key"),
-                )
-                .arg(
-                    Arg::with_name("device-cert-ca-chain")
-                        .required(true)
-                        .takes_value(true)
-                        .help("Chain with CA certificates for device certificate")
-                        .long("device-cert-ca-chain"),
-                )
-                .arg(
-                    Arg::with_name("rendezvous-info")
-                        .required(true)
-                        .takes_value(true)
-                        .help("Path to a TOML file containing the rendezvous information")
-                        .long("rendezvous-info"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("dump-ownership-voucher")
-                .about("Prints ownership voucher contents")
-                .arg(
-                    Arg::with_name("path")
-                        .required(true)
-                        .help("Path to the ownership voucher")
-                        .index(1),
-                )
-                .arg(
-                    Arg::with_name("outform")
-                        .required(false)
-                        .takes_value(true)
-                        .possible_values(&["pem", "cose"])
-                        .help("Output format")
-                        .long("outform"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("dump-device-credential")
-                .about("Prints device credential contents")
-                .arg(
-                    Arg::with_name("path")
-                        .required(true)
-                        .help("Path to the device credential")
-                        .index(1),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("extend-ownership-voucher")
-                .about("Extends an ownership voucher for a new owner")
-                .arg(
-                    Arg::with_name("path")
-                        .required(true)
-                        .help("Path to the ownership voucher")
-                        .index(1),
-                )
-                .arg(
-                    Arg::with_name("current-owner-private-key")
-                        .required(true)
-                        .takes_value(true)
-                        .help("Path to the current owner private key")
-                        .long("current-owner-private-key"),
-                )
-                .arg(
-                    Arg::with_name("new-owner-cert")
-                        .required(true)
-                        .takes_value(true)
-                        .help("Path to the new owner certificate")
-                        .long("new-owner-cert"),
-                ),
-        )
-        .get_matches();
-
-    match matches.subcommand() {
-        ("initialize-device", Some(sub_m)) => initialize_device(sub_m),
-        ("dump-ownership-voucher", Some(sub_m)) => dump_voucher(sub_m),
-        ("dump-device-credential", Some(sub_m)) => dump_devcred(sub_m),
-        ("extend-ownership-voucher", Some(sub_m)) => extend_voucher(sub_m),
-        _ => {
-            println!("{}", matches.usage());
-            Ok(())
-        }
+    match Cli::parse().command {
+        Commands::InitializeDevice(args) => initialize_device(&args),
+        Commands::DumpOwnershipVoucher(args) => dump_voucher(&args),
+        Commands::DumpDeviceCredential(args) => dump_devcred(&args),
+        Commands::ExtendOwnershipVoucher(args) => extend_voucher(&args),
     }
 }
 
@@ -299,59 +263,50 @@ fn build_device_cert<T: openssl::pkey::HasPublic>(
     Ok(builder.build())
 }
 
-fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
-    // Parse and validate arguments
-    let device_id = matches.value_of("device-id").unwrap();
-    let ownershipvoucher_out = matches.value_of("ownershipvoucher-out").unwrap();
-    let device_credential_out = matches.value_of("device-credential-out").unwrap();
-    let manufacturer_cert_path = matches.value_of("manufacturer-cert").unwrap();
-    let device_cert_ca_private_key_path = matches.value_of("device-cert-ca-private-key").unwrap();
-    let device_cert_ca_chain_path = matches.value_of("device-cert-ca-chain").unwrap();
-    let rendezvous_info_path = matches.value_of("rendezvous-info").unwrap();
-
-    let manufacturer_cert = load_x509(manufacturer_cert_path).with_context(|| {
+fn initialize_device(args: &InitializeDeviceArguments) -> Result<(), Error> {
+    let manufacturer_cert = load_x509(&args.manufacturer_cert).with_context(|| {
         format!(
             "Error loading manufacturer cert at {}",
-            manufacturer_cert_path
+            args.manufacturer_cert
         )
     })?;
     let manufacturer_pubkey = PublicKey::try_from(manufacturer_cert)
         .context("Error creating manufacturer public key representation")?;
 
-    let device_cert_ca_private_key = load_private_key(device_cert_ca_private_key_path)
+    let device_cert_ca_private_key = load_private_key(&args.device_cert_ca_private_key)
         .with_context(|| {
             format!(
                 "Error loading device CA private key at {}",
-                device_cert_ca_private_key_path
+                args.device_cert_ca_private_key
             )
         })?;
-    let device_cert_ca_chain = load_x509s(device_cert_ca_chain_path).with_context(|| {
+    let device_cert_ca_chain = load_x509s(&args.device_cert_ca_chain).with_context(|| {
         format!(
             "Error loading device cert ca chain at {}",
-            device_cert_ca_chain_path
+            args.device_cert_ca_chain
         )
     })?;
 
-    let rendezvous_info = load_rendezvous_info(rendezvous_info_path)
-        .with_context(|| format!("Error loading rendezvous info at {}", rendezvous_info_path))?;
+    let rendezvous_info = load_rendezvous_info(&args.rendezvous_info)
+        .with_context(|| format!("Error loading rendezvous info at {}", args.rendezvous_info))?;
 
-    if Path::new(&device_credential_out).exists() {
+    if Path::new(&args.device_credential_out).exists() {
         bail!(
             "Device credential file {} already exists",
-            device_credential_out
+            args.device_credential_out
         );
     }
-    if Path::new(&ownershipvoucher_out).exists() {
+    if Path::new(&args.ownershipvoucher_out).exists() {
         bail!(
             "Ownership voucher file {} already exists",
-            ownershipvoucher_out
+            args.ownershipvoucher_out
         );
     }
 
     // Build device cert
     let mut device_subject = X509NameBuilder::new().context("Error building device subject")?;
     device_subject
-        .append_entry_by_text("CN", device_id)
+        .append_entry_by_text("CN", &args.device_id)
         .context("Error building device subject")?;
     let device_subject = device_subject.build();
     let device_subject = device_subject.as_ref();
@@ -393,7 +348,7 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
         ProtocolVersion::Version1_1,
         device_guid.clone(),
         rendezvous_info.clone(),
-        device_id.to_string(),
+        args.device_id.clone(),
         manufacturer_pubkey,
         Some(device_cert_chain_hash),
     )
@@ -406,7 +361,7 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
     let devcred = FileDeviceCredential {
         active: true,
         protver: ProtocolVersion::Version1_1,
-        device_info: device_id.to_string(),
+        device_info: args.device_id.clone(),
         guid: device_guid.clone(),
         rvinfo: rendezvous_info,
         pubkey_hash: ov_header
@@ -439,8 +394,8 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
         .serialize_data()
         .context("Error serializing device credential")?;
 
-    fs::write(&ownershipvoucher_out, &ov).context("Error writing ownership voucher")?;
-    fs::write(&device_credential_out, &devcred).context("Error writing device credential")?;
+    fs::write(&args.ownershipvoucher_out, &ov).context("Error writing ownership voucher")?;
+    fs::write(&args.device_credential_out, &devcred).context("Error writing device credential")?;
 
     println!(
         "Created ownership voucher for device {}",
@@ -450,26 +405,23 @@ fn initialize_device(matches: &ArgMatches) -> Result<(), Error> {
     Ok(())
 }
 
-fn dump_voucher(matches: &ArgMatches) -> Result<(), Error> {
-    let ownershipvoucher_path = matches.value_of("path").unwrap();
-    let outform = matches.value_of("outform");
-
+fn dump_voucher(args: &DumpOwnershipVoucherArguments) -> Result<(), Error> {
     let ov = {
-        let cts = fs::read(ownershipvoucher_path).context("Error reading ownership voucher")?;
+        let cts = fs::read(args.path.clone()).context("Error reading ownership voucher")?;
         OwnershipVoucher::from_pem_or_raw(&cts).context("Error deserializing ownership voucher")?
     };
 
+    let outform = args.outform;
     if let Some(outform) = outform {
         let output = match outform {
-            "cose" => ov
+            OutputFormat::Cose => ov
                 .serialize_data()
                 .context("Error serializing ownership voucher")?,
-            "pem" => ov
+            OutputFormat::Pem => ov
                 .to_pem()
                 .context("Error serializing ownership voucher")?
                 .as_bytes()
                 .to_vec(),
-            _ => bail!("Invalid output format"),
         };
         std::io::stdout()
             .write_all(&output)
@@ -533,11 +485,9 @@ fn dump_voucher(matches: &ArgMatches) -> Result<(), Error> {
     Ok(())
 }
 
-fn dump_devcred(matches: &ArgMatches) -> Result<(), Error> {
-    let devcred_path = matches.value_of("path").unwrap();
-
+fn dump_devcred(args: &DumpDeviceCredentialArguments) -> Result<(), Error> {
     let dc = {
-        let dc = fs::read(devcred_path).context("Error reading device credential")?;
+        let dc = fs::read(args.path.clone()).context("Error reading device credential")?;
         FileDeviceCredential::deserialize_data(&dc)
             .context("Error deserializing device credential")?
     };
@@ -583,13 +533,9 @@ fn dump_devcred(matches: &ArgMatches) -> Result<(), Error> {
     Ok(())
 }
 
-fn extend_voucher(matches: &ArgMatches) -> Result<(), Error> {
-    let ownershipvoucher_path = matches.value_of("path").unwrap();
-    let current_owner_private_key_path = matches.value_of("current-owner-private-key").unwrap();
-    let new_owner_cert_path = matches.value_of("new-owner-cert").unwrap();
-
+fn extend_voucher(args: &ExtendOwnershipVoucherArguments) -> Result<(), Error> {
     let mut ov = {
-        let ov = fs::read(ownershipvoucher_path).context("Error reading ownership voucher")?;
+        let ov = fs::read(args.path.clone()).context("Error reading ownership voucher")?;
         OwnershipVoucher::from_pem_or_raw(&ov).context("Error deserializing ownership voucher")?
     };
 
@@ -602,17 +548,17 @@ fn extend_voucher(matches: &ArgMatches) -> Result<(), Error> {
         );
     }
 
-    let current_owner_private_key =
-        load_private_key(current_owner_private_key_path).with_context(|| {
+    let current_owner_private_key = load_private_key(&args.current_owner_private_key)
+        .with_context(|| {
             format!(
                 "Error loading current owner private key at {}",
-                current_owner_private_key_path
+                args.current_owner_private_key
             )
         })?;
-    let new_owner_cert = load_x509(new_owner_cert_path).with_context(|| {
+    let new_owner_cert = load_x509(&args.new_owner_cert).with_context(|| {
         format!(
             "Error loading new owner certificate at {}",
-            new_owner_cert_path
+            args.new_owner_cert
         )
     })?;
     let new_owner_pubkey =
@@ -622,14 +568,14 @@ fn extend_voucher(matches: &ArgMatches) -> Result<(), Error> {
         .context("Error extending ownership voucher")?;
 
     // Write out
-    let newname = format!("{}.new", ownershipvoucher_path);
+    let newname = format!("{}.new", args.path);
     {
         // A new scope, to ensure the file gets closed before we move it
         let ov = ov.to_pem().context("Error serializing ownership voucher")?;
         fs::write(&newname, &ov).with_context(|| format!("Error writing to {}", newname))?;
     }
 
-    fs::rename(newname, ownershipvoucher_path)
+    fs::rename(newname, args.path.clone())
         .context("Error moving new ownership voucher in place")?;
 
     Ok(())
