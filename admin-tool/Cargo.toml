@@ -19,7 +19,7 @@ tera = "1"
 serde = "1"
 serde_yaml = "0.8"
 pretty_env_logger = "0.4"
-nix = "0.23"
+nix = "0.24"
 tokio = { version = "1", features = ["full"] }
 
 fdo-data-formats = { path = "../data-formats", version = "0.4.7" }

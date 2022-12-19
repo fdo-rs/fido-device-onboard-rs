@@ -570,7 +570,7 @@ dependencies = [
  "bitflags",
  "devicemapper-sys",
  "lazy_static",
- "nix 0.24.2",
+ "nix",
  "semver 1.0.14",
  "serde",
 ]
@@ -582,7 +582,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d2aad5bae6bc8a217f8c398c5737122966cbd35f19dd223433606225ec48285"
 dependencies = [
  "bindgen",
- "nix 0.24.2",
+ "nix",
 ]
 
 [[package]]
@@ -692,7 +692,7 @@ dependencies = [
  "fdo-util",
  "futures",
  "log",
- "nix 0.23.1",
+ "nix",
  "openssl",
  "pretty_env_logger",
  "reqwest",
@@ -714,7 +714,7 @@ dependencies = [
  "fdo-util",
  "libcryptsetup-rs",
  "log",
- "nix 0.23.1",
+ "nix",
  "passwd",
  "rand",
  "secrecy",
@@ -1623,19 +1623,6 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "tempfile",
-]
-
-[[package]]
-name = "nix"
-version = "0.23.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f866317acbd3a240710c63f065ffb1e4fd466259045ccb504130b7f668f35c6"
-dependencies = [
- "bitflags",
- "cc",
- "cfg-if 1.0.0",
- "libc",
- "memoffset",
 ]
 
 [[package]]

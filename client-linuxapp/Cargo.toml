@@ -14,7 +14,7 @@ sys-info = "0.9"
 serde_bytes = "0.11"
 passwd = "0.0.1"
 rand = "0.8.4"
-nix = "0.23.0"
+nix = "0.24.2"
 uuid = "1.0"
 thiserror = "1"
 libcryptsetup-rs = { version = "0.5.1", features = ["mutex"] }
