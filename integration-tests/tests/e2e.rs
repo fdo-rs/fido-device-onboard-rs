@@ -372,7 +372,7 @@ where
                     .env("ALLOW_NONINTEROPERABLE_KDF", &"1");
                 Ok(())
             },
-            Duration::from_secs(60),
+            Duration::from_secs(120),
         )
         .context("Error running client")?;
     output.expect_success().context("client failed")?;
