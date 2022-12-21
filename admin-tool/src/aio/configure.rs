@@ -1,9 +1,9 @@
-use std::{collections::BTreeMap, net::IpAddr, path::Path};
-
 use anyhow::{bail, Context, Error, Result};
 use clap::Args;
 use fdo_data_formats::types::RemoteConnection;
 use serde::{Deserialize, Serialize};
+use std::net::Ipv4Addr;
+use std::{collections::BTreeMap, net::IpAddr, path::Path};
 
 use fdo_store::StoreConfig;
 use fdo_util::servers::configuration::{
@@ -354,6 +354,22 @@ fn generate_secret_token() -> Result<String, Error> {
     Ok(openssl::base64::encode_block(&bytes))
 }
 
+fn is_valid_address(addr: &IpAddr) -> bool {
+    if addr.is_unspecified() {
+        log::trace!("Skipping unspecified address {:?}", addr);
+        return false;
+    }
+    if addr.is_loopback() {
+        log::trace!("Skipping loopback address {:?}", addr);
+        return false;
+    }
+    if addr.is_multicast() {
+        log::trace!("Skipping multicast address {:?}", addr);
+        return false;
+    }
+    true
+}
+
 pub(super) fn generate_configs_and_keys(
     aio_dir: &Path,
     config_args: Option<Configuration>,
@@ -433,26 +449,22 @@ pub(super) fn generate_configs_and_keys(
         None => {
             log::trace!("Determining all IP addresses");
             let mut contact_addresses = vec![];
-            for address in
-                nix::ifaddrs::getifaddrs().context("Error getting network interface list")?
-            {
-                if let Some(nix::sys::socket::SockAddr::Inet(address)) = address.address {
-                    let address = address.ip().to_std();
 
-                    if address.is_unspecified() {
-                        log::trace!("Skipping unspecified address {:?}", address);
-                        continue;
+            let ifaddrs =
+                nix::ifaddrs::getifaddrs().context("Error getting network interface list")?;
+            for ifaddr in ifaddrs {
+                if let Some(sockaddrsto) = ifaddr.address {
+                    if let Some(sockaddr) = sockaddrsto.as_sockaddr_in() {
+                        let address = IpAddr::from(Ipv4Addr::from(sockaddr.ip()));
+                        if is_valid_address(&address) {
+                            contact_addresses.push(ContactAddress::IpAddr(address));
+                        }
+                    } else if let Some(sockaddr) = sockaddrsto.as_sockaddr_in6() {
+                        let address = IpAddr::from(sockaddr.ip());
+                        if is_valid_address(&address) {
+                            contact_addresses.push(ContactAddress::IpAddr(address));
+                        }
                     }
-                    if address.is_loopback() {
-                        log::trace!("Skipping loopback address {:?}", address);
-                        continue;
-                    }
-                    if address.is_multicast() {
-                        log::trace!("Skipping multicast address {:?}", address);
-                        continue;
-                    }
-
-                    contact_addresses.push(ContactAddress::IpAddr(address));
                 }
             }
             log::trace!("Found contact addresses: {:?}", contact_addresses);
