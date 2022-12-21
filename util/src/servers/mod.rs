@@ -105,6 +105,7 @@ pub fn yaml_to_cbor(val: &Value) -> Result<CborValue> {
                 .map(|(key, val)| (yaml_to_cbor(key).unwrap(), yaml_to_cbor(val).unwrap()))
                 .collect(),
         ),
+        Value::Tagged(_) => bail!("YAML tags are unsupported"),
     })
 }
 
