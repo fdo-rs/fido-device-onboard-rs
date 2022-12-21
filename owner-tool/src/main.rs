@@ -153,6 +153,7 @@ fn yaml_to_cbor(val: &Value) -> Result<CborSimpleType, Error> {
                 .map(|(key, val)| (yaml_to_cbor(key).unwrap(), yaml_to_cbor(val).unwrap()))
                 .collect::<std::collections::BTreeMap<CborSimpleType, CborSimpleType>>(),
         ),
+        Value::Tagged(_) => bail!("YAML tags are unsupported"),
     })
 }
 
