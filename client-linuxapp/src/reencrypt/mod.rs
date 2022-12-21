@@ -70,8 +70,8 @@ fn perform_reencrypt(dev_name: &str) -> Result<()> {
     let status = dev
         .reencrypt_handle()
         .status(libcryptsetup_rs::CryptParamsReencrypt {
-            mode: libcryptsetup_rs::CryptReencryptModeInfo::Reencrypt,
-            direction: libcryptsetup_rs::CryptReencryptDirectionInfo::Forward,
+            mode: libcryptsetup_rs::consts::vals::CryptReencryptModeInfo::Reencrypt,
+            direction: libcryptsetup_rs::consts::vals::CryptReencryptDirectionInfo::Forward,
             resilience: String::from("journal"),
             hash: String::from("sha256"),
             data_shift: 0,
@@ -87,11 +87,14 @@ fn perform_reencrypt(dev_name: &str) -> Result<()> {
                 label: None,
                 subsystem: None,
             },
-            flags: libcryptsetup_rs::CryptReencryptFlags::empty(),
+            flags: libcryptsetup_rs::consts::flags::CryptReencrypt::empty(),
         })
         .context("Error getting reencryption status")?;
 
-    if !matches!(status, libcryptsetup_rs::CryptReencryptInfo::None) {
+    if !matches!(
+        status,
+        libcryptsetup_rs::consts::vals::CryptReencryptInfo::None
+    ) {
         log::info!("Reencryption of {} in progress, resuming", dev_name);
 
         let (_, _, clevis_pass) = rebind::get_clevis_token_slot_pass(&mut dev)
