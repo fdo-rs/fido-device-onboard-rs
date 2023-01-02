@@ -1791,13 +1791,15 @@ impl COSESign {
         })
     }
 
-    pub fn new<T>(
+    pub fn new<T, H>(
         payload: &T,
         unprotected: Option<COSEHeaderMap>,
         sign_key: &dyn SigningPrivateKey,
+        hash: &H,
     ) -> Result<Self, Error>
     where
         T: Serializable,
+        H: aws_nitro_enclaves_cose::crypto::Hash,
     {
         let unprotected = match unprotected {
             Some(v) => v,
@@ -1805,19 +1807,21 @@ impl COSESign {
         };
         let payload = payload.serialize_data()?;
 
-        let inner = COSESignInner::new(&payload, &unprotected.into(), sign_key)?;
+        let inner = COSESignInner::new::<H>(&payload, &unprotected.into(), sign_key)?;
 
         Self::new_from_inner(inner)
     }
 
-    pub fn new_with_protected<T>(
+    pub fn new_with_protected<T, H>(
         payload: &T,
         protected: COSEHeaderMap,
         unprotected: Option<COSEHeaderMap>,
         sign_key: &dyn SigningPrivateKey,
+        hash: &H,
     ) -> Result<Self, Error>
     where
         T: Serializable,
+        H: aws_nitro_enclaves_cose::crypto::Hash,
     {
         let unprotected = match unprotected {
             Some(v) => v,
@@ -1830,13 +1834,16 @@ impl COSESign {
         protected.insert(1.into(), (sig_alg as i8).into());
 
         let inner =
-            COSESignInner::new_with_protected(&payload, &protected, &unprotected.into(), sign_key)?;
+            COSESignInner::new_with_protected::<H>(&payload, &protected, &unprotected.into(), sign_key)?;
 
         Self::new_from_inner(inner)
     }
 
-    pub fn verify(&self, sign_key: &dyn SigningPublicKey) -> Result<(), Error> {
-        if self.cached_inner.verify_signature(sign_key)? {
+    pub fn verify<H>(&self, sign_key: &dyn SigningPublicKey) -> Result<(), Error>
+    where
+        H: aws_nitro_enclaves_cose::crypto::Hash,
+    {
+        if self.cached_inner.verify_signature::<H>(sign_key)? {
             Ok(())
         } else {
             Err(Error::InconsistentValue("Signature verification failed"))
@@ -1852,7 +1859,7 @@ impl COSESign {
         ES: PayloadState,
     {
         let claims = eat.to_map();
-        Self::new(&claims.0, unprotected, sign_key)
+        Self::new(&claims.0, unprotected, sign_key, &sign_key.get_parameters()?.0)
     }
 
     pub fn get_payload_unverified<T>(&self) -> Result<UnverifiedValue<T>, Error>

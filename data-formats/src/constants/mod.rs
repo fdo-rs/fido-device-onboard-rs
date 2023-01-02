@@ -111,8 +111,8 @@ const RS384: i16 = -258;
 #[repr(i16)]
 #[non_exhaustive]
 pub enum DeviceSigType {
-    StSECP256R1 = (aws_nitro_enclaves_cose::sign::SignatureAlgorithm::ES256 as i16),
-    StSECP384R1 = (aws_nitro_enclaves_cose::sign::SignatureAlgorithm::ES384 as i16),
+    StSECP256R1 = (aws_nitro_enclaves_cose::crypto::SignatureAlgorithm::ES256 as i16),
+    StSECP384R1 = (aws_nitro_enclaves_cose::crypto::SignatureAlgorithm::ES384 as i16),
     StRSA2048 = RS256,
     StRSA3072 = RS384,
     StEPID10 = 90,
