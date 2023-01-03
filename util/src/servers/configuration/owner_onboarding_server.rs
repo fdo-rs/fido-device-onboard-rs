@@ -7,9 +7,11 @@ use super::{AbsolutePathBuf, Bind};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OwnerOnboardingServerSettings {
     // Ownership Voucher storage info
+    #[serde(with = "serde_yaml::with::singleton_map")]
     pub ownership_voucher_store_driver: StoreConfig,
 
     // Session store info
+    #[serde(with = "serde_yaml::with::singleton_map")]
     pub session_store_driver: StoreConfig,
 
     // Trusted keys
@@ -24,6 +26,7 @@ pub struct OwnerOnboardingServerSettings {
 
     // Service Info API Server
     pub service_info_api_url: String,
+    #[serde(with = "serde_yaml::with::singleton_map")]
     pub service_info_api_authentication: fdo_http_wrapper::client::JsonAuthentication,
 
     pub owner_addresses: Vec<RemoteConnection>,

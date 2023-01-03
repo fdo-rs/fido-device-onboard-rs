@@ -9,12 +9,15 @@ use super::{AbsolutePathBuf, Bind};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ManufacturingServerSettings {
     // Session store info
+    #[serde(with = "serde_yaml::with::singleton_map")]
     pub session_store_driver: StoreConfig,
 
     // Ownership Voucher store info
+    #[serde(with = "serde_yaml::with::singleton_map")]
     pub ownership_voucher_store_driver: StoreConfig,
 
     // Public key store info
+    #[serde(with = "serde_yaml::with::singleton_map")]
     pub public_key_store_driver: Option<StoreConfig>,
 
     // Bind information

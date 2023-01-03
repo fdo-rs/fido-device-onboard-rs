@@ -14,6 +14,7 @@ pub struct ServiceInfoApiServerSettings {
     pub service_info_auth_token: String,
     pub admin_auth_token: Option<String>,
 
+    #[serde(with = "serde_yaml::with::singleton_map")]
     pub device_specific_store_driver: StoreConfig,
 }
 
