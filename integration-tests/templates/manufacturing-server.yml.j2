@@ -5,6 +5,9 @@ session_store_driver:
 ownership_voucher_store_driver:
   Directory:
     path: {{ test_dir }}/ownership_vouchers/
+public_key_store_driver:
+  Directory:
+    path: {{ config_dir }}/keys/
 bind: {{ bind }}
 rendezvous_info:
 - dns: localhost
