@@ -798,7 +798,9 @@ impl<'a> TestServerConfigurator<'a> {
 
                 context_configurator(cfg)
             })?;
-
+        L.l(format!("Config file created at {}", &output_path.display()));
+        let contents = fs::read_to_string(&output_path)?;
+        L.l(format!("with:\n {}", &contents));
         Ok(output_path)
     }
 }
