@@ -118,6 +118,13 @@ jobs:
           FDO_PRIVILEGED: true
         with:
           command: test
+      - name: Check aio
+        run: |
+          mkdir aio-dir/
+          ./target/debug/fdo-admin-tool aio --directory aio-dir/ &
+          AIO_PID=$!
+          sleep 5
+          if [ -d /proc/$AIO_PID ]; then rm -rf aio-dir; else exit 1; fi
       # This is primarily to ensure that changes to fdo_data.h are committed,
       # which is critical for determining whether any stability changes were made
       # during the PR review.
