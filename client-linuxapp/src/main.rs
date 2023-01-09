@@ -90,7 +90,7 @@ async fn send_client_error(
 }
 
 fn mark_device_onboarding_executed() -> Result<()> {
-    fs::write(&marker_file_location(), "executed").context("Error creating executed marker file")
+    fs::write(marker_file_location(), "executed").context("Error creating executed marker file")
 }
 
 fn get_to2_urls(entries: &[TO2AddressEntry]) -> Vec<String> {
