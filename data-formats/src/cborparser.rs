@@ -250,7 +250,7 @@ impl<N: ParsedArraySize> Serializable for ParsedArray<N> {
                 reader.read_exact(&mut singlebyte_buf)?;
                 header_buf.extend_from_slice(&singlebyte_buf);
 
-                Some(tag_val as u64)
+                Some(tag_val)
             }
             MajorType::Array => None,
             tp => return Err(Error::from(ArrayParseError::InvalidTopLevelType(tp))),

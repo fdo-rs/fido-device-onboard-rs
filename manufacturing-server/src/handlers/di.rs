@@ -135,7 +135,7 @@ pub(crate) async fn app_start(
     let new_voucher_header_serialized = new_voucher_header
         .serialize_data()
         .map_err(Error::from_error::<messages::v11::di::AppStart, _>)?;
-    let new_voucher_header_serialized = hex::encode(&new_voucher_header_serialized);
+    let new_voucher_header_serialized = hex::encode(new_voucher_header_serialized);
     session
         .insert(OV_HEADER_SES_KEY, new_voucher_header_serialized)
         .map_err(Error::from_error::<messages::v11::di::AppStart, _>)?;

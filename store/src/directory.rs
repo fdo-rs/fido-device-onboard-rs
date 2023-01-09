@@ -77,7 +77,7 @@ fn ttl_from_disk(ttl: &[u8]) -> Result<SystemTime, StoreError> {
         )));
     }
     let ttl = u64::from_le_bytes(ttl.try_into().unwrap());
-    let ttl = Duration::from_secs(ttl as u64);
+    let ttl = Duration::from_secs(ttl);
     Ok(SystemTime::UNIX_EPOCH + ttl)
 }
 

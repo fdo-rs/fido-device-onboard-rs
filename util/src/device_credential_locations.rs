@@ -101,7 +101,7 @@ impl FileSystemPath {
     }
 
     fn write(&self, new_contents: Vec<u8>) -> Result<()> {
-        fs::write(&self.path, &new_contents)
+        fs::write(&self.path, new_contents)
             .with_context(|| format!("Error writing to file at {}", &self.path))
     }
 }

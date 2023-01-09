@@ -509,7 +509,7 @@ impl CborSimpleTypeExt for CborSimpleType {
 
     fn as_f64(&self) -> Option<f64> {
         match self {
-            serde_cbor::Value::Float(f) => Some(*f as f64),
+            serde_cbor::Value::Float(f) => Some(*f),
             _ => None,
         }
     }

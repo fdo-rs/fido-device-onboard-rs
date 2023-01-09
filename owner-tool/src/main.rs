@@ -395,8 +395,8 @@ fn initialize_device(args: &InitializeDeviceArguments) -> Result<(), Error> {
         .serialize_data()
         .context("Error serializing device credential")?;
 
-    fs::write(&args.ownershipvoucher_out, &ov).context("Error writing ownership voucher")?;
-    fs::write(&args.device_credential_out, &devcred).context("Error writing device credential")?;
+    fs::write(&args.ownershipvoucher_out, ov).context("Error writing ownership voucher")?;
+    fs::write(&args.device_credential_out, devcred).context("Error writing device credential")?;
 
     println!(
         "Created ownership voucher for device {}",
@@ -573,7 +573,7 @@ fn extend_voucher(args: &ExtendOwnershipVoucherArguments) -> Result<(), Error> {
     {
         // A new scope, to ensure the file gets closed before we move it
         let ov = ov.to_pem().context("Error serializing ownership voucher")?;
-        fs::write(&newname, &ov).with_context(|| format!("Error writing to {}", newname))?;
+        fs::write(&newname, ov).with_context(|| format!("Error writing to {}", newname))?;
     }
 
     fs::rename(newname, args.path.clone())

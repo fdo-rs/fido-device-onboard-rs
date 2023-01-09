@@ -195,8 +195,7 @@ enum DiunPublicKeyVerificationMode {
 impl DiunPublicKeyVerificationMode {
     fn get_from_env() -> Result<Self> {
         if let Ok(rootcerts_path) = env::var("DIUN_PUB_KEY_ROOTCERTS") {
-            let certs =
-                fs::read(&rootcerts_path).context("Error reading DIUN_PUB_KEY_ROOTCERTS")?;
+            let certs = fs::read(rootcerts_path).context("Error reading DIUN_PUB_KEY_ROOTCERTS")?;
             let certs = openssl::x509::X509::stack_from_pem(&certs)
                 .context("Error parsing DIUN_PUB_KEY_ROOTCERTS as X509 stack")?;
             let bag =
@@ -652,7 +651,7 @@ impl KeyReference {
                     None => DEVICE_CREDENTIAL_FILESYSTEM_PATH.to_string(),
                 };
 
-                fs::write(filename, &cred).context("Error writing device credential")
+                fs::write(filename, cred).context("Error writing device credential")
             }
             KeyReference::SemiTpm {
                 signing_public,
@@ -686,7 +685,7 @@ impl KeyReference {
                     None => DEVICE_CREDENTIAL_FILESYSTEM_PATH.to_string(),
                 };
 
-                fs::write(filename, &cred).context("Error writing device credential")
+                fs::write(filename, cred).context("Error writing device credential")
             }
         }
     }
