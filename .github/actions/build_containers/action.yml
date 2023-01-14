@@ -24,7 +24,7 @@ runs:
 
   - name: Container Metadata
     id: container-metadata
-    uses: docker/metadata-action@v3
+    uses: docker/metadata-action@v4
     with:
       images: "{0}"
       tags: |
