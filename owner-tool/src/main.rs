@@ -1,7 +1,7 @@
 use std::{convert::TryFrom, fs, io::Write, path::Path, str::FromStr};
 
 use anyhow::{bail, Context, Error, Result};
-use clap::{ArgEnum, Args, Parser, Subcommand};
+use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 use openssl::{
     asn1::{Asn1Integer, Asn1Time},
     bn::BigNum,
@@ -53,20 +53,20 @@ struct InitializeDeviceArguments {
     /// Output path for device credential
     device_credential_out: String,
     /// Path to the certificate for the manufacturer
-    #[clap(long, takes_value = true)]
+    #[clap(long, action = ArgAction::Set)]
     manufacturer_cert: String,
     /// Private key for the device certificate CA
-    #[clap(long, takes_value = true)]
+    #[clap(long, action = ArgAction::Set)]
     device_cert_ca_private_key: String,
     /// Chain with CA certificates for device certificate
-    #[clap(long, takes_value = true)]
+    #[clap(long, action = ArgAction::Set)]
     device_cert_ca_chain: String,
     /// Path to a TOML file containing the rendezvous information
-    #[clap(long, takes_value = true)]
+    #[clap(long, action = ArgAction::Set)]
     rendezvous_info: String,
 }
 
-#[derive(Copy, Clone, ArgEnum)]
+#[derive(Copy, Clone, ValueEnum)]
 enum OutputFormat {
     Pem,
     Cose,
@@ -77,7 +77,7 @@ struct DumpOwnershipVoucherArguments {
     /// Path to the ownership voucher
     path: String,
     /// Output format
-    #[clap(arg_enum, long, required = false, takes_value = true)]
+    #[clap(value_enum, long, required = false, action = ArgAction::Set)]
     outform: Option<OutputFormat>,
 }
 
@@ -92,10 +92,10 @@ struct ExtendOwnershipVoucherArguments {
     /// Path to the ownership voucher
     path: String,
     /// Path to the current owner private key
-    #[clap(long, takes_value = true)]
+    #[clap(long, action = ArgAction::Set)]
     current_owner_private_key: String,
     /// Path to the new owner certificate
-    #[clap(long, takes_value = true)]
+    #[clap(long, action = ArgAction::Set)]
     new_owner_cert: String,
 }
 
