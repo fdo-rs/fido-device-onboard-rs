@@ -3306,9 +3306,9 @@ dependencies = [
 
 [[package]]
 name = "warp-sessions"
-version = "1.0.17"
+version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa41dbc0e6f6100b3d75cad3dc173e6cda67bbf661f2c9363973581b80c2f83d"
+checksum = "8dbdf66c553080abc9688d42c30bdd385c64fd386106682d139cf899f523489b"
 dependencies = [
  "async-session",
  "async-trait",
