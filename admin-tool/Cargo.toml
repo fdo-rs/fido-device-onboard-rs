@@ -26,3 +26,6 @@ fdo-data-formats = { path = "../data-formats", version = "0.4.7" }
 fdo-http-wrapper = { path = "../http-wrapper", version = "0.4.7", features = ["server", "client"] }
 fdo-store = { path = "../store", version = "0.4.7", features = ["directory"] }
 fdo-util = { path = "../util", version = "0.4.7" }
+
+[dev-dependencies]
+rand = "0.8"
