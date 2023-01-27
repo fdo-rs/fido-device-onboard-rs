@@ -64,6 +64,7 @@ pub(super) struct Configuration {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
 pub(super) enum ContactAddress {
     IpAddr(IpAddr),
     Hostname(String),
@@ -479,4 +480,65 @@ pub(super) fn generate_configs_and_keys(
     let cfg_file = std::fs::File::create(aio_dir.join("aio_configuration"))
         .context("Error creating aio_configuration file")?;
     serde_yaml::to_writer(cfg_file, &config_args).context("Error writing aio_configuration file")
+}
+
+#[cfg(test)]
+mod test {
+    use fdo_util::servers::configuration::manufacturing_server::ManufacturingServerSettings;
+    use fdo_util::servers::configuration::owner_onboarding_server::OwnerOnboardingServerSettings;
+    use fdo_util::servers::configuration::rendezvous_server::RendezvousServerSettings;
+    use fdo_util::servers::configuration::serviceinfo_api_server::ServiceInfoApiServerSettings;
+
+    use crate::aio::configure;
+    use rand::distributions::{Alphanumeric, DistString};
+    use std::fs;
+    use std::path::PathBuf;
+
+    use super::Configuration;
+
+    #[test]
+    /// Serializes all the configuration files (common server .yaml config
+    /// files and the internal aio_configuration file) and then tries to read
+    /// them.
+    // cargo test --bin fdo-admin-tool
+    fn serialize_and_deserialize() {
+        let config_args = Configuration::default();
+        let dir = format!(
+            "{}{}",
+            "./aio-tests-",
+            Alphanumeric.sample_string(&mut rand::thread_rng(), 16)
+        );
+        let aio_dir = PathBuf::from(&dir);
+        // this serializes the contents of Rust types into yamls
+        configure::generate_configs_and_keys(&aio_dir, Some(config_args)).unwrap();
+
+        // deserialization tests: from .yml into Rust types, simply panic if something goes wrong
+        let manu_server = PathBuf::from(format!("{}{}", &dir, "/configs/manufacturing_server.yml"));
+        let manu_config = fs::read_to_string(manu_server).unwrap();
+        let _: ManufacturingServerSettings = serde_yaml::from_str(&manu_config).unwrap();
+
+        let oo_server = PathBuf::from(format!(
+            "{}{}",
+            &dir, "/configs/owner_onboarding_server.yml"
+        ));
+        let oo_config = fs::read_to_string(oo_server).unwrap();
+        let _: OwnerOnboardingServerSettings = serde_yaml::from_str(&oo_config).unwrap();
+
+        let rendezvous_server =
+            PathBuf::from(format!("{}{}", &dir, "/configs/rendezvous_server.yml"));
+        let rendezvous_config = fs::read_to_string(rendezvous_server).unwrap();
+        let _: RendezvousServerSettings = serde_yaml::from_str(&rendezvous_config).unwrap();
+
+        let serviceinfo_server =
+            PathBuf::from(format!("{}{}", &dir, "/configs/serviceinfo_api_server.yml"));
+        let serviceinfo_config = fs::read_to_string(serviceinfo_server).unwrap();
+        let _: ServiceInfoApiServerSettings = serde_yaml::from_str(&serviceinfo_config).unwrap();
+
+        let aio = PathBuf::from(format!("{}{}", &dir, "/aio_configuration"));
+        let aio_config = fs::read_to_string(aio).unwrap();
+        let _: Configuration = serde_yaml::from_str(&aio_config).unwrap();
+
+        // clean up the dir
+        std::fs::remove_dir_all(&aio_dir).unwrap();
+    }
 }
