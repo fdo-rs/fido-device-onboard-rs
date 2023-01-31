@@ -305,7 +305,7 @@ where
         .status(MT::status_code())
         .header("Message-Type", (MT::message_type() as u8).to_string());
 
-    let token = token.map(|t| format!("Bearer {}", t));
+    let token = token.map(|t| format!("Bearer {t}"));
 
     if let Some(token) = token {
         if !token.is_empty() {

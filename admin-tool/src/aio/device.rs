@@ -65,10 +65,7 @@ async fn run_device(
         .status()
         .await
         .context("Error starting the client")?;
-    println!(
-        "========== CLIENT ENDED WITH STATUS: {:?} ==========",
-        status
-    );
+    println!("========== CLIENT ENDED WITH STATUS: {status:?} ==========",);
 
     if status.success() {
         log::info!("Device onboarding completed");
@@ -111,10 +108,7 @@ async fn manufacture_device(
     .status()
     .await
     .context("Error running manufacturing client")?;
-    println!(
-        "========== MANUFACTURING CLIENT ENDED WITH STATUS: {:?} ==========",
-        status
-    );
+    println!("========== MANUFACTURING CLIENT ENDED WITH STATUS: {status:?} ==========");
 
     if status.success() {
         log::info!("Device manufacturing completed");

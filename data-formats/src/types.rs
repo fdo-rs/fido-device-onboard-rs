@@ -750,7 +750,7 @@ impl ServiceInfo {
         let mut buffer = Vec::new();
         ciborium::ser::into_writer(&value, &mut buffer)?;
         let value = ByteBuf::from(buffer);
-        self.0.push((format!("{}:{}", module, key), value));
+        self.0.push((format!("{module}:{key}"), value));
         Ok(())
     }
 

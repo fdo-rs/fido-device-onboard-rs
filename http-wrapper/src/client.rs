@@ -107,7 +107,7 @@ impl JsonClient {
 
         let query_str = query
             .into_iter()
-            .map(|(k, v)| format!("{}={}", k, v))
+            .map(|(k, v)| format!("{k}={v}"))
             .collect::<Vec<_>>()
             .join("&");
 
@@ -118,7 +118,7 @@ impl JsonClient {
         let request_builder = match &self.authentication {
             JsonAuthentication::None => request_builder,
             JsonAuthentication::BearerToken { token } => {
-                request_builder.header("Authorization", format!("Bearer {}", token))
+                request_builder.header("Authorization", format!("Bearer {token}"))
             }
             JsonAuthentication::ClientCertificate { .. } => {
                 unreachable!("Should not be possible to get here")

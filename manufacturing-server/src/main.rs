@@ -122,12 +122,12 @@ fn load_rendezvous_info(rvs: &[BTreeMap<String, Value>]) -> Result<RendezvousInf
 
         for (key, val) in val.iter() {
             let key = RendezvousVariable::from_str(key)
-                .with_context(|| format!("Error parsing rendezvous key '{}'", key))?;
+                .with_context(|| format!("Error parsing rendezvous key '{key}'"))?;
 
             let val = yaml_to_cbor(val)?;
             let val = key
                 .value_from_human_to_machine(val)
-                .with_context(|| format!("Error parsing value for key '{:?}'", key))?;
+                .with_context(|| format!("Error parsing value for key '{key:?}'"))?;
 
             entry.push((key, val));
         }

@@ -377,7 +377,7 @@ impl aws_nitro_enclaves_cose::crypto::SigningPrivateKey for TpmCoseSigner {
                     validation,
                 )
             })
-            .map_err(|e| CoseError::UnsupportedError(format!("Error signing: {}", e)))?
+            .map_err(|e| CoseError::UnsupportedError(format!("Error signing: {e}")))?
         };
         match signature {
             tss_esapi::structures::Signature::EcDsa(signature) => Ok(merge_ec_signature(
