@@ -348,7 +348,7 @@ async fn get_ov_entries(
             )
             .await;
         let entry_result =
-            entry_result.with_context(|| format!("Error getting OV entry num {}", entry_num))?;
+            entry_result.with_context(|| format!("Error getting OV entry num {entry_num}"))?;
 
         if entry_result.entry_num() != entry_num {
             bail!(

@@ -10,10 +10,9 @@ pub fn maybe_print_version(
 ) {
     let mut args = std::env::args();
     if args.len() == 2 && args.nth(1).unwrap() == "--version" {
-        println!("{} {}.{}.{} {}", name, major, minor, patch, pre);
+        println!("{name} {major}.{minor}.{patch} {pre}");
         if !fdo_data_formats::interoperable_kdf_available() {
-            println!("WARNING: This version of {} is not interoperable with FDO as it is using a non-interoperable KDF implementation",
-                     name);
+            println!("WARNING: This version of {name} is not interoperable with FDO as it is using a non-interoperable KDF implementation");
         }
         std::process::exit(0);
     }

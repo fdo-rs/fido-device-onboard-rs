@@ -17,7 +17,7 @@ impl<'de> serde::Deserialize<'de> for ServiceInfoModule {
             where
                 E: serde::de::Error,
             {
-                ServiceInfoModule::from_str(value).map_err(|e| E::custom(format!("{}", e)))
+                ServiceInfoModule::from_str(value).map_err(|e| E::custom(format!("{e}")))
             }
         }
         deserializer.deserialize_string(SIMVisitor)
@@ -95,7 +95,7 @@ impl Display for ServiceInfoModule {
                 write!(f, "com.redhat.")?;
                 Display::fmt(module, f)
             }
-            ServiceInfoModule::Unsupported(other) => write!(f, "{}", other),
+            ServiceInfoModule::Unsupported(other) => write!(f, "{other}"),
         }
     }
 }

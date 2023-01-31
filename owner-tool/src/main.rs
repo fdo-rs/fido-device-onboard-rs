@@ -182,12 +182,12 @@ fn load_rendezvous_info(path: &str) -> Result<RendezvousInfo, Error> {
                 _ => bail!("Invalid key type"),
             };
             let key = RendezvousVariable::from_str(key)
-                .with_context(|| format!("Error parsing rendezvous key '{}'", key))?;
+                .with_context(|| format!("Error parsing rendezvous key '{key}'"))?;
 
             let val = yaml_to_cbor(val)?;
             let val = key
                 .value_from_human_to_machine(val)
-                .with_context(|| format!("Error parsing value for key '{:?}'", key))?;
+                .with_context(|| format!("Error parsing value for key '{key:?}'"))?;
 
             entry.push((key, val));
         }
@@ -444,7 +444,7 @@ fn dump_voucher(args: &DumpOwnershipVoucherArguments) -> Result<(), Error> {
     println!("\tDevice GUID: {}", ov_header.guid().to_string());
     println!("\tRendezvous Info:");
     for rv_entry in ov_header.rendezvous_info().values() {
-        println!("\t\t- {:?}", rv_entry);
+        println!("\t\t- {rv_entry:?}");
     }
     println!("\tDevice Info: {:?}", ov_header.device_info());
     println!(
@@ -453,7 +453,7 @@ fn dump_voucher(args: &DumpOwnershipVoucherArguments) -> Result<(), Error> {
     );
     match &ov_header.device_certificate_chain_hash() {
         None => println!("\tDevice certificate chain hash: <none>"),
-        Some(v) => println!("\tDevice certificate chain hash: {}", v),
+        Some(v) => println!("\tDevice certificate chain hash: {v}"),
     }
 
     println!("Header HMAC: {}", ov.header_hmac());
@@ -463,7 +463,7 @@ fn dump_voucher(args: &DumpOwnershipVoucherArguments) -> Result<(), Error> {
         None => println!("\t<none>"),
         Some(v) => {
             for (num, cert) in v.chain().iter().enumerate() {
-                println!("\tCertificate {}: {:?}", num, cert);
+                println!("\tCertificate {num}: {cert:?}");
             }
         }
     }
@@ -472,9 +472,9 @@ fn dump_voucher(args: &DumpOwnershipVoucherArguments) -> Result<(), Error> {
 
     println!("Entries:");
     for (pos, entry) in ov_iter.enumerate() {
-        let entry = entry.with_context(|| format!("Error parsing entry {}", pos))?;
+        let entry = entry.with_context(|| format!("Error parsing entry {pos}"))?;
 
-        println!("\tEntry {}", pos);
+        println!("\tEntry {pos}");
         println!("\t\tPrevious entry hash: {}", entry.hash_previous_entry());
         println!("\t\tHeader info hash: {}", entry.hash_header_info());
         if ov_header.protocol_version() >= ProtocolVersion::Version1_1 {
@@ -507,7 +507,7 @@ fn dump_devcred(args: &DumpDeviceCredentialArguments) -> Result<(), Error> {
     println!("Device GUID: {}", dc.guid.to_string());
     println!("Rendezvous Info:");
     for rv_entry in dc.rvinfo.values() {
-        println!("\t- {:?}", rv_entry);
+        println!("\t- {rv_entry:?}");
     }
     println!("Public key hash: {}", dc.pubkey_hash);
     println!("HMAC and signing key:");
@@ -526,8 +526,8 @@ fn dump_devcred(args: &DumpDeviceCredentialArguments) -> Result<(), Error> {
             let signing_public =
                 TssPublic::unmarshall(&signing_public).context("Error loading Signing Public")?;
 
-            println!("\tHMAC key TPM public: {:?}", hmac_public);
-            println!("\tSigning key TPM public: {:?}", signing_public);
+            println!("\tHMAC key TPM public: {hmac_public:?}");
+            println!("\tSigning key TPM public: {signing_public:?}");
         }
     }
 
@@ -573,7 +573,7 @@ fn extend_voucher(args: &ExtendOwnershipVoucherArguments) -> Result<(), Error> {
     {
         // A new scope, to ensure the file gets closed before we move it
         let ov = ov.to_pem().context("Error serializing ownership voucher")?;
-        fs::write(&newname, ov).with_context(|| format!("Error writing to {}", newname))?;
+        fs::write(&newname, ov).with_context(|| format!("Error writing to {newname}"))?;
     }
 
     fs::rename(newname, args.path.clone())

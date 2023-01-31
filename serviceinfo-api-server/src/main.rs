@@ -34,8 +34,7 @@ impl ServiceInfoConfiguration {
                 file.parsed_permissions = if let Some(permissions) = &file.permissions {
                     Some(u32::from_str_radix(permissions, 8).with_context(|| {
                         format!(
-                            "Invalid permission string for file {}: {} (invalid octal)",
-                            path, permissions
+                            "Invalid permission string for file {path}: {permissions} (invalid octal)"
                         )
                     })?)
                 } else {
@@ -421,7 +420,7 @@ async fn main() -> Result<()> {
         device_specific_store,
 
         service_info_auth_token: format!("Bearer {}", settings.service_info_auth_token),
-        admin_auth_token: settings.admin_auth_token.map(|s| format!("Bearer {}", s)),
+        admin_auth_token: settings.admin_auth_token.map(|s| format!("Bearer {s}")),
     });
     let ud_si = user_data.clone();
     let ud_admin = user_data.clone();

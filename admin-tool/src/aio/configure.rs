@@ -185,7 +185,7 @@ where
 fn generate_configs(aio_dir: &Path, config_args: &Configuration) -> Result<(), Error> {
     let get_bind = |port: u16| -> Result<Bind, anyhow::Error> {
         Ok(Bind::new(
-            format!("0.0.0.0:{}", port)
+            format!("0.0.0.0:{port}")
                 .parse()
                 .context("Error parsing bind")?,
         ))
@@ -399,7 +399,7 @@ pub(super) fn generate_configs_and_keys(
     log::debug!("Creating empty directories");
     for dir in &["work", "keys", "configs", "stores", "logs"] {
         std::fs::create_dir_all(aio_dir.join(dir))
-            .with_context(|| format!("Error creating {} directory", dir))?;
+            .with_context(|| format!("Error creating {dir} directory"))?;
     }
     for store_dir in &[
         "mfg_sessions",
@@ -412,7 +412,7 @@ pub(super) fn generate_configs_and_keys(
         "manufacturer_keys",
     ] {
         std::fs::create_dir(aio_dir.join("stores").join(store_dir))
-            .with_context(|| format!("Error creating {} store directory", store_dir))?;
+            .with_context(|| format!("Error creating {store_dir} store directory"))?;
     }
     if config_args.separate_manufacturing_and_owner_voucher_store {
         std::fs::create_dir(aio_dir.join("stores").join("manufacturing_vouchers"))
@@ -432,7 +432,7 @@ pub(super) fn generate_configs_and_keys(
             country: config_args.cert_country.clone(),
             destination_dir: aio_dir.join("keys").to_string_lossy().to_string(),
         })
-        .with_context(|| format!("Error creating {:?} key", key_subject))?;
+        .with_context(|| format!("Error creating {key_subject:?} key"))?;
     }
 
     let mut config_args = config_args;

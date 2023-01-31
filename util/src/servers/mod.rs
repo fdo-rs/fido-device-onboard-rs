@@ -37,7 +37,7 @@ pub fn settings_for(component: &str) -> Result<config::Config> {
         .add_source(
             glob(
                 &conf_dir_from_env(&format_conf_dir_env(component))
-                    .unwrap_or_else(|| format!("/etc/fdo/{}.conf.d/*.yml", component)),
+                    .unwrap_or_else(|| format!("/etc/fdo/{component}.conf.d/*.yml")),
             )?
             .map(|path| config::File::from(path.unwrap()))
             .collect::<Vec<_>>(),
@@ -45,16 +45,16 @@ pub fn settings_for(component: &str) -> Result<config::Config> {
         .add_source(
             config::File::from(Path::new(
                 &conf_dir_from_env(&format_conf_env(component))
-                    .unwrap_or_else(|| format!("/etc/fdo/{}.yml", component)),
+                    .unwrap_or_else(|| format!("/etc/fdo/{component}.yml")),
             ))
             .required(false),
         )
         .add_source(
-            config::File::from(Path::new(&format!("/usr/share/fdo/{}.yml", component)))
+            config::File::from(Path::new(&format!("/usr/share/fdo/{component}.yml")))
                 .required(false),
         )
         .build()
-        .context(format!("Loading configuration for {}", component))
+        .context(format!("Loading configuration for {component}"))
 }
 
 pub fn format_conf_env(component: &str) -> String {

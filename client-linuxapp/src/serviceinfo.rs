@@ -106,8 +106,7 @@ fn install_ssh_key(user: &str, key: &str) -> Result<()> {
         "".to_string()
     };
     let contents = format!(
-        "{}\n# These keys are installed by FIDO Device Onboarding\n{}\n# End of FIDO Device Onboarding keys\n",
-        contents, key
+        "{contents}\n# These keys are installed by FIDO Device Onboarding\n{key}\n# End of FIDO Device Onboarding keys\n"
     );
     fs::write(&key_path, contents.as_bytes()).context("Error writing SSH keys")?;
     set_perm_mode(&key_path, 0o600).with_context(|| {
@@ -125,8 +124,8 @@ fn perform_rhsm(organization_id: &str, activation_key: &str, perform_insights: b
     log::info!("Executing subscription-manager registration");
     Command::new("subscription-manager")
         .arg("register")
-        .arg(format!("--org={}", organization_id))
-        .arg(format!("--activationkey={}", activation_key))
+        .arg(format!("--org={organization_id}"))
+        .arg(format!("--activationkey={activation_key}"))
         .spawn()
         .context("Error spawning subscription-manager")?
         .wait()
@@ -248,7 +247,7 @@ impl DiskEncryptionInProgress {
         } else {
             libcryptsetup_rs::CryptInit::init_by_name_and_header(disk_label, None)
         }
-        .with_context(|| format!("Error opening device {}", disk_label))?;
+        .with_context(|| format!("Error opening device {disk_label}"))?;
 
         log::debug!("Device initiated");
 
@@ -298,14 +297,8 @@ impl DiskEncryptionInProgress {
             .ok_or_else(|| anyhow!("Disk encryption config not set"))?;
         let reencrypt = self.reencrypt;
 
-        Self::execute_with_values(si_out, &disk_label, &pin, &config, reencrypt).with_context(
-            || {
-                format!(
-                    "Error executing disk encryption for disk label {}",
-                    disk_label
-                )
-            },
-        )
+        Self::execute_with_values(si_out, &disk_label, &pin, &config, reencrypt)
+            .with_context(|| format!("Error executing disk encryption for disk label {disk_label}"))
     }
 }
 
@@ -419,17 +412,17 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
             if key == "organization_id" {
                 let value = value
                     .as_str()
-                    .with_context(|| format!("Error parsing rhsm {} value", key))?;
+                    .with_context(|| format!("Error parsing rhsm {key} value"))?;
                 rhsm_organization_id = Some(value.to_string());
             } else if key == "activation_key" {
                 let value = value
                     .as_str()
-                    .with_context(|| format!("Error parsing rhsm {} value", key))?;
+                    .with_context(|| format!("Error parsing rhsm {key} value"))?;
                 rhsm_activation_key = Some(value.to_string());
             } else if key == "perform_insights" {
                 let value = value
                     .as_bool()
-                    .with_context(|| format!("Error parsing rhsm {} value", key))?;
+                    .with_context(|| format!("Error parsing rhsm {key} value"))?;
                 rhsm_perform_insights = Some(value);
             }
         } else if module == FedoraIotServiceInfoModule::BinaryFile.into() {
@@ -483,7 +476,7 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
                 let sha_type = key.split('-').nth(1).unwrap();
                 let sha_value = value
                     .as_bytes()
-                    .with_context(|| format!("Error parsing binary file sha-{} value", sha_type))?;
+                    .with_context(|| format!("Error parsing binary file sha-{sha_type} value"))?;
                 let hasher = match sha_type {
                     "256" => HashType::Sha256,
                     "384" => HashType::Sha384,
@@ -692,7 +685,7 @@ pub(crate) async fn perform_to2_serviceinfos(client: &mut ServiceClient) -> Resu
 
         let return_si: RequestResult<OwnerServiceInfo> = client.send_request(send_si, None).await;
         let return_si =
-            return_si.with_context(|| format!("Error during ServiceInfo loop {}", loop_num))?;
+            return_si.with_context(|| format!("Error during ServiceInfo loop {loop_num}"))?;
         log::trace!("Got ServiceInfo loop {}: {:?}", loop_num, return_si);
 
         if return_si.is_done() {

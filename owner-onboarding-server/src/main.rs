@@ -283,10 +283,7 @@ async fn main() -> Result<()> {
     let trusted_device_keys = {
         let trusted_keys_path = &settings.trusted_device_keys_path;
         let contents = std::fs::read(trusted_keys_path).with_context(|| {
-            format!(
-                "Error reading trusted device keys from {}",
-                trusted_keys_path
-            )
+            format!("Error reading trusted device keys from {trusted_keys_path}")
         })?;
         X509::stack_from_pem(&contents).context("Error parsing trusted device keys")?
     };

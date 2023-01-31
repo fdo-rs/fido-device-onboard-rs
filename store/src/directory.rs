@@ -31,15 +31,13 @@ where
     }
     fs::create_dir_all(path).map_err(|e| {
         StoreError::Configuration(format!(
-            "Storage directory '{:?}' could not be created: {}",
-            path, e
+            "Storage directory '{path:?}' could not be created: {e}"
         ))
     })?;
 
     let canonicalized_directory = path.canonicalize().map_err(|e| {
         StoreError::Configuration(format!(
-            "Storage directory '{:?}' could not be canonicalized: {}",
-            path, e
+            "Storage directory '{path:?}' could not be canonicalized: {e}"
         ))
     })?;
 
@@ -72,8 +70,7 @@ where
 fn ttl_from_disk(ttl: &[u8]) -> Result<SystemTime, StoreError> {
     if ttl.len() != 8 {
         return Err(StoreError::Unspecified(format!(
-            "TTL length is not u64: {:?}",
-            ttl
+            "TTL length is not u64: {ttl:?}"
         )));
     }
     let ttl = u64::from_le_bytes(ttl.try_into().unwrap());
@@ -88,7 +85,7 @@ pub struct DirectoryStoreFilterType {
 }
 
 fn format_xattr(key: &str) -> String {
-    format!("user.{}", key)
+    format!("user.{key}")
 }
 
 #[async_trait]
@@ -215,12 +212,7 @@ where
 
         let file = match File::open(&path) {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => {
-                return Err(StoreError::Unspecified(format!(
-                    "Error opening file: {}",
-                    e,
-                )))
-            }
+            Err(e) => return Err(StoreError::Unspecified(format!("Error opening file: {e}"))),
             Ok(f) => f,
         };
         match file.get_xattr(format_xattr(crate::MetadataKey::<MKT>::Ttl.to_key())) {
@@ -235,16 +227,11 @@ where
                 }
             }
             Ok(None) => {}
-            Err(e) => {
-                return Err(StoreError::Unspecified(format!(
-                    "Error checking TTL: {}",
-                    e
-                )))
-            }
+            Err(e) => return Err(StoreError::Unspecified(format!("Error checking TTL: {e}"))),
         }
 
         Ok(Some(V::deserialize_from_reader(&file).map_err(|e| {
-            StoreError::Unspecified(format!("Error deserializing value: {:?}", e))
+            StoreError::Unspecified(format!("Error deserializing value: {e:?}"))
         })?))
     }
 
@@ -259,12 +246,7 @@ where
 
         let file = match File::open(&path) {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-            Err(e) => {
-                return Err(StoreError::Unspecified(format!(
-                    "Error opening file: {}",
-                    e,
-                )))
-            }
+            Err(e) => return Err(StoreError::Unspecified(format!("Error opening file: {e}"))),
             Ok(f) => f,
         };
 
@@ -292,12 +274,7 @@ where
 
         let file = match File::open(&path) {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-            Err(e) => {
-                return Err(StoreError::Unspecified(format!(
-                    "Error opening file: {}",
-                    e,
-                )))
-            }
+            Err(e) => return Err(StoreError::Unspecified(format!("Error opening file: {e}"))),
             Ok(f) => f,
         };
 

@@ -230,7 +230,7 @@ pub(super) async fn execute_aio(
 
     for binary in ALL_DAEMON_BINARIES {
         ctx.start_binary(*binary)
-            .with_context(|| format!("Error starting binary {:?}", binary))?;
+            .with_context(|| format!("Error starting binary {binary:?}"))?;
     }
 
     ctx.wait_until_ready()
@@ -246,6 +246,7 @@ pub(super) async fn execute_aio(
         tokio::select! {
             _ = signal_handler => {
                 log::info!("Shutting down");
+                #[allow(clippy::let_underscore_future)]
                 let _ = futures::future::join_all(ctx.childs.iter_mut().map(|child| {
                     Box::pin(child.child.kill())
                 }));

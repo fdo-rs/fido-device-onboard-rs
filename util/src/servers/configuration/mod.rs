@@ -42,7 +42,7 @@ impl<'de> Deserialize<'de> for Bind {
         let parsed = s.parse::<SocketAddr>();
         parsed
             .map(Bind)
-            .map_err(|e| serde::de::Error::custom(format!("Error parsing bind string: {:?}", e)))
+            .map_err(|e| serde::de::Error::custom(format!("Error parsing bind string: {e:?}")))
     }
 }
 
@@ -98,8 +98,7 @@ impl<'de> Deserialize<'de> for AbsolutePathBuf {
         let path = PathBuf::from(&s);
         if !path.is_absolute() {
             return Err(serde::de::Error::custom(format!(
-                "path {} is not absolute",
-                s
+                "path {s} is not absolute"
             )));
         }
         Ok(AbsolutePathBuf(path))

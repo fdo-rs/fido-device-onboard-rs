@@ -41,7 +41,7 @@ pub trait Message: Send + Serializable + Sized {
         match self.serialize_data() {
             Ok(v) => v,
             Err(e) => {
-                eprintln!("Error serializing response: {:?}", e);
+                eprintln!("Error serializing response: {e:?}");
 
                 let errmsg = match Self::protocol_version() {
                     ProtocolVersion::Version1_0 => v11::ErrorMessage::new(
