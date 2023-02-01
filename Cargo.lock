@@ -204,6 +204,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "604178f6c5c21f02dc555784810edfb88d34ac2c73b2eae109655649ee73ce3d"
 
 [[package]]
+name = "base64ct"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c3c1a368f70d6cf7302d78f8f7093da241fb8e8807c05cc9e51a125895a6d5b"
+
+[[package]]
 name = "bincode"
 version = "1.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -798,10 +804,12 @@ dependencies = [
  "libcryptsetup-rs",
  "log",
  "nix",
+ "openssl",
  "passwd",
  "rand",
  "secrecy",
  "serde_bytes",
+ "sha-crypt",
  "sys-info",
  "thiserror",
  "tokio",
@@ -2584,6 +2592,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.18",
+]
+
+[[package]]
+name = "sha-crypt"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88e79009728d8311d42d754f2f319a975f9e38f156fd5e422d2451486c78b286"
+dependencies = [
+ "base64ct",
+ "rand",
+ "sha2 0.10.6",
+ "subtle",
 ]
 
 [[package]]
