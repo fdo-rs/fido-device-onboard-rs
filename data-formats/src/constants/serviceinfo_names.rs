@@ -53,6 +53,7 @@ impl FromStr for ServiceInfoModule {
             "org.fedoraiot.diskencryption-clevis" => {
                 FedoraIotServiceInfoModule::DiskEncryptionClevis.into()
             }
+            "org.fedoraiot.reboot" => FedoraIotServiceInfoModule::Reboot.into(),
 
             "com.redhat.subscriptionmanager" => {
                 RedHatComServiceInfoModule::SubscriptionManager.into()
@@ -125,6 +126,7 @@ pub enum FedoraIotServiceInfoModule {
     SSHKey,
     BinaryFile,
     DiskEncryptionClevis,
+    Reboot,
 }
 
 impl Display for FedoraIotServiceInfoModule {
@@ -137,6 +139,7 @@ impl Display for FedoraIotServiceInfoModule {
                 FedoraIotServiceInfoModule::SSHKey => "sshkey",
                 FedoraIotServiceInfoModule::BinaryFile => "binaryfile",
                 FedoraIotServiceInfoModule::DiskEncryptionClevis => "diskencryption-clevis",
+                FedoraIotServiceInfoModule::Reboot => "reboot",
             }
         )
     }

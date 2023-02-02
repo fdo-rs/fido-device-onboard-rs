@@ -29,6 +29,7 @@ fn find_available_modules() -> Result<Vec<ServiceInfoModule>> {
         FedoraIotServiceInfoModule::SSHKey.into(),
         FedoraIotServiceInfoModule::BinaryFile.into(),
         FedoraIotServiceInfoModule::Command.into(),
+        FedoraIotServiceInfoModule::Reboot.into(),
     ];
 
     // See if we add RHSM
@@ -368,7 +369,7 @@ impl CommandInProgress {
     }
 }
 
-async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -> Result<()> {
+async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -> Result<bool> {
     let mut active_modules: HashSet<ServiceInfoModule> = HashSet::new();
 
     let mut sshkey_user: Option<String> = None;
@@ -383,6 +384,8 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
         BinaryFileInProgress::new(binary_file_prefix_owned.as_deref());
     let mut command_in_progress = CommandInProgress::new();
     let mut disk_encryption_in_progress = DiskEncryptionInProgress::new();
+
+    let mut reboot_requested = false;
 
     for (module, key, value) in si_in.iter() {
         log::trace!("Got module {}, command {}, value {:?}", module, key, value);
@@ -407,6 +410,12 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
                 sshkey_user = Some(value.to_string());
             } else if key == "key" {
                 sshkey_key = Some(value.to_string());
+            }
+        } else if module == FedoraIotServiceInfoModule::Reboot.into() {
+            if key == "reboot" {
+                let value = value.as_bool().context("Error parsing reboot value")?;
+                reboot_requested = value;
+                log::trace!("Got reboot value: {value}");
             }
         } else if module == RedHatComServiceInfoModule::SubscriptionManager.into() {
             if key == "organization_id" {
@@ -639,12 +648,13 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
         .context("Error performing RHSM enrollment")?;
     }
 
-    Ok(())
+    Ok(reboot_requested)
 }
 
-pub(crate) async fn perform_to2_serviceinfos(client: &mut ServiceClient) -> Result<()> {
+pub(crate) async fn perform_to2_serviceinfos(client: &mut ServiceClient) -> Result<bool> {
     let mut loop_num = 0;
     let mut out_si = ServiceInfo::new();
+    let mut reboot_required = false;
 
     while loop_num < MAX_SERVICE_INFO_LOOPS {
         if loop_num == 0 {
@@ -690,7 +700,7 @@ pub(crate) async fn perform_to2_serviceinfos(client: &mut ServiceClient) -> Resu
 
         if return_si.is_done() {
             log::trace!("ServiceInfo loops done, number taken: {}", loop_num);
-            return Ok(());
+            return Ok(reboot_required);
         }
         if return_si.is_more_service_info() {
             // TODO
@@ -698,9 +708,12 @@ pub(crate) async fn perform_to2_serviceinfos(client: &mut ServiceClient) -> Resu
         }
 
         // Process
-        process_serviceinfo_in(return_si.service_info(), &mut out_si)
+        let reboot_si = process_serviceinfo_in(return_si.service_info(), &mut out_si)
             .await
             .context("Error processing returned serviceinfo")?;
+        if !reboot_required {
+            reboot_required = reboot_si;
+        }
 
         loop_num += 1;
     }

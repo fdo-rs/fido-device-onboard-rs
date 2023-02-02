@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, env, fs, path::PathBuf, thread, time};
+use std::{borrow::Borrow, env, fs, path::PathBuf, process::Command, thread, time};
 
 use anyhow::{anyhow, bail, Context, Result};
 use rand::Rng;
@@ -852,7 +852,7 @@ async fn perform_to2(
     devcred: &dyn DeviceCredential,
     url: &str,
     to1d: &COSESign,
-) -> Result<()> {
+) -> Result<bool> {
     log::info!("Performing TO2 protocol, URL: {:?}", url);
 
     let mut client = fdo_http_wrapper::client::ServiceClient::new(ProtocolVersion::Version1_1, url);
@@ -1006,17 +1006,21 @@ async fn perform_to2(
     };
 
     // Now, the magic: performing the roundtrip! We delegated that.
-    if let Err(serviceinfo_err) = serviceinfo::perform_to2_serviceinfos(&mut client).await {
-        log::error!("ServiceInfo failed, error: {:?}", serviceinfo_err);
-        let e_result = ErrorResult::new(
-            ErrorCode::InternalServerError,
-            "Error performing the ServiceInfo roundtrips",
-            MessageType::TO2OwnerServiceInfo,
-            anyhow!("Error performing the ServiceInfo roundtrips"),
-        );
-        send_client_error(&mut client, &e_result).await;
-        bail!(e_result.error);
-    }
+    let reboot_required = match serviceinfo::perform_to2_serviceinfos(&mut client).await {
+        Err(serviceinfo_err) => {
+            log::error!("ServiceInfo failed, error: {:?}", serviceinfo_err);
+            let e_result = ErrorResult::new(
+                ErrorCode::InternalServerError,
+                "Error performing the ServiceInfo roundtrips",
+                MessageType::TO2OwnerServiceInfo,
+                anyhow!("Error performing the ServiceInfo roundtrips"),
+            );
+            send_client_error(&mut client, &e_result).await;
+            bail!(e_result.error);
+        }
+        Ok(reboot) => reboot,
+    };
+    log::trace!("Got reboot_required: {reboot_required}");
 
     if mark_device_onboarding_executed().is_err() {
         let e_result = ErrorResult::new(
@@ -1042,7 +1046,7 @@ async fn perform_to2(
 
     // Send: Done, Receive: Done2
     match perform_done(nonce7, nonce6, &mut client).await {
-        Ok(ok) => Ok(ok),
+        Ok(_) => Ok(reboot_required),
         Err(e) => match e {
             ClientError::Request(e) => {
                 send_client_error(&mut client, e.borrow()).await;
@@ -1134,6 +1138,7 @@ async fn main() -> Result<()> {
     let rv_info = get_rv_info(dc.as_ref())?;
 
     let mut onboarding_performed = false;
+    let mut reboot_si_required = false;
     let mut rv_entry_delay = 0;
 
     loop {
@@ -1197,8 +1202,11 @@ async fn main() -> Result<()> {
                     .await
                     .context("Error performing TO2 ownership protocol")
                 {
-                    Ok(_) => {
+                    Ok(maybe_reboot) => {
                         onboarding_performed = true;
+                        if !reboot_si_required {
+                            reboot_si_required = maybe_reboot;
+                        }
                         break;
                     }
                     Err(e) => {
@@ -1218,5 +1226,12 @@ async fn main() -> Result<()> {
         }
     }
     log::info!("Secure Device Onboarding DONE");
+    log::info!("Reboot required? {}", reboot_si_required);
+    if reboot_si_required {
+        Command::new("systemctl")
+            .arg("reboot")
+            .spawn()
+            .expect("Reboot failed");
+    }
     Ok(())
 }

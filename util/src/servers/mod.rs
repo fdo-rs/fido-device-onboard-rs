@@ -115,10 +115,17 @@ pub struct ServiceInfoApiReplyInitialUser {
     pub ssh_keys: Vec<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ServiceInfoApiReplyReboot {
+    pub reboot: bool,
+}
+
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct ServiceInfoApiReply {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub initial_user: Option<ServiceInfoApiReplyInitialUser>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extra_commands: Option<Vec<(ServiceInfoModule, String, serde_json::Value)>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reboot: Option<ServiceInfoApiReplyReboot>,
 }

@@ -560,6 +560,11 @@ async fn perform_service_info(
         }
     }
 
+    if let Some(reboot) = resp.reboot {
+        out_si.add(FedoraIotServiceInfoModule::Reboot, "active", &true)?;
+        out_si.add(FedoraIotServiceInfoModule::Reboot, "reboot", &reboot.reboot)?;
+    }
+
     log::trace!("Sending ServiceInfo result: {:?}", out_si);
 
     Ok(messages::v11::to2::OwnerServiceInfo::new(

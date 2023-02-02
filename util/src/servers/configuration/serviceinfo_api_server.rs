@@ -29,6 +29,8 @@ pub struct ServiceInfoSettings {
     pub diskencryption_clevis: Option<Vec<ServiceInfoDiskEncryptionClevis>>,
 
     pub additional_serviceinfo: Option<HashMap<ServiceInfoModule, Vec<(String, String)>>>,
+
+    pub after_onboarding_reboot: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
