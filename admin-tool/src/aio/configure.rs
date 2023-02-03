@@ -166,6 +166,7 @@ impl Configuration {
             commands: None,
             diskencryption_clevis: None,
             additional_serviceinfo: None,
+            after_onboarding_reboot: Some(false),
         })
     }
 }
