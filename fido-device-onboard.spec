@@ -70,7 +70,11 @@ install -D -m 0755 -t %{buildroot}%{_libexecdir}/fdo target/release/fdo-admin-to
 install -D -m 0755 -t %{buildroot}%{_bindir} target/release/fdo-owner-tool
 install -D -m 0755 -t %{buildroot}%{_bindir} target/release/fdo-admin-tool
 install -D -m 0644 -t %{buildroot}%{_unitdir} examples/systemd/*
-install -D -m 0644 -t %{buildroot}%{_docdir}/fdo examples/config/*
+# we do not need the rendezvous-info.yml for the AIO command, add everything else
+install -D -m 0644 -t %{buildroot}%{_docdir}/examples examples/config/manufacturing-server.yml
+install -D -m 0644 -t %{buildroot}%{_docdir}/examples examples/config/owner-onboarding-server.yml
+install -D -m 0644 -t %{buildroot}%{_docdir}/examples examples/config/rendezvous-server.yml
+install -D -m 0644 -t %{buildroot}%{_docdir}/examples examples/config/serviceinfo-api-server.yml
 mkdir -p %{buildroot}%{_sysconfdir}/fdo
 # 52fdo
 install -D -m 0755 -t %{buildroot}%{dracutlibdir}/modules.d/52fdo dracut/52fdo/module-setup.sh
@@ -103,8 +107,8 @@ Requires: openssl-libs >= 3.0.1-12
 %{_mandir}/man1/fdo-owner-onboarding-server.1*
 %{_libexecdir}/fdo/fdo-owner-onboarding-server
 %{_libexecdir}/fdo/fdo-serviceinfo-api-server
-%{_docdir}/fdo/owner-onboarding-server.yml
-%{_docdir}/fdo/serviceinfo-api-server.yml
+%{_docdir}/examples/owner-onboarding-server.yml
+%{_docdir}/examples/serviceinfo-api-server.yml
 %{_unitdir}/fdo-owner-onboarding-server.service
 %{_unitdir}/fdo-serviceinfo-api-server.service
 
@@ -129,7 +133,7 @@ Summary: FDO Rendezvous Server implementation
 %license LICENSE
 %{_mandir}/man1/fdo-rendezvous-server.1*
 %{_libexecdir}/fdo/fdo-rendezvous-server
-%{_docdir}/fdo/rendezvous-server.yml
+%{_docdir}/examples/rendezvous-server.yml
 %{_unitdir}/fdo-rendezvous-server.service
 
 %post -n fdo-rendezvous-server
@@ -151,7 +155,7 @@ Requires: openssl-libs >= 3.0.1-12
 %license LICENSE
 %{_mandir}/man1/fdo-manufacturing-server.1*
 %{_libexecdir}/fdo/fdo-manufacturing-server
-%{_docdir}/fdo/manufacturing-server.yml
+%{_docdir}/examples/manufacturing-server.yml
 %{_unitdir}/fdo-manufacturing-server.service
 
 %post -n fdo-manufacturing-server
