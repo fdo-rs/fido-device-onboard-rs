@@ -15,7 +15,7 @@ tokio = { version = "1", features = ["full"] }
 sys-info = "0.9"
 passwd = "0.0.1"
 rand = "0.8.4"
-tss-esapi = "7.0"
+tss-esapi = "7.2"
 
 fdo-data-formats = { path = "../data-formats", version = "0.4.7" }
 fdo-http-wrapper = { path = "../http-wrapper", version = "0.4.7", features = ["client"] }
