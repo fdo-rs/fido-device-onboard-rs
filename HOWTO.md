@@ -464,6 +464,7 @@ service_info:
       pin: test
       config: "{}"
     reencrypt: true
+  after_onboarding_reboot: true
 ```
 
 Where:
@@ -502,6 +503,8 @@ Where:
           `{}`; sample configuration for `tpm2`: `'{"pcr_bank": "sha256",
           "prc_id": "1.7"}'`)
     - `reencrypt`: boolean, whether re-encryption should be done.
+  - `after_onboarding_reboot`: [OPTIONAL] specifies if the device should be
+    rebooted after onboarding has completed, boolean (default false).
   - `additional_service_info`: [OPTIONAL]
 
 ## How to run the servers
