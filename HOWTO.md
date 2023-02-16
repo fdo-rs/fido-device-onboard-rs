@@ -19,7 +19,10 @@
   - Owner Onboarding Server
   - Rendezvous Server
   - Service Info API Server
-- How to run the Client
+- How to run the Client 
+   - `fdo-manufacturing-client`
+   - `fdo-client-linuxappp`
+- Environmental Variables
 
 ## Pre-requisites
 
@@ -282,6 +285,24 @@ Where:
   - `plain_di`: [OPTIONAL] boolean.
   - `diun`: [OPTIONAL]
     - `mfg_string_type`: device serial number
+    Note: During `DIUN` protocol `mfg_string_type` is passed from `fdo-manufacturing-server` to 
+    `fdo-manufacturing client`. 
+    This field takes values : `SerialNumber` or `StructuredDeviceInfo`.
+    
+    If `SerialNumber` value is provided `msg_string_type` will be populated with the device info 
+    as provide by manufacturer which is read from `/sys/devices/virtual/dmi/id/product_serial` or 
+    `/sys/devices/virtual/dmi/id/chassis_serial` locations inside the device.
+    
+    `StructuredDeviceInfo` option can be used when SN(serial number) from manufacturer is not present
+    then 'Device Info' field in device-credential file appears null. To avoid that and provide a way 
+    for device identification StructuredDeviceInfo option is implemented.
+    With this option ,'Device Info:' field in device-credential will be populated with a list of mac
+    addresses of available ethernet interfaces ,separated by semicolon.
+    e.g. 
+    ```
+    Device Info: IFACE_eth0=02:42:ac:11:00:03;IFACE_wlan0=02:45:ac:71:00:03;
+    ```
+    
     - `key_type`: SECP256R1 or SECP384R1 (up-to-date list of options
       [here](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/util/src/servers/configuration/manufacturing_server.rs#L71). 
     - `allowed_key_storage_types`: list of allowed storage types. Possible
@@ -521,10 +542,14 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
    Files/manufacturing_server.yml](#manufacturing_serveryml) and place it either in
    `/usr/share/fdo`, `/etc/fdo/` or
    `/etc/fdo/manufacturing-serverr.conf.d/`. The paths will be checked in that
-   same order.
+   same order. 
+   Mention the path for keys and certificates as generated in step1 inside `manufcturing-server.yml`.
 
-3. Execute `fdo-manufacturing-server` or run it as a service, see sample
-   file in
+3. To execute `fdo-manufacturing-server` as a binary on its own use below command:
+   ```
+   sudo MANUFACTURING_SERVER_CONF=/path/to/manufacturing_server.yml LOG_LEVEL=trace ./target/debug/fdo-manufacturing-server
+   ```
+   or run it as a service, see sample file in
    [examples/systemd](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/systemd/fdo-manufacturing-server.service).
 
 ### Owner Onboarding Server
@@ -576,6 +601,25 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
 
 ## How to run the Client
 
+### `fdo-manufacturing-client`
+
+1. If you come across use case such as: you need to check DI (Device Initialize)
+or DIUN (Device Initialize over Untrusted Network) protocol is working as expected, 
+then you can run `fdo-manufacturing-server` and `fdo-manufacturing-client`
+on their own. 
+2. Run `fdo-manufacturing-server` as mentioned in [Manufacturing Server](#manufacturing-server). 
+3. If you are running `plain_DI`, set following environmental variables additionally
+ before running manufacturing client:
+    - `DI_MFG_STRING_TYPE`, `DI_KEY_STORAGE_TYPE`, `DI_SIGN_KEY_PATH`, `DI_HMAC_KEY_PATH`
+Check section [Environmental Variables](#environmental-variables) for detail of each env variable.
+4. If you are running `DIUN` use below command (above step 3 is not needed): 
+   ```
+   sudo MANUFACTURING_SERVER_URL=http://localhos:8080 DEVICE_CREDENTIAL=/path/to/device-credentials 
+   DIUN_PUB_KEY_ROOTCERTS=/path/to/keys/diun_cert.pem ./path/to/binary/fdo-manufacturing-client
+   ```
+    
+### `fdo-client-linuxappp`
+
 1. Initialize the Device, see [How to generate an Ownership Voucher (OV) and
     Credential for a Device (Device
     Initialization)](#how-to-generate-an-ownership-voucher-ov-and-credential-for-a-device-device-initialization).
@@ -591,3 +635,59 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
     ```
 
 3. Run the client: `fdo-client-linuxappp`
+
+### Environmental Variables
+
+Here is a list of environmental variables, their meaning and suggested values. 
+Note: Contributors/Developers are encouraged to amend to this list of env variables 
+as they come across or write new variables.
+
+1. `LOG_LEVEL` 
+- Usage: This variable is used to provide the log level while running any of the 
+servers or client binary or systemd service.
+- Suggested values:
+`trace` , `info`, `debug`, `error`
+
+2. `MANUFACTURING_SERVER_CONF`
+- Usage: This variable is used to provide path to `manufacturing_server.yml` config file
+- Suggested values: `/path/to/manufacturing_server.yml`
+
+
+3. `DI_MFG_STRING_TYPE` 
+- Usage: This variable is used to provide what type of device info is needed from the device.
+This can be used for device identification.
+As of today this variable has two values mentioned below.
+- Suggested values: `SerialNumber` or `StructuredDeviceInfo`
+
+Note: 
+`SerialNumber` - provides device identification in the form of a string provided by manufacturer
+which is read from `/sys/devices/virtual/dmi/id/product_serial` or `/sys/devices/virtual/dmi/id/chassis_serial`
+locations inside the device.
+`StructuredDeviceInfo` - whereas this option allows user to get device info in the form of a string
+which consists of MAC addresses of the network devices. Depending upon the availability of the
+value of `SerialNumber` from manufacturer this string may also be present in this information.
+
+4. `DI_KEY_STORAGE_TYPE`
+- Usage: This variable is used to specify which type of key storage medium is to be used while
+running `fdo-manufacturing-client` 
+- Suggested values: `FileSystem` or `Tpm`
+
+5. `DI_SIGN_KEY_PATH`
+- Usage: This variable is used to specify the directory path to keys as generated in
+ [How to generate keys and certificates](#how-to-generate-keys-and-certificates).
+- Suggested values: `/path/to/keys`
+
+6. `DI_HMAC_KEY_PATH`
+- Usage: This variable is used to specify the directory path to keys as generated in
+ [How to generate keys and certificates](#how-to-generate-keys-and-certificates).
+- Suggested values: `/path/to/keys`
+
+7. `DIUN_PUB_KEY_ROOTCERTS`
+- Usage: This variable is used to specify the directory path to certificates as generated in
+ [How to generate keys and certificates](#how-to-generate-keys-and-certificates).
+- Suggested values: `/path/to/keys`
+
+8. `DEVICE_CREDENTIAL`
+- Usage: This variable is used to specify the path to `device-credentials` as created in 
+[How to generate an Ownership Voucher (OV) and Credential for a Device (Device Initialization)](#how-to-generate-an-ownership-voucher-ov-and-credential-for-a-device-device-initialization)
+- Suggested values: `/path/to/device-credential`
