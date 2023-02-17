@@ -234,6 +234,7 @@ impl StoreConfig {
         match self {
             #[cfg(feature = "directory")]
             StoreConfig::Directory { path } => directory::initialize(path),
+            _ => todo!(),
         }
     }
 }
