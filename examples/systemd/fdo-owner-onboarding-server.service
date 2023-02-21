@@ -5,7 +5,6 @@ After=network-online.target
 [Service]
 Environment=LOG_LEVEL=info
 ExecStart=/usr/libexec/fdo/fdo-owner-onboarding-server
-ExecStartPost=/usr/libexec/fdo/fdo-serviceinfo-api-server
 # restart and failure condition
 
 [Install]
