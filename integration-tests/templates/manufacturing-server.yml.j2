@@ -24,7 +24,7 @@ protocols:
     key_path: {{ keys_path }}/diun_key.der
     cert_path: {{ keys_path }}/diun_cert.pem
     key_type: SECP256R1
-    mfg_string_type: SerialNumber
+    mfg_string_type: {{ serial_number_format }}
     allowed_key_storage_types:
     - {{ diun_key_type }}
 manufacturing:

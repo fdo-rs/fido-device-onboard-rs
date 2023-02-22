@@ -18,6 +18,7 @@ async fn test_device_credentials_already_active() -> Result<()> {
                 Ok(cfg.prepare_config_file(None, |cfg| {
                     cfg.insert("rendezvous_port", "1337");
                     cfg.insert("diun_key_type", "FileSystem");
+                    cfg.insert("serial_number_format", "SerialNumber");
                     Ok(())
                 })?)
             },

@@ -1,7 +1,9 @@
+use anyhow::{bail, Context, Result};
+use lazy_static::lazy_static;
+use regex::Regex;
+use std::fmt::Write;
 use std::{convert::TryFrom, fs};
 use std::{convert::TryInto, env, str::FromStr};
-
-use anyhow::{bail, Context, Result};
 
 use fdo_data_formats::{
     constants::{HashType, HeaderKeys, KeyStorageType, MfgStringType, PublicKeyType},
@@ -296,10 +298,66 @@ async fn get_mfg_info(mfg_string_type: MfgStringType) -> Result<CborSimpleType> 
     }
     match mfg_string_type {
         MfgStringType::SerialNumber => {
-            let serial = fs::read_to_string("/sys/devices/virtual/dmi/id/product_serial")
+            log::debug!(
+                "mfg_string_type value:{:#?} refers SerialNumber format ",
+                mfg_string_type
+            );
+            let serial_dmi = fs::read_to_string("/sys/devices/virtual/dmi/id/product_serial")
                 .or_else(|_| fs::read_to_string("/sys/devices/virtual/dmi/id/chassis_serial"))
                 .context("Error determining system serial number")?;
-            Ok(CborSimpleType::Text(serial))
+            Ok(CborSimpleType::Text(serial_dmi))
+        }
+        MfgStringType::StructuredDeviceInfo => {
+            log::debug!(
+                "mfg_string_type value:{:#?} refers StructuredDeviceInfo format ",
+                mfg_string_type
+            );
+            let serial_dmi = fs::read_to_string("/sys/devices/virtual/dmi/id/product_serial")
+                .or_else(|_| fs::read_to_string("/sys/devices/virtual/dmi/id/chassis_serial"))
+                .map(|s| s.trim_end().to_owned())
+                .context("Error determining system serial number")?;
+
+            let path = "/sys/class/net/";
+            let mut serial_mac = String::new();
+
+            for entry in fs::read_dir(path)? {
+                let entry = entry?;
+                let path_mac_addr = entry.path().join("address");
+                let interface = entry.file_name().to_string_lossy().to_string();
+                let mac = fs::read_to_string(path_mac_addr)
+                    .map(|s| s.trim_end().to_owned())
+                    .context("Error reading MAC address")?;
+
+                log::debug!("MAC address read from file /sys/class/net/{interface}/address {mac}");
+
+                lazy_static! {
+                    static ref MAC_REGEX: Regex =
+                        Regex::new(r"^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$").unwrap();
+                }
+                if MAC_REGEX.is_match(&mac) {
+                    let mut non_zero_mac = false;
+                    for byte in mac.split(':') {
+                        let byte = u8::from_str_radix(byte, 16)?;
+                        if byte != 0 {
+                            non_zero_mac = true;
+                            break;
+                        }
+                    }
+                    if non_zero_mac {
+                        write!(serial_mac, "IFACE_{interface}={mac};").unwrap();
+                        log::debug!("MAC address {serial_mac} of interface {interface} ");
+                    }
+                }
+            }
+            if serial_dmi == "None" || serial_dmi.is_empty() {
+                log::info!(" Serial number of the device is just MAC address: {serial_mac} ");
+                Ok(CborSimpleType::Text(serial_mac))
+            } else {
+                serial_mac = serial_dmi + ";" + &serial_mac;
+                log::info!( "Serial number of the device is a ';' separated string of the serial number from the DMI and
+                 the MAC address  {serial_mac} ");
+                Ok(CborSimpleType::Text(serial_mac))
+            }
         }
         _ => bail!(
             "Unsupported MFG string type {:?} requested",

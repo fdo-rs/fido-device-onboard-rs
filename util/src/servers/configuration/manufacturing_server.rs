@@ -60,12 +60,14 @@ pub struct DiunSettings {
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum MfgStringTypeString {
     SerialNumber,
+    StructuredDeviceInfo,
 }
 
 impl From<MfgStringTypeString> for MfgStringType {
     fn from(mfg_string_type: MfgStringTypeString) -> Self {
         match mfg_string_type {
             MfgStringTypeString::SerialNumber => MfgStringType::SerialNumber,
+            MfgStringTypeString::StructuredDeviceInfo => MfgStringType::StructuredDeviceInfo,
         }
     }
 }

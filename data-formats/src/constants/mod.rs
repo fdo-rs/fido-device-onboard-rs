@@ -426,6 +426,7 @@ pub enum ErrorCode {
 #[non_exhaustive]
 pub enum MfgStringType {
     SerialNumber = 0,
+    StructuredDeviceInfo = 1,
 }
 
 impl FromStr for MfgStringType {
@@ -434,6 +435,9 @@ impl FromStr for MfgStringType {
     fn from_str(s: &str) -> Result<Self> {
         Ok(match &s.to_lowercase()[..] {
             "serialnumber" | "serial_number" => MfgStringType::SerialNumber,
+            "structureddeviceinfo" | "structured_device_info" => {
+                MfgStringType::StructuredDeviceInfo
+            }
             _ => return Err(Error::InconsistentValue("mfg-string-type")),
         })
     }
