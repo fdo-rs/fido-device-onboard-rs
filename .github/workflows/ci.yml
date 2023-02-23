@@ -92,7 +92,7 @@ jobs:
     steps:
       - name: Install deps
         run: |
-          dnf install -y make gcc openssl openssl-devel findutils golang git tpm2-tss-devel swtpm swtpm-tools cargo rust git clevis clevis-luks cryptsetup cryptsetup-devel clang-devel
+          dnf install -y make gcc openssl openssl-devel findutils golang git tpm2-tss-devel swtpm swtpm-tools cargo rust git clevis clevis-luks cryptsetup cryptsetup-devel clang-devel cracklib-dicts
       - uses: actions/checkout@v3
         with:
           persist-credentials: false
