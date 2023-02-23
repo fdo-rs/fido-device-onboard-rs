@@ -15,7 +15,7 @@ There are a number of ways in which you can set up development environments for 
 In order to make a test build of this crate, when using Fedora, you can run:
 
 ``` bash
-sudo yum install -y cargo rust rust-src git-core openssl-devel clippy rustfmt golang tpm2-tss-devel clevis clevis-luks cryptsetup cryptsetup-devel clang-devel
+sudo yum install -y cargo rust rust-src git-core openssl-devel clippy rustfmt golang tpm2-tss-devel clevis clevis-luks cryptsetup cryptsetup-devel clang-devel cracklib-dicts
 git clone https://github.com/fedora-iot/fido-device-onboard-rs.git
 cd fido-device-onboard-rs
 cargo build --release
