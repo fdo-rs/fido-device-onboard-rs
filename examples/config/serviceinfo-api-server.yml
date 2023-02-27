@@ -37,3 +37,4 @@ service_info:
       pin: test
       config: "{}"
     reencrypt: true
+  after_onboarding_reboot: true

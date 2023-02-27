@@ -12,7 +12,7 @@ use fdo_data_formats::{
 use fdo_store::Store;
 use fdo_util::servers::{
     configuration::serviceinfo_api_server::{ServiceInfoApiServerSettings, ServiceInfoSettings},
-    settings_for, ServiceInfoApiReply, ServiceInfoApiReplyInitialUser,
+    settings_for, ServiceInfoApiReply, ServiceInfoApiReplyInitialUser, ServiceInfoApiReplyReboot,
 };
 
 #[derive(Debug)]
@@ -325,6 +325,21 @@ async fn serviceinfo_handler(
                     &serde_json::Value::Null,
                 );
             }
+        }
+    }
+
+    if query_info
+        .modules
+        .contains(&FedoraIotServiceInfoModule::Reboot.into())
+    {
+        if let Some(reboot) = &user_data
+            .service_info_configuration
+            .settings
+            .after_onboarding_reboot
+        {
+            reply.reply.reboot = Some(ServiceInfoApiReplyReboot {
+                reboot: reboot.to_owned(),
+            })
         }
     }
 
