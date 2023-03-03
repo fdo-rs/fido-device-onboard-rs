@@ -5,7 +5,7 @@ i.e. building the rhel for edge image using simplified installer and then provis
 ##### Pre-requisite : 
 In order to test the end to end FDO scenario (i.e. building simplified iso image ,booting it in a vm and performing FIDO Device Onboarding) you need to have simplified installer image already built .Please follow README.md document from https://github.com/osbuild/rhel-for-edge-demo to built simplified installer image. You will need a Rhel system (or a vm if you are on other linux/mac machine).
 
-Note: Please make a note while building simplified installer, provide the same manufacturing server ip that you will use in qemu command. In this case it it 10.0.2.2 .(which is used in installer.toml blueprint).
+Note: Please make a note while building simplified installer, provide the same manufacturing server ip that you will use in qemu command. In this case it is 10.0.2.2 .(which is used in installer.toml blueprint).
 
 Now to start with FDO on-boarding , we need to install the simplified installer image. This also can be done using different tools, this document mentions use of qemu to install and boot virtual machine. Qemu can be used on both Linux and Mac machines. (Virt-install is also an option if you are on Linux/RHEL machine)
 - Create a disk image where simplified installer iso will be installed. 
@@ -42,18 +42,23 @@ qemu-system-x86_64 \
 aio stands for All-In-One command, which basically can be used with fdo-admin-tool to configure & run manufacturing server, rendezvous server and owner-onboarding server. ‘Aio-dir’ is the directory you can provide where all this configs, keys and logs are generated.
 
 On running this command output looks like this, if servers are running successfully.
+```
  INFO  fdo_admin_tool::aio::execute > Starting AIO
  INFO  fdo_admin_tool::aio::execute > Waiting until services are ready
  INFO  fdo_admin_tool::aio::execute > All services are ready
  INFO  fdo_admin_tool::aio::execute > AIO running
+```
 
 ##### Updating config files
 1. aio_configuration file 
+```
 contact_addresses:
     IpAddr: 10.0.2.2
     IpAddr: 172.17.0.3
+```
 You need to provide the same ip address which you used for manufacturing server ip while building a simplified installer image. 172.17.0.3 is the default created ip.
 2. manufacturing_server.yml
+```
 rendezvous_info:
    deviceport: 8082
    ip_address: 10.0.2.2
@@ -63,13 +68,16 @@ rendezvous_info:
    ip_address: 172.17.0.3
    ownerport: 8082
    protocol: http
+```
 3. owner_onboarding_sever.yml
+```
 owner_addresses:
   transport: http
    addresses:
       ip_address: 10.0.2.2
       ip_address: 172.17.0.3
    port: 8081
+```
 
 In case you land up on an emergency shell upon booting into a simplified installer , you can run ‘ip route’ command to check if the manufacturing ip is the correct one that's mentioned in above config files.
 Also you can use curl command to check connectivity with manufacturing server.
