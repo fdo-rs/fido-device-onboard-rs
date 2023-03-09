@@ -224,7 +224,7 @@ fn generate_configs(aio_dir: &Path, config_args: &Configuration) -> Result<(), E
 
             bind: get_bind(config_args.listen_port_serviceinfo_api_server)?,
 
-            service_info_auth_token: config_args.serviceinfo_api_auth_token.clone(),
+            service_info_auth_token: Some(config_args.serviceinfo_api_auth_token.clone()),
             admin_auth_token: Some(config_args.serviceinfo_api_admin_token.clone()),
 
             device_specific_store_driver: StoreConfig::Directory {

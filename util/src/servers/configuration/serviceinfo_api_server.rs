@@ -11,7 +11,7 @@ pub struct ServiceInfoApiServerSettings {
     pub service_info: ServiceInfoSettings,
     pub bind: Bind,
 
-    pub service_info_auth_token: String,
+    pub service_info_auth_token: Option<String>,
     pub admin_auth_token: Option<String>,
 
     #[serde(with = "serde_yaml::with::singleton_map")]
