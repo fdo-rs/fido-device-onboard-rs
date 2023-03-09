@@ -82,7 +82,7 @@ struct ServiceInfoApiServerUD {
     >,
 
     // Auth Info
-    service_info_auth_token: String,
+    service_info_auth_token: Option<String>,
     admin_auth_token: Option<String>,
 
     // Basic Service Info configuration
@@ -184,9 +184,17 @@ async fn serviceinfo_auth_handler(
     user_data: ServiceInfoApiServerUDT,
     auth_header: String,
 ) -> Result<ServiceInfoApiServerUDT, warp::Rejection> {
-    if auth_header != user_data.service_info_auth_token {
-        log::warn!("Request with invalid auth token");
-        return Err(warp::reject::reject());
+    match &user_data.service_info_auth_token {
+        None => {
+            log::trace!("service_info_auth_token is disabled");
+            return Ok(user_data);
+        }
+        Some(token) => {
+            if token != &auth_header {
+                log::warn!("Request with invalid auth token");
+                return Err(warp::reject::reject());
+            }
+        }
     }
 
     Ok(user_data)
@@ -434,7 +442,9 @@ async fn main() -> Result<()> {
 
         device_specific_store,
 
-        service_info_auth_token: format!("Bearer {}", settings.service_info_auth_token),
+        service_info_auth_token: settings
+            .service_info_auth_token
+            .map(|s| format!("Bearer {s}")),
         admin_auth_token: settings.admin_auth_token.map(|s| format!("Bearer {s}")),
     });
     let ud_si = user_data.clone();

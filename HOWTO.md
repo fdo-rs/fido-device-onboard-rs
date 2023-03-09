@@ -469,8 +469,8 @@ service_info:
 
 Where:
 - `bind`: IP address and port that the Service Info API Server will take.
-- `service_info_auth_token`: Authorization token, `None` if no authentication
-  is needed.
+- `service_info_auth_token`: [OPTIONAL] Authorization token (default no authentication
+   is needed).
 - `admin_auth_token`: [OPTIONAL] Admin's authorization token.
 - `device_specific_store_driver`: path to a directory that will hold
   device-specific info.
