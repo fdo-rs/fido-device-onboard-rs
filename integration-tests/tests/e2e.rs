@@ -163,7 +163,7 @@ where
                 Ok(cfg.prepare_config_file(None, |cfg| {
                     cfg.insert("diun_key_type", diun_key_type);
                     cfg.insert("rendezvous_port", &rendezvous_server.server_port().unwrap());
-                    cfg.insert("serial_number_format", "SerialNumber");
+                    cfg.insert("serial_number_format", "StructuredDeviceInfo");
                     Ok(())
                 })?)
             },
@@ -184,7 +184,7 @@ where
             Some(&mfg_server),
             |cfg| {
                 cfg.env("DEVICE_CREDENTIAL_FILENAME", "devicecredential.dc")
-                    .env("MANUFACTURING_INFO", "testdevice")
+                   // .env("MANUFACTURING_INFO", "testdevice")
                     .env(&verification_key, &verification_value);
                 Ok(())
             },

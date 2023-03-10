@@ -345,7 +345,7 @@ async fn get_mfg_info(mfg_string_type: MfgStringType) -> Result<CborSimpleType> 
                     }
                     if non_zero_mac {
                         write!(serial_mac, "IFACE_{interface}={mac};").unwrap();
-                        log::debug!("MAC address {serial_mac} of interface {interface} ");
+                        log::debug!("MAC address {serial_mac} of interface {interface}");
                     }
                 }
             }
@@ -354,8 +354,8 @@ async fn get_mfg_info(mfg_string_type: MfgStringType) -> Result<CborSimpleType> 
                 Ok(CborSimpleType::Text(serial_mac))
             } else {
                 serial_mac = serial_dmi + ";" + &serial_mac;
-                log::info!( "Serial number of the device is a ';' separated string of the serial number from the DMI and
-                 the MAC address  {serial_mac} ");
+                log::info!("Serial number of the device is a ';' separated string of the serial number from the DMI and
+                 the MAC address {serial_mac}");
                 Ok(CborSimpleType::Text(serial_mac))
             }
         }
