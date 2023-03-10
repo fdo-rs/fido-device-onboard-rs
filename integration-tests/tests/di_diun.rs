@@ -35,7 +35,7 @@ async fn test_device_credentials_already_active() -> Result<()> {
             Some(&mfg_server),
             |cfg| {
                 cfg.env("DEVICE_CREDENTIAL_FILENAME", "devicecredential.dc")
-                    .env("MANUFACTURING_INFO", "testdevice")
+                    .env("MANUFACTURING_INFO", "testdevicetestdevicetestdevicetestdevicetestdevicetestdevicetestdevice")
                     .env("DIUN_PUB_KEY_INSECURE", "true");
                 Ok(())
             },
@@ -56,7 +56,7 @@ async fn test_device_credentials_already_active() -> Result<()> {
             Some(&mfg_server),
             |cfg| {
                 cfg.env("DEVICE_CREDENTIAL_FILENAME", "devicecredential.dc")
-                    .env("MANUFACTURING_INFO", "testdevice")
+                    .env("MANUFACTURING_INFO", "testdevicetestdevicetestdevicetestdevicetestdevicetestdevicetestdevice")
                     .env("DEVICE_CREDENTIAL", dc_path)
                     .env("DIUN_PUB_KEY_INSECURE", "true");
                 Ok(())

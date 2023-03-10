@@ -184,7 +184,7 @@ where
             Some(&mfg_server),
             |cfg| {
                 cfg.env("DEVICE_CREDENTIAL_FILENAME", "devicecredential.dc")
-                    .env("MANUFACTURING_INFO", "testdevice")
+                    .env("MANUFACTURING_INFO", "testdevicetestdevicetestdevicetestdevicetestdevicetestdevicetestdevice")
                     .env(&verification_key, &verification_value);
                 Ok(())
             },
