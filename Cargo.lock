@@ -869,11 +869,11 @@ name = "fdo-manufacturing-client"
 version = "0.4.9"
 dependencies = [
  "anyhow",
+ "clap 4.1.14",
  "fdo-data-formats",
  "fdo-http-wrapper",
  "fdo-util",
  "hex",
- "lazy_static",
  "log",
  "openssl",
  "passwd",
