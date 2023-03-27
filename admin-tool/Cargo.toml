@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 anyhow = "1"
 config = "0.13.3"
-openssl = "0.10.45"
+openssl = "0.10.48"
 log = "0.4"
 time = "0.3"
 clap = { version = "4.1", features = ["derive"] }
