@@ -47,11 +47,10 @@ $(RPM_SPECFILE):
 $(RPM_TARBALL):
 	mkdir -p $(CURDIR)/rpmbuild/SOURCES
 	git archive --prefix=fido-device-onboard-rs-$(COMMIT)/ --format=tar.gz HEAD > $(RPM_TARBALL)
+	cp ./make-vendored-tarfile.sh rpmbuild/SOURCES/make-vendored-tarfile.sh
 
 $(VENDOR_TARBALL):
-	mkdir -p $(CURDIR)/rpmbuild/SOURCES
-	cargo vendor target/vendor
-	tar -czf $(VENDOR_TARBALL) -C target vendor
+	./make-vendored-tarfile.sh $(COMMIT) $(VENDOR_TARBALL)
 
 .PHONY: srpm
 srpm: $(RPM_SPECFILE) $(RPM_TARBALL) $(VENDOR_TARBALL)
