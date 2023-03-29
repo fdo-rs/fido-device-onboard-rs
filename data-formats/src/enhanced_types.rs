@@ -214,7 +214,7 @@ impl<T: std::error::Error> From<T> for X509ValidationError {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct X5Bag {
     certs: HashMap<Vec<u8>, X509>,
 }

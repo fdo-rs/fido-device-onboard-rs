@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
-use lazy_static::lazy_static;
+use clap::{Args, Parser, Subcommand};
 use regex::Regex;
-use std::fmt::Write;
+use std::path::Path;
 use std::{convert::TryFrom, fs};
 use std::{convert::TryInto, env, str::FromStr};
 
@@ -31,7 +31,7 @@ use openssl::{
     sign::Signer,
 };
 
-use fdo_util::device_credential_locations;
+use fdo_util::{device_credential_locations, device_identification};
 use tss_esapi::{
     attributes::ObjectAttributesBuilder,
     interface_types::algorithm::HashingAlgorithm,
@@ -40,6 +40,70 @@ use tss_esapi::{
 };
 
 const DEVICE_CREDENTIAL_FILESYSTEM_PATH: &str = "/etc/device-credentials";
+
+#[derive(Parser, Debug)]
+struct MainArguments {
+    #[clap(subcommand)]
+    command: Option<Commands>,
+    #[clap(flatten)]
+    noplaindi_default: DefaultToEnvVariables,
+}
+
+#[derive(Args, Debug)]
+struct DefaultToEnvVariables {}
+
+#[derive(Subcommand, Debug)]
+#[clap(group = clap::ArgGroup::new("main_commands").multiple(false))]
+enum Commands {
+    /// Simple Device Initialization mode, implies insecure DIUN Public Key Verification Mode
+    PlainDI(PlainDIArgs),
+    /// Allows to choose a DIUN Public Key Verification Mode for Device Initialization
+    NoPlainDI(NoPlainDIArgs),
+}
+
+#[derive(Args, Debug)]
+struct PlainDIArgs {
+    /// URL of the manufacturing server
+    #[clap(long, short)]
+    manufacturing_server_url: String,
+
+    /// Device Identification string type.
+    /// Available values: SerialNumber or MACAddress (requires iface selection with --iface).
+    #[clap(long)]
+    mfg_string_type: MfgStringType,
+    /// iface name for the MACAddress Device Identification string type.
+    #[clap(long)]
+    iface: Option<String>,
+
+    /// Key reference.
+    /// Available values: filesystem, tpm.
+    #[clap(long)]
+    key_ref: String,
+}
+
+#[derive(Args, Debug)]
+#[clap(group = clap::ArgGroup::new("diun_pub_key").multiple(false).required(true))]
+struct NoPlainDIArgs {
+    /// URL of the manufacturing server.
+    #[arg(long, short)]
+    manufacturing_server_url: String,
+
+    /// X509 certificate-based DIUN Public Key Verification Mode.
+    /// Requires path to certificate.
+    #[clap(long, group = "diun_pub_key", value_name = "PATH")]
+    rootcerts: Option<String>,
+    /// Hash-based DIUN Public Key Verification Mode.
+    /// Available values: sha256, sha384.
+    #[clap(long, group = "diun_pub_key", value_name = "HASH_TYPE")]
+    hash: Option<String>,
+    /// Insecure DIUN Public Key Verification Mode.
+    #[clap(long, group = "diun_pub_key")]
+    insecure: bool,
+
+    /// iface name for the MACAddress Device Identification string type.
+    #[clap(long)]
+    iface: Option<String>,
+}
 
 async fn perform_diun(
     client: &mut ServiceClient,
@@ -151,8 +215,9 @@ async fn perform_di(
     client: &mut ServiceClient,
     mut key_reference: KeyReference,
     mfg_string_type: MfgStringType,
+    iface: Option<String>,
 ) -> Result<()> {
-    let mfg_info = get_mfg_info(mfg_string_type)
+    let mfg_info = get_mfg_info(mfg_string_type, iface)
         .await
         .context("Error building MFG string")?;
     let set_credentials: RequestResult<messages::v11::di::SetCredentials> = client
@@ -187,7 +252,7 @@ async fn perform_di(
     Ok(())
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum DiunPublicKeyVerificationMode {
     Hash(Hash),
     Certs(X5Bag),
@@ -197,11 +262,7 @@ enum DiunPublicKeyVerificationMode {
 impl DiunPublicKeyVerificationMode {
     fn get_from_env() -> Result<Self> {
         if let Ok(rootcerts_path) = env::var("DIUN_PUB_KEY_ROOTCERTS") {
-            let certs = fs::read(rootcerts_path).context("Error reading DIUN_PUB_KEY_ROOTCERTS")?;
-            let certs = openssl::x509::X509::stack_from_pem(&certs)
-                .context("Error parsing DIUN_PUB_KEY_ROOTCERTS as X509 stack")?;
-            let bag =
-                X5Bag::with_certs(certs).context("Error building DIUN_PUB_KEY_ROOTCERTS bag")?;
+            let bag = get_X5Bag_from_rootcerts_path(rootcerts_path)?;
             Ok(DiunPublicKeyVerificationMode::Certs(bag))
         } else if let Ok(hash) = env::var("DIUN_PUB_KEY_HASH") {
             Ok(DiunPublicKeyVerificationMode::Hash(
@@ -213,6 +274,14 @@ impl DiunPublicKeyVerificationMode {
             bail!("No DIUN root key verification variables set")
         }
     }
+}
+
+#[allow(non_snake_case)]
+fn get_X5Bag_from_rootcerts_path(rootcerts_path: String) -> Result<X5Bag> {
+    let certs = fs::read(rootcerts_path).context("Error reading DIUN_PUB_KEY_ROOTCERTS")?;
+    let certs = openssl::x509::X509::stack_from_pem(&certs)
+        .context("Error parsing DIUN_PUB_KEY_ROOTCERTS as X509 stack")?;
+    X5Bag::with_certs(certs).context("Error building DIUN_PUB_KEY_ROOTCERTS bag")
 }
 
 #[tokio::main]
@@ -240,130 +309,158 @@ async fn main() -> Result<()> {
         }
     };
 
-    let url =
-        env::var("MANUFACTURING_SERVER_URL").context("Please provide MANUFACTURING_SERVER_URL")?;
-    let use_plain_di: bool = match env::var("USE_PLAIN_DI") {
-        Ok(val) => val == "true",
-        Err(_) => false,
-    };
+    let url: String;
+    let diun_pub_key_verification: DiunPublicKeyVerificationMode;
+    let mfg_string_type: MfgStringType;
+    let keyref: KeyReference;
+    let mut iface: Option<String> = None;
+    let mut client: ServiceClient;
 
-    let diun_pub_key_verification = if use_plain_di {
-        DiunPublicKeyVerificationMode::Insecure
+    let args: MainArguments = clap::Parser::parse();
+    if let Some(command) = args.command {
+        log::debug!("Handling commands");
+        match command {
+            Commands::PlainDI(args) => {
+                url = args.manufacturing_server_url;
+
+                mfg_string_type = args.mfg_string_type;
+                // ensure that we are given the iface if MACAddress is selected
+                if mfg_string_type == MfgStringType::MACAddress && args.iface.is_none() {
+                    bail!("When using MACAddress as the MfgStringType --iface is required");
+                }
+                iface = args.iface;
+
+                keyref = KeyReference::str_key(args.key_ref)
+                    .await
+                    .context("Error determining key for DI")?;
+                client = ServiceClient::new(ProtocolVersion::Version1_1, &url);
+            }
+            Commands::NoPlainDI(args) => {
+                url = args.manufacturing_server_url;
+
+                if args.rootcerts.is_some() {
+                    let bag = get_X5Bag_from_rootcerts_path(args.rootcerts.unwrap())?;
+                    diun_pub_key_verification = DiunPublicKeyVerificationMode::Certs(bag);
+                } else if args.hash.is_some() {
+                    let input_hash = args.hash.unwrap();
+                    let hash = Hash::from_str(&input_hash)
+                        .context(format!("Error parsing '{input_hash}' as hash"))?;
+                    diun_pub_key_verification = DiunPublicKeyVerificationMode::Hash(hash);
+                } else if args.insecure {
+                    diun_pub_key_verification = DiunPublicKeyVerificationMode::Insecure;
+                } else {
+                    bail!("No DIUN root key verification methods set");
+                }
+                iface = args.iface;
+
+                log::debug!("Performing DIUN");
+                client = ServiceClient::new(ProtocolVersion::Version1_1, &url);
+                (keyref, mfg_string_type) = perform_diun(&mut client, diun_pub_key_verification)
+                    .await
+                    .context("Error performing DIUN")?;
+                if mfg_string_type == MfgStringType::MACAddress && iface.is_none() {
+                    bail!("Server has requested mac_address as mfg_string_type and there is no iface set");
+                }
+            }
+        }
     } else {
-        DiunPublicKeyVerificationMode::get_from_env()
-            .context("Error determining how to verify DIUN public key")?
-    };
+        log::debug!("Reading env variables by default");
 
-    log::info!(
-        "Attempting manufacturing, url: {}, plain DI: {}, DIUN public key verification: {:?}",
-        url,
-        use_plain_di,
-        diun_pub_key_verification
-    );
+        url = env::var("MANUFACTURING_SERVER_URL")
+            .context("Please provide MANUFACTURING_SERVER_URL")?;
+        client = ServiceClient::new(ProtocolVersion::Version1_1, &url);
 
-    let mut client = ServiceClient::new(ProtocolVersion::Version1_1, &url);
+        let use_plain_di = match env::var("USE_PLAIN_DI") {
+            Ok(val) => val == "true",
+            Err(_) => false,
+        };
 
-    let (keyref, mfg_string_type) = if use_plain_di {
-        let mfg_string_type =
-            env::var("DI_MFG_STRING_TYPE").unwrap_or_else(|_| String::from("serialnumber"));
-        let mfg_string_type = MfgStringType::from_str(&mfg_string_type).with_context(|| {
-            format!("Unsupported MFG string type {} requested", &mfg_string_type)
-        })?;
+        diun_pub_key_verification = if use_plain_di {
+            DiunPublicKeyVerificationMode::Insecure
+        } else {
+            DiunPublicKeyVerificationMode::get_from_env()
+                .context("Error determining how to verify DIUN public key")?
+        };
+        if use_plain_di {
+            let env_mfg_string_type =
+                env::var("DI_MFG_STRING_TYPE").unwrap_or_else(|_| String::from("serialnumber"));
+            mfg_string_type = MfgStringType::from_str(&env_mfg_string_type).with_context(|| {
+                format!("Unsupported MFG string type {env_mfg_string_type} requested")
+            })?;
+            if mfg_string_type == MfgStringType::MACAddress {
+                iface = Some(env::var("DI_MFG_STRING_TYPE_MAC_IFACE").context(
+                    "Please provide an iface for the MAC address with DI_MFG_STRING_TYPE_MAC_IFACE",
+                )?);
+            }
+            keyref = KeyReference::env_key()
+                .await
+                .context("Error determining key for DI")?;
+        } else {
+            // For !use_plain_di we also need to get the iface if given it to us
+            // since the mfg_string_type will be determined in the manufacturing server
+            // and it might request MACAddress as the mfg_string_type. What it cannot do
+            // is select the iface for the client, so we must set it ahead of time.
+            // Thereby, we are just getting this value if provided, hiding errors.
+            if env::var("DI_MFG_STRING_TYPE_MAC_IFACE").is_ok() {
+                iface = Some(env::var("DI_MFG_STRING_TYPE_MAC_IFACE").unwrap());
+            }
+            (keyref, mfg_string_type) = perform_diun(&mut client, diun_pub_key_verification)
+                .await
+                .context("Error performing DIUN")?;
+            // once diun has been performed we can error ahead of time if the
+            // server has requested MACaddress but we haven't set an iface.
+            if mfg_string_type == MfgStringType::MACAddress && iface.is_none() {
+                bail!("Server has requested mac_address as mfg_string_type and there is no iface (DI_MFG_STRING_TYPE_MAC_IFACE) set");
+            }
+        }
+    }
 
-        let keyref = KeyReference::env_key()
-            .await
-            .context("Error determining key for DI")?;
-
-        (keyref, mfg_string_type)
-    } else {
-        log::debug!("Performing DIUN");
-        perform_diun(&mut client, diun_pub_key_verification)
-            .await
-            .context("Error performing DIUN")?
-    };
     log::debug!(
         "Performing Device Initialization, with key reference {:?} and MFG String Type {:?}",
         &keyref,
         &mfg_string_type
     );
 
-    perform_di(&mut client, keyref, mfg_string_type)
+    perform_di(&mut client, keyref, mfg_string_type, iface)
         .await
         .context("Error performing DI")
 }
 
-async fn get_mfg_info(mfg_string_type: MfgStringType) -> Result<CborSimpleType> {
+async fn get_mfg_info(
+    mfg_string_type: MfgStringType,
+    iface: Option<String>,
+) -> Result<CborSimpleType> {
     if let Some(mfg_info) = env::var_os("MANUFACTURING_INFO") {
         return Ok(CborSimpleType::Text(mfg_info.into_string().unwrap()));
     }
-    match mfg_string_type {
+    log::debug!("mfg_string_type '{mfg_string_type:?}' requested");
+    let mfg_iden = match mfg_string_type {
         MfgStringType::SerialNumber => {
-            log::debug!(
-                "mfg_string_type value:{:#?} refers SerialNumber format ",
-                mfg_string_type
-            );
-            let serial_dmi = fs::read_to_string("/sys/devices/virtual/dmi/id/product_serial")
+            fs::read_to_string("/sys/devices/virtual/dmi/id/product_serial")
                 .or_else(|_| fs::read_to_string("/sys/devices/virtual/dmi/id/chassis_serial"))
-                .context("Error determining system serial number")?;
-            Ok(CborSimpleType::Text(serial_dmi))
+                .context("Error determining system serial number")?
         }
-        MfgStringType::StructuredDeviceInfo => {
-            log::debug!(
-                "mfg_string_type value:{:#?} refers StructuredDeviceInfo format ",
-                mfg_string_type
-            );
-            let serial_dmi = fs::read_to_string("/sys/devices/virtual/dmi/id/product_serial")
-                .or_else(|_| fs::read_to_string("/sys/devices/virtual/dmi/id/chassis_serial"))
-                .map(|s| s.trim_end().to_owned())
-                .context("Error determining system serial number")?;
-
-            let path = "/sys/class/net/";
-            let mut serial_mac = String::new();
-
-            for entry in fs::read_dir(path)? {
-                let entry = entry?;
-                let path_mac_addr = entry.path().join("address");
-                let interface = entry.file_name().to_string_lossy().to_string();
-                let mac = fs::read_to_string(path_mac_addr)
-                    .map(|s| s.trim_end().to_owned())
-                    .context("Error reading MAC address")?;
-
-                log::debug!("MAC address read from file /sys/class/net/{interface}/address {mac}");
-
-                lazy_static! {
-                    static ref MAC_REGEX: Regex =
-                        Regex::new(r"^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$").unwrap();
-                }
-                if MAC_REGEX.is_match(&mac) {
-                    let mut non_zero_mac = false;
-                    for byte in mac.split(':') {
-                        let byte = u8::from_str_radix(byte, 16)?;
-                        if byte != 0 {
-                            non_zero_mac = true;
-                            break;
-                        }
-                    }
-                    if non_zero_mac {
-                        write!(serial_mac, "IFACE_{interface}={mac};").unwrap();
-                        log::debug!("MAC address {serial_mac} of interface {interface} ");
-                    }
-                }
+        MfgStringType::MACAddress => {
+            let given_iface = iface.context("No iface provided")?;
+            if !Path::new(&format!("/sys/class/net/{given_iface}")).exists() {
+                bail!(format!("The iface '{given_iface}' is not available"));
             }
-            if serial_dmi == "None" || serial_dmi.is_empty() {
-                log::info!(" Serial number of the device is just MAC address: {serial_mac} ");
-                Ok(CborSimpleType::Text(serial_mac))
-            } else {
-                serial_mac = serial_dmi + ";" + &serial_mac;
-                log::info!( "Serial number of the device is a ';' separated string of the serial number from the DMI and
-                 the MAC address  {serial_mac} ");
-                Ok(CborSimpleType::Text(serial_mac))
+            let mac = fs::read_to_string(format!("/sys/class/net/{given_iface}/address"))
+                .context("Error reading MAC address")?;
+            let mac = mac.as_str().trim();
+            let re = Regex::new(r"^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$")?;
+            if !re.is_match(mac) || mac.eq("00:00:00:00:00:00") {
+                bail!(format!(
+                    "Invalid MAC address '{mac}' for iface '{given_iface}'"
+                ));
             }
+            mac.to_string()
         }
-        _ => bail!(
-            "Unsupported MFG string type {:?} requested",
-            mfg_string_type
-        ),
-    }
+        _ => bail!("Unsupported MFG string type {mfg_string_type:?} requested"),
+    };
+    // check that the identifier is sound
+    device_identification::check_device_identifier(&mfg_iden)?;
+    Ok(CborSimpleType::Text(mfg_iden))
 }
 
 #[derive(Debug)]
@@ -608,7 +705,15 @@ impl KeyReference {
 
         match key_storage_type {
             KeyStorageType::FileSystem => KeyReference::env_key_filesystem().await,
-            _ => bail!("Unsupported key storage type {:?}", key_storage_type),
+            _ => bail!(format!("Unsupported key storage type {key_storage_type:?}")),
+        }
+    }
+
+    async fn str_key(key: String) -> Result<Self> {
+        let key_storage_type = KeyStorageType::from_str(&key).context("Invalid sroage type")?;
+        match key_storage_type {
+            KeyStorageType::FileSystem => KeyReference::env_key_filesystem().await,
+            _ => bail!(format!("Unsupported key storage type {key_storage_type:?}")),
         }
     }
 

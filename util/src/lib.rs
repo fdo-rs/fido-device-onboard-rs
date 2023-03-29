@@ -1,4 +1,5 @@
 pub mod device_credential_locations;
+pub mod device_identification;
 pub mod servers;
 
 pub fn maybe_print_version(
