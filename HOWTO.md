@@ -14,12 +14,14 @@
   - `owner_onboarding_server.yml`
   - `rendezvous_server.yml`
   - `serviceinfo_api_server.yml`
-- How to run the servers
+- How to run the servers:
   - Manufacturing Server
   - Owner Onboarding Server
   - Rendezvous Server
   - Service Info API Server
-- How to run the Client
+- How to run the clients:
+  - Linuxapp client
+  - Manufacturing client
 
 ## Pre-requisites
 
@@ -281,7 +283,10 @@ Where:
 - `protocols`: configures the protocol settings:
   - `plain_di`: [OPTIONAL] boolean.
   - `diun`: [OPTIONAL]
-    - `mfg_string_type`: device serial number
+    - `mfg_string_type`: sets which type of identification is expected to be
+    used in the devices. Possible values: `SerialNumer` or `MACAddress`
+    (up-to-date list of options
+    [here](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/data-formats/src/constants/mod.rs#L427)). 
     - `key_type`: SECP256R1 or SECP384R1 (up-to-date list of options
       [here](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/util/src/servers/configuration/manufacturing_server.rs#L71). 
     - `allowed_key_storage_types`: list of allowed storage types. Possible
@@ -577,14 +582,16 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
    in
    [examples/systemd](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/systemd/fdo-serviceinfo-api-server.service).
 
-## How to run the Client
+## How to run the clients
+
+### Linuxapp client
 
 1. Initialize the Device, see [How to generate an Ownership Voucher (OV) and
     Credential for a Device (Device
     Initialization)](#how-to-generate-an-ownership-voucher-ov-and-credential-for-a-device-device-initialization).
 
 2. The client will look for the Device Credential created during the previous
-  step. It will look for in on
+  step. It will look for it on
   `/sys/firmware/qemu_fw_cfg/by_name/opt/device_onboarding/devicecredential/raw`,
   in the location specified by the `DEVICE_CREDENTIAL` environment variable, or
   in `/etc/device-credentials`, in that order.
@@ -594,3 +601,136 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
     ```
 
 3. Run the client: `fdo-client-linuxappp`
+
+### Manufacturing client
+
+You can run the `fdo-manufacturing-client` using the [provided
+CLI mode](#cli-mode) or setting up [environment
+variables](#environment-variables-mode).
+
+For both cases, the Manufacturing client will only run if no Device Credentials
+are found in any of the default locations:
+`/sys/firmware/qemu_fw_cfg/by_name/opt/device_onboarding/devicecredential/raw`,
+a location previously set up by the `DEVICE_CREDENTIAL` environment variable,
+or `/etc/device-credentials`.
+
+#### Environment variables mode
+
+Please note that the environment variables shown in this section and
+subsections are *required* unless said otherwise. 
+
+* `MANUFACTURING_SERVER_URL`: URL of the manufacturing server.
+* `USE_PLAIN_DI`: [optional] sets the Device Identification mode to `plain-di`
+  or `no-plain-di`, by default `no-plain-di`.
+  
+The Manufacturing client will then operate in one of these two different modes:
+`plain-di` or `no-plain-di`, which require a different set of environment
+variables: 
+
+##### `no-plain-di`
+
+With this mode the Manufacturing server will request a specific Device
+Identification method to the device.
+
+1. Select the DIUN Public Key Verification Mode using *one* of the following
+   environment variables and configuring it with the required value:
+   
+   - `DIUN_PUB_KEY_ROOTCERTS`: X509 certificate-based DIUN Public Key
+     Verification Mode. Requires a path to the certificate.
+   - `DIUN_PUB_KEY_HASH`: hash-based DIUN Public Key Verification
+     Mode. Available options: `sha256` or `sha384`.
+   - `DIUN_PUB_KEY_INSECURE`: (boolean) sets Public Key Verification Mode to
+     `insecure`.
+   
+   If more than one environment variable is set the first one in the following
+   order will take precedence: `DIUN_PUB_KEY_ROOTCERTS`, `DIUN_PUB_KEY_HASH`
+   and `DIUN_PUB_KEY_INSECURE`.
+   
+2. If the Manufacturing server is specifically configured with a
+   `mfg_string_type` set to `MACAddress` in its `diun` configuration section it
+   will ask the device to identify itself with a MAC Address, in order to do so
+   the device must set `DI_MFG_STRING_TYPE_MAC_IFACE` [optional] to a valid
+   interface.
+   
+   Please note that this `DI_MFG_STRING_TYPE_MAC_IFACE` environment variable is
+   *optional* and will only be read if the server requests a `MACAddress`
+   identification mode, but if the Manufacturing server is configured as
+   described above the Device Initialize protocol will result in an early error
+   if this environment variable is not set.
+   
+   In such case, the value `DI_MFG_STRING_TYPE_MAC_IFACE` must be set to any
+   interface name of the device that does not result in `00:00:00:00:00:00` as
+   the specified MAC Address.
+   
+3. Run the client: `fdo-manufacturing-client`.
+
+##### `plain-di`
+
+The Device will have to configure all the required options for its
+identification with the Manufacturing server.
+
+1. `DI_MFG_STRING_TYPE`: [optional] selects the Device Identification string
+   type; by default `serial_number`, other possible value is `mac_address`.
+   
+   If `mac_address` is selected as `DI_MFG_STRING_TYPE` then the user *must*
+   specify a valid interface to read the MAC Address from with
+   `DI_MFG_STRING_TYPE_MAC_IFACE`. Valid interfaces are those which do not
+   result in a `00:00:00:00:00:00` MAC Address.
+   
+2. `DI_KEY_STORAGE_TYPE`: selects the storage type for the Device
+   Identification keys, valid values: `filesystem` (`tpm` not yet
+   implemented).
+   
+3. `DI_SIGN_KEY_PATH`:
+
+4. `DI_HMAC_KEY_PATH`:
+
+5. `DEVICE_CREDENTIAL_FILENAME`: [optional] filepath specified by the user to
+   store the device credentials, by default `/etc/device-credentials`.
+
+6. Run the client: `fdo-manufacturing-client`.
+
+#### CLI mode
+
+The command-line interface also operates on `no-plain-di` and `plain-di` mode:
+
+##### `no-plain-di`
+
+```
+Usage: fdo-manufacturing-client no-plain-di [OPTIONS] --manufacturing-server-url <MANUFACTURING_SERVER_URL> <--rootcerts <PATH>|--hash <HASH_TYPE>|--insecure>
+
+Options:
+  -m, --manufacturing-server-url <MANUFACTURING_SERVER_URL>
+          URL of the manufacturing server
+      --rootcerts <PATH>
+          X509 certificate-based DIUN Public Key Verification Mode. Requires path to certificate
+      --hash <HASH_TYPE>
+          Hash-based DIUN Public Key Verification Mode. Available values: sha256, sha384
+      --insecure
+          Insecure DIUN Public Key Verification Mode
+      --iface <IFACE>
+          iface name for the MACAddress Device Identification string type
+  -h, --help
+          Print help
+```
+
+##### `plain-di`
+
+```
+Usage: fdo-manufacturing-client plain-di [OPTIONS] --manufacturing-server-url <MANUFACTURING_SERVER_URL> --mfg-string-type <MFG_STRING_TYPE> --key-ref <KEY_REF>
+
+Options:
+  -m, --manufacturing-server-url <MANUFACTURING_SERVER_URL>
+          URL of the manufacturing server
+      --mfg-string-type <MFG_STRING_TYPE>
+          Device Identification string type. Available values: SerialNumber or MACAddress (requires iface selection with --iface)
+      --iface <IFACE>
+          iface name for the MACAddress Device Identification string type
+      --key-ref <KEY_REF>
+          Key reference. Available values: filesystem, tpm
+  -h, --help
+          Print help
+```
+
+Please note that in this mode there are some environment variables that are
+still required to be set by the user (`DI_SIGN_KEY_PATH`, `DI_HMAC_KEY_PATH`).
