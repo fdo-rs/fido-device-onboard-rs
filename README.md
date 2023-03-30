@@ -31,3 +31,7 @@ Untrusted Networks (DIUN) protocols.
 - `fdo-store`: Implementation of different backend datastores for services.
 - `fdo-util`: Utilities/helpers for server (and, in the future client) crates.
 - `fdo-iot-stream-message`: Implements the stream message creation/parsing of StreamMsg. Currently not implemented.
+
+## RPMs and containers
+
+This project currently releases RPMs and containers tracking the `main` branch. RPMs are available in [COPR](https://copr.fedorainfracloud.org/coprs/g/fedora-iot/fedora-iot/). Containers are available on [Quay.io](https://quay.io/organization/fido-fdo).
