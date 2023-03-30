@@ -26,6 +26,7 @@ actions:
   - bash -c "ls -1 ./fido-device-onboard-rs-*.tar.gz"
   fix-spec-file:
   - sed -i fido-device-onboard.spec -e "s/with_packit 0/with_packit 1/"
+  - bash -c "sed -i -r \"s/Release:(\s*)\S+/Release:\1${PACKIT_RPMSPEC_RELEASE}%{?dist}/\" fido-device-onboard.spec"
 
 jobs:
 - job: copr_build
