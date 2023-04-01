@@ -1,8 +1,7 @@
-use std::convert::TryInto;
-
-use thiserror::Error;
-
+use byteorder::{BigEndian, ByteOrder};
 use paste::paste;
+use std::convert::TryInto;
+use thiserror::Error;
 
 use crate::{
     constants::HashType,
@@ -147,12 +146,23 @@ impl MajorType {
 }
 
 fn encode_item_start(major_type: MajorType, val: u64) -> Vec<u8> {
-    // We currently only support arrays that fit in a single byte
-    // TODO: support arrays that are larger than 24
-    // (This is only a possible problem for ownership voucher entries)
-    assert!(val <= 24);
-
-    vec![((major_type as u8) << 5) | ((val as u8) & MASK_VAL)]
+    if val <= 23 {
+        vec![((major_type as u8) << 5) | ((val as u8) & MASK_VAL)]
+    } else if val <= u8::MAX as u64 {
+        vec![((major_type as u8) << 5) | 24, val as u8]
+    } else if val <= u16::MAX as u64 {
+        let mut buf = vec![((major_type as u8) << 5) | 25, 0, 0];
+        BigEndian::write_u16(&mut buf[1..], val as u16);
+        buf
+    } else if val <= u32::MAX as u64 {
+        let mut buf = vec![((major_type as u8) << 5) | 26, 0, 0, 0];
+        BigEndian::write_u32(&mut buf[1..], val as u32);
+        buf
+    } else {
+        let mut buf = vec![((major_type as u8) << 5) | 27, 0, 0, 0, 0];
+        BigEndian::write_u64(&mut buf[1..], val);
+        buf
+    }
 }
 
 fn read_len<R>(mut reader: R, header: u8) -> Result<(u64, Vec<u8>), ArrayParseError>
@@ -754,6 +764,17 @@ mod test {
         assert_eq!(parsed.get::<u8>(0).unwrap(), 1);
         assert_eq!(parsed.get::<String>(1).unwrap(), "test");
         assert_eq!(parsed.get::<u8>(2).unwrap(), 3);
+        let serialized = parsed.serialize_data().expect("Failed to serialize");
+        assert_eq!(serialized, data);
+    }
+
+    #[test]
+    fn test_value_with_large_value() {
+        let data = vec![0xd8, 0x18, 0x81, 0x01];
+        let parsed: ParsedArray<super::ParsedArraySize1> =
+            ParsedArray::deserialize_data(&data).expect("Failed to parse");
+        assert_eq!(parsed.raw_values(), vec![vec![0x01]]);
+        assert_eq!(parsed.tag(), Some(24));
         let serialized = parsed.serialize_data().expect("Failed to serialize");
         assert_eq!(serialized, data);
     }

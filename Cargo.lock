@@ -819,6 +819,7 @@ name = "fdo-data-formats"
 version = "0.4.9"
 dependencies = [
  "aws-nitro-enclaves-cose",
+ "byteorder",
  "ciborium",
  "hex",
  "http",
