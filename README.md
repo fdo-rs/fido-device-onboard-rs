@@ -31,6 +31,7 @@ Untrusted Networks (DIUN) protocols.
 - `fdo-store`: Implementation of different backend datastores for services.
 - `fdo-util`: Utilities/helpers for server (and, in the future client) crates.
 - `fdo-iot-stream-message`: Implements the stream message creation/parsing of StreamMsg. Currently not implemented.
+- `fdo-serviceinfo-api-server`: Service Info API Server implementation. The specification is written in [serviceinfo_api.md](./docs/specs/serviceinfo_api.md).
 
 ## RPMs and containers
 
