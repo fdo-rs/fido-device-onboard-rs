@@ -1,0 +1,9 @@
+initial_user:
+  username: username_per_device
+  sshkeys:
+  - "testkeyperdevice"
+files: null
+commands: null
+diskencryption_clevis: null
+additional_serviceinfo: null
+after_onboarding_reboot: false
