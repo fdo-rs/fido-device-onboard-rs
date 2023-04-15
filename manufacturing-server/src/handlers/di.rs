@@ -48,6 +48,17 @@ where
 const OV_HEADER_SES_KEY: &str = "mfg_di_ov_header";
 const DEVICE_CERTIFICATE_SES_KEY: &str = "mfg_di_device_certificate";
 
+// TODO: support reading public key from filesystem.
+// This is just a data to demonstrate how plain-di works.
+const CERT_PEM: &str = "-----BEGIN CERTIFICATE-----
+MIIBCTCBsaADAgECAgEqMAoGCCqGSM49BAMDMA8xDTALBgNVBAMMBGRpdW4wHhcN
+MjMwNDE2MTEwMDE4WhcNMjMwNDE3MTEwMDE4WjAPMQ0wCwYDVQQDDARkaXVuMFkw
+EwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEwz5NhgAuQ61yTAg03Hn/jy30WISHHB3x
+H8QFdxTL1hAXMv9SzOYmI0+SF/sEhHV0xXSGwL/hu/bGoaV94nYR6jAKBggqhkjO
+PQQDAwNHADBEAiBFRUXXCgz09oSP60OAtbTRzYrozngvNLxylHQxR96jZQIgB7sK
+eDsQkt+qasxancJPj9MsPv0JUnIKizXqLAYP0SM=
+-----END CERTIFICATE-----";
+
 pub(crate) async fn app_start(
     user_data: ManufacturingServiceUDT,
     mut ses_with_store: RequestInformation,
@@ -76,12 +87,32 @@ pub(crate) async fn app_start(
         Some(key) => Some(key),
         None => match &user_data.public_key_store {
             None => None,
-            Some(store) => store
+            Some(_store) => {
+                // Use temporary public key data.
+                let pem_data = CERT_PEM.as_bytes();
+                let x509 = X509::from_pem(&pem_data)
+                    .map_err(Error::from_error::<messages::v11::di::AppStart, _>)?;
+                let pkey = x509
+                    .public_key()
+                    .map_err(Error::from_error::<messages::v11::di::AppStart, _>)?;
+                Some(
+                    pkey.public_key_to_der()
+                        .map_err(Error::from_error::<messages::v11::di::AppStart, _>)?,
+                )
+                // NOTE:
+                // When plain-di is enabled, the certificate should be prepared manually.
+                // It also means cert is a usual pem data.
+                // However, store.load_data() deserialize the certificate, so it cannot use for plain-di.
+                /*
+                store
                 .load_data(&mfg_info.to_string())
                 .await
                 .map_err(Error::from_error::<messages::v11::di::AppStart, _>)?,
+                 */
+            }
         },
     };
+
     let public_key = match public_key {
         None => {
             return Err(Error::new(
