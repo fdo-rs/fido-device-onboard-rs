@@ -66,7 +66,7 @@ fn test_multiple_vouchers_raw() -> Result<()> {
             count += 1;
 
             let pemblock = pem::parse(&voucher).context("Error parsing OV PEM")?;
-            buffer.extend_from_slice(&pemblock.contents);
+            buffer.extend_from_slice(pemblock.contents());
 
             Ok(buffer)
         })?;

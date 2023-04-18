@@ -476,22 +476,6 @@ where
         self.contents[n] = value.serialize_data()?;
         Ok(())
     }
-
-    pub fn get_hash_two_items(
-        &self,
-        a: usize,
-        b: usize,
-        hash_type: HashType,
-    ) -> Result<Hash, Error> {
-        check_bounds!(a);
-        check_bounds!(b);
-
-        let mut data = Vec::with_capacity(self.contents[a].len() + self.contents[b].len());
-        data.extend_from_slice(&self.contents[a]);
-        data.extend_from_slice(&self.contents[b]);
-
-        Hash::from_data(hash_type, &data)
-    }
 }
 
 impl<N: ParsedArraySize> ParsedArray<N> {

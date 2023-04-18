@@ -176,20 +176,20 @@ impl OwnershipVoucher {
 
     pub fn from_pem(data: &[u8]) -> Result<Self> {
         let parsed = pem::parse(data)?;
-        if parsed.tag != VOUCHER_PEM_TAG {
-            return Err(Error::InvalidPemTag(parsed.tag));
+        if parsed.tag() != VOUCHER_PEM_TAG {
+            return Err(Error::InvalidPemTag(parsed.tag().to_string()));
         }
-        Self::deserialize_data(&parsed.contents)
+        Self::deserialize_data(parsed.contents())
     }
 
     pub fn many_from_pem(data: &[u8]) -> Result<Vec<Self>> {
         pem::parse_many(data)?
             .into_iter()
             .map(|parsed| {
-                if parsed.tag == VOUCHER_PEM_TAG {
-                    Self::deserialize_from_reader(&*parsed.contents)
+                if parsed.tag() == VOUCHER_PEM_TAG {
+                    Self::deserialize_from_reader(parsed.contents())
                 } else {
-                    Err(Error::InvalidPemTag(parsed.tag))
+                    Err(Error::InvalidPemTag(parsed.tag().to_string()))
                 }
             })
             .collect()
@@ -204,10 +204,7 @@ impl OwnershipVoucher {
     }
 
     pub fn to_pem(&self) -> Result<String> {
-        let block = pem::Pem {
-            tag: VOUCHER_PEM_TAG.to_string(),
-            contents: self.serialize_data()?,
-        };
+        let block = pem::Pem::new(VOUCHER_PEM_TAG.to_string(), self.serialize_data()?);
         Ok(pem::encode(&block))
     }
 

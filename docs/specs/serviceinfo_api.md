@@ -24,7 +24,7 @@ Requests and responses for the Management API use JSON encoding, instead of the 
 
 #### Authentication
 
-For this protocol, the FDO Owner Onboarding Server will authenticate to the server of this API, via any of the authentication methods defined in the [OV Management API specification](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/specs/ov_management_api.md#authentication).
+For this protocol, the FDO Owner Onboarding Server will authenticate to the server of this API, via any of the authentication methods defined in the [OV Management API specification](./ov_management_api.md#authentication).
 
 ### Endpoint
 

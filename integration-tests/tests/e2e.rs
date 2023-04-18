@@ -53,8 +53,12 @@ async fn test_e2e() -> Result<()> {
         ),
     ];
     let mut diun_key_types = vec!["FileSystem"];
-    if std::fs::metadata("/dev/tpm0").is_ok() {
+    // Verify if the file exists and has read permission.
+    if std::fs::File::open("/dev/tpm0").is_ok() {
+        env::set_var("TEST_TCTI", "device:/dev/tpm0");
         diun_key_types.push("Tpm");
+    } else {
+        println!("skipping test with TPM as /dev/tpm0 does not exist or no read permission")
     }
 
     let mut failed = Vec::new();
