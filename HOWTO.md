@@ -48,28 +48,24 @@ Use `fdo-admin-tool generate-key-and-cert` to generate the required keys for
 `diun`, `manufacturer`, `device-ca` or `owner`. 
 
 ```bash
-USAGE:
-    fdo-admin-tool generate-key-and-cert [OPTIONS] <SUBJECT>
+Usage: fdo-admin-tool generate-key-and-cert [OPTIONS] <SUBJECT>
 
-ARGS:
-    <SUBJECT>    Subject of the key and certificate [possible values: diun, manufacturer,
-                 device-ca, owner]
+Arguments:
+  <SUBJECT>  Subject of the key and certificate [possible values: diun, manufacturer, device-ca, owner]
 
-OPTIONS:
-        --country <COUNTRY>
-            Country name for the certificate [default: US]
-
-        --destination-dir <DESTINATION_DIR>
-            Writes key and certificate to the given path [default: keys]
-
-    -h, --help
-            Print help information
-
-        --organization <ORGANIZATION>
-            Organization name for the certificate [default: Example]
-
-    -V, --version
-            Print version information
+Options:
+      --organization <ORGANIZATION>
+          Organization name for the certificate [default: Example]
+      --country <COUNTRY>
+          Country name for the certificate [default: US]
+      --validity-ends <VALIDITY_ENDS>
+          Number of days the certificate is going to be valid [default: 365]
+      --destination-dir <DESTINATION_DIR>
+          Writes key and certificate to the given path [default: keys]
+  -h, --help
+          Print help
+  -V, --version
+          Print version
 ```
 
 Note in the results that `.der` indicate private keys and `.pem` certificates.
