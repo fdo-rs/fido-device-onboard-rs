@@ -11,7 +11,11 @@ If you want to suggest any changes to the process, please feel free to open a Pu
 
 There are a number of ways in which you can set up development environments for working on FDO (FIDO Device Onboarding). 
 
-##### On Fedora host system
+#### On Fedora host system
+
+Please note that the build requirement are valid for the **latest stable Fedora release**.
+Previous Fedora releases *might* need a different set of dependencies than the ones outlined here.
+
 In order to make a test build of this crate, when using Fedora, you can run:
 
 ``` bash
@@ -24,11 +28,14 @@ cargo build --release
 After making changes, you can use `cargo test` to run the test suite, `cargo fmt` to ensure the code style is adhered to, and `cargo clippy` to check for some common lints against the code.
 
 
-##### On non-Fedora host system
+#### On non-Fedora host system
+
 If your host operating system is other than Fedora, following two ways are suggested for devlopement setup.
 1.VSCODE remote containers
 2.Toolbox 
-###### 1. VSCODE remote container setup:
+
+##### 1. VSCODE remote container setup:
+
 Pre-requisites:
 - Install VSCODE for your host operating system. 
 - Install ‘Remote-containers’ extension OR you can also install the ‘Remote Development’ extension which contains three extensions useful for remote container development.
@@ -46,13 +53,14 @@ cargo build
 cargo test 
 ``` 
 
-###### 2. ToolBox 
+##### 2. ToolBox
+
 ToolBox is an utility for containerized command line environments on Linux. So if you are working on RHEL and instead of creating another vm for fedora ‘ToolBox’ is a good option too. So by creating a container for fedora and then fdo can be built on it. Follow below commands to get build env up & running.
 
 ``` bash
 sudo yum install toolbox
-toolbox create --distro fedora --release f36
-toolbox enter fedora-toolbox-36 
+toolbox create --distro fedora
+toolbox enter fedora-toolbox-{VERSION}
 ```
 
 You can find the name of the container using : 'toolbox list' command.
