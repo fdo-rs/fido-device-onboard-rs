@@ -16,6 +16,6 @@ libc = "0.2"
 cbindgen = "0.24.3"
 
 [dev-dependencies]
-tempfile = "3.4.0"
+tempfile = "3.5.0"
 assert-str = "0.1"
 serial_test = "2.0.0"
