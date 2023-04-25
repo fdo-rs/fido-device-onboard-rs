@@ -1,18 +1,19 @@
+use anyhow::{bail, Context, Result};
 use config::Config;
 use fdo_data_formats::constants::ServiceInfoModule;
+use fdo_store::StoreConfig;
 use glob::glob;
 use serde::{Deserialize, Serialize};
-use std::env;
-use std::path::Path;
-use fdo_store::{StoreConfig};
-use anyhow::{bail, Context, Result};
 use serde_cbor::Value as CborValue;
 use serde_yaml::Value;
+use std::env;
+use std::path::Path;
 use std::result::Result::Ok;
 
 pub mod configuration;
-use crate::servers::configuration::serviceinfo_api_server::{ServiceInfoApiServerSettings, ServiceInfoSettings};
-
+use crate::servers::configuration::serviceinfo_api_server::{
+    ServiceInfoApiServerSettings, ServiceInfoSettings,
+};
 
 // TODO(runcom): find a better home for this as it's shared between
 // owner-onboarding-server and manufacturing-server...
@@ -62,17 +63,14 @@ pub fn settings_for(component: &str) -> Result<config::Config> {
 pub fn settings_per_device(guid: &str) -> Result<ServiceInfoSettings> {
     // here we first check if the requested device has per-device file stored
     // in device_specific_store_driver, if not return error
-    
+
     let settings: ServiceInfoApiServerSettings = settings_for("serviceinfo-api-server")?
-    .try_deserialize()
-    .context("Error parsing configuration")?;
-   
+        .try_deserialize()
+        .context("Error parsing configuration")?;
+
     let path_per_device_store = match settings.device_specific_store_driver {
         StoreConfig::Directory { mut path } => {
-            let file_name = format!(
-                "{}.yml",
-                guid
-            );
+            let file_name = format!("{}.yml", guid);
             path.push(file_name);
             path.to_string_lossy().into_owned()
         }
@@ -97,7 +95,7 @@ pub fn settings_per_device(guid: &str) -> Result<ServiceInfoSettings> {
             .as_ref()
             .map(|user| &user.sshkeys)
     );
-    return Ok(per_device_settings);
+    Ok(per_device_settings)
 }
 
 pub fn format_conf_env(component: &str) -> String {

@@ -778,6 +778,16 @@ impl<'a> TestServerConfigurator<'a> {
             .runner_path(&self.server_number)
             .join(config_file_name);
 
+        let per_device: bool = match env::var("PER_DEVICE_SERVICEINFO") {
+            Ok(val) => val.parse().unwrap_or(false),
+            Err(e) => {
+                eprintln!(
+                    "Error reading environment variable: {} setting to default",
+                    e
+                );
+                false
+            }
+        };
         self.test_context
             .generate_config_file(&output_path, config_file_name, |cfg| {
                 cfg.insert(
@@ -790,10 +800,23 @@ impl<'a> TestServerConfigurator<'a> {
                     "config_dir",
                     &self.test_context.runner_path(&self.server_number),
                 );
-                cfg.insert(
-                    "user",
-                    users::get_current_username().unwrap().to_str().unwrap(),
-                );
+
+                if !per_device {
+                    L.l("per_device_serviceinfo is not set, using default values");
+                    cfg.insert(
+                        "user",
+                        users::get_current_username().unwrap().to_str().unwrap(),
+                    );
+                    cfg.insert("sshkey", "sshkey_default");
+                } else {
+                    L.l("per_device_serviceinfo is set, using device specific values");
+                    cfg.insert(
+                        "user",
+                        users::get_current_username().unwrap().to_str().unwrap(),
+                    );
+                    cfg.insert("sshkey", "sshkey_per_device");
+                }
+
                 // TODO: Insert more defaults
 
                 context_configurator(cfg)

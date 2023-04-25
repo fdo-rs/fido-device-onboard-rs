@@ -9,7 +9,7 @@ service_info:
   initial_user:
     username: {{ user }}
     sshkeys:
-    - "testkey"
+    - {{ sshkey }}
   files:
   - path: /etc/hosts
     permissions: 644

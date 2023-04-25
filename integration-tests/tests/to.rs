@@ -263,7 +263,7 @@ async fn test_to_impl(
             .context("Error reading authorized SSH keys")?,
         "
 # These keys are installed by FIDO Device Onboarding
-testkey
+sshkey_default
 # End of FIDO Device Onboarding keys
 "
     );

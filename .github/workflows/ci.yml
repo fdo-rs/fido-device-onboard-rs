@@ -111,6 +111,7 @@ jobs:
       - name: Run tests
         env:
           FDO_PRIVILEGED: true
+          PER_DEVICE_SERVICEINFO: false
         run: cargo test
       - name: Check aio
         run: |
