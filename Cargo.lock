@@ -656,13 +656,13 @@ checksum = "850878694b7933ca4c9569d30a34b55031b9b139ee1fc7b94a527c4ef960d690"
 
 [[package]]
 name = "devicemapper"
-version = "0.33.2"
+version = "0.33.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "caaf758a11609262ca9c93b7ff6fdbedc0c2f4e49d597474a7f70eab23eee699"
+checksum = "1792cb2154d0e257d330b13f820e424d91de0a149050f2f478d97202926ce28a"
 dependencies = [
  "bitflags",
  "devicemapper-sys",
- "env_logger 0.9.3",
+ "env_logger 0.10.0",
  "lazy_static",
  "log",
  "nix",
@@ -763,12 +763,12 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.9.3"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a12e6657c4c97ebab115a42dcee77225f7f482cdd841cf7088c657a42e9e00e7"
+checksum = "85cdab6a89accf66733ad5a1693a4dcced6aeff64602b634530dd73c1f3ee9f0"
 dependencies = [
- "atty",
  "humantime 2.1.0",
+ "is-terminal",
  "log",
  "regex",
  "termcolor",
