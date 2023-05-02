@@ -22,6 +22,8 @@
 - How to run the clients:
   - Linuxapp client
   - Manufacturing client
+- How to use Features:
+  - How to use the `per-device serviceinfo` feature
 
 ## Pre-requisites
 
@@ -734,3 +736,26 @@ Options:
 
 Please note that in this mode there are some environment variables that are
 still required to be set by the user (`DI_SIGN_KEY_PATH`, `DI_HMAC_KEY_PATH`).
+
+## How to use Features
+
+### How to use the `per-device serviceinfo` feature
+
+  Using this feature the user can choose to apply different serviceinfo settings on different devices.
+  For that the user needs to provide a path to a `per-device serviceinfo` file under the `device_specific_store_driver` field
+  present in the `serviceinfo_api_server.yml` file.
+  If other devices do not have their `per-device serviceinfo` file under `device_specific_store_driver` they will get onboarded
+  with settings from the main file, which is `serviceinfo_api_server.yml`.
+  
+  1. Initialize the device as mentioned in [How to generate an Ownership Voucher and Credential for a Device](#how-to-generate-an-ownership-voucher-ov-and-credential-for-a-device-device-initialization).
+
+  2. Dump the `device-credentials`
+  ```bash
+  fdo-owner-tool dump-device-credential /path/to/device-credentials
+  ```
+
+  3. Note the GUID of the device and create a .yml file with same name as the `guid` under directory path `device_specific_store_driver`.
+
+  4. You can refer to [per_device_serviceinfo.yml](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/config/device_specific_serviceinfo.yml) as an example.
+
+  5. Follow the onboarding procedure and this particular device will get the serviceinfo settings as mentioned in the above file.

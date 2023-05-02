@@ -1,10 +1,4 @@
-use std::{collections::HashSet, str::FromStr};
-
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
-use tokio::signal::unix::{signal, SignalKind};
-use warp::Filter;
-
 use fdo_data_formats::{
     constants::{FedoraIotServiceInfoModule, HashType, ServiceInfoModule},
     types::{Guid, Hash},
@@ -12,8 +6,17 @@ use fdo_data_formats::{
 use fdo_store::Store;
 use fdo_util::servers::{
     configuration::serviceinfo_api_server::{ServiceInfoApiServerSettings, ServiceInfoSettings},
-    settings_for, ServiceInfoApiReply, ServiceInfoApiReplyInitialUser, ServiceInfoApiReplyReboot,
+    settings_for, settings_per_device, ServiceInfoApiReply, ServiceInfoApiReplyInitialUser,
+    ServiceInfoApiReplyReboot,
 };
+use serde::{Deserialize, Serialize};
+use std::{collections::HashSet, str::FromStr};
+use tokio::signal::unix::{signal, SignalKind};
+use warp::Filter;
+
+#[derive(Debug)]
+struct ServiceInfoFailure(anyhow::Error);
+impl warp::reject::Reject for ServiceInfoFailure {}
 
 #[derive(Debug)]
 struct ServiceInfoConfiguration {
@@ -224,12 +227,30 @@ async fn serviceinfo_handler(
         .modules
         .contains(&FedoraIotServiceInfoModule::SSHKey.into())
     {
-        if let Some(initial_user) = &user_data.service_info_configuration.settings.initial_user {
-            reply.reply.initial_user = Some(ServiceInfoApiReplyInitialUser {
-                username: initial_user.username.clone(),
-                ssh_keys: initial_user.sshkeys.clone(),
-            });
-        }
+        // precedence is given to 'per_device' settings over base serviceinfo_api_server.yml config
+        match settings_per_device(&query_info.device_guid.to_string().replace('\"', "")) {
+            Ok(config) => {
+                let per_device_settings = config;
+                if let Some(initial_user) = &per_device_settings.initial_user {
+                    reply.reply.initial_user = Some(ServiceInfoApiReplyInitialUser {
+                        username: initial_user.username.clone(),
+                        ssh_keys: initial_user.sshkeys.clone(),
+                    });
+                }
+            }
+            Err(_) => {
+                log::info!("per-device settings file not available, so loading base config file");
+                if let Some(initial_user) =
+                    &user_data.service_info_configuration.settings.initial_user
+                {
+                    log::debug!("serviceinfo setting from base file applied");
+                    reply.reply.initial_user = Some(ServiceInfoApiReplyInitialUser {
+                        username: initial_user.username.clone(),
+                        ssh_keys: initial_user.sshkeys.clone(),
+                    });
+                }
+            }
+        };
     }
 
     if query_info
@@ -364,25 +385,6 @@ async fn serviceinfo_handler(
             }
         }
     }
-
-    let device_specific_info = match user_data
-        .device_specific_store
-        .load_data(&query_info.device_guid)
-        .await
-    {
-        Ok(res) => res,
-        Err(e) => {
-            log::warn!("Error loading device specific store: {:?}", e);
-            return Err(warp::reject::reject());
-        }
-    };
-    if let Some(device_specific_info) = device_specific_info {
-        log::trace!("Loaded device-specific information");
-        for (module, key, value) in device_specific_info {
-            reply.add_extra(module, &key, &value);
-        }
-    }
-
     Ok(warp::reply::json(&reply.reply))
 }
 

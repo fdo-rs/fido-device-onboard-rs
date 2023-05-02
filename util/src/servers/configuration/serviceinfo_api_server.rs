@@ -19,6 +19,7 @@ pub struct ServiceInfoApiServerSettings {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct ServiceInfoSettings {
     pub initial_user: Option<ServiceInfoInitialUser>,
 
