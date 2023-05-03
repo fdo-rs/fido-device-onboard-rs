@@ -540,8 +540,8 @@ async fn perform_service_info(
         )?;
         if initial_user.password.is_some() {
             out_si.add(
-                FedoraIotServiceInfoModule::SSHKey, 
-                "password", 
+                FedoraIotServiceInfoModule::SSHKey,
+                "password",
                 &initial_user.password,
             )?;
         }

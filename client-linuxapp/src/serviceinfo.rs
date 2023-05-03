@@ -77,7 +77,10 @@ fn create_user(user: &str) -> Result<()> {
         log::info!("User {user} created successfully");
         Ok(())
     } else {
-        bail!(format!("User creation failed. Exit Status: {:#?}", status.code()));
+        bail!(format!(
+            "User creation failed. Exit Status: {:#?}",
+            status.code()
+        ));
     }
 }
 
@@ -112,7 +115,6 @@ fn create_user_with_password(user: &str, password: &str) -> Result<()> {
         str_encrypted_pw = sha256_simple(password, &default_params).expect("Hashing failed");
         assert!(sha256_check(password, &str_encrypted_pw).is_ok());
     }
-    
     // Creates new user if user not present
     log::info!("Creating user {user} with password");
     let status = Command::new("useradd")
@@ -128,10 +130,12 @@ fn create_user_with_password(user: &str, password: &str) -> Result<()> {
         log::info!("User {user} created successfully with password");
         Ok(())
     } else {
-        bail!(format!("User creation failed. Exit Status: {:#?}", status.code()));
+        bail!(format!(
+            "User creation failed. Exit Status: {:#?}",
+            status.code()
+        ));
     }
 }
-
 
 fn install_ssh_key(user: &str, key: &str) -> Result<()> {
     let user_info = passwd::Passwd::from_name(user);
@@ -470,21 +474,15 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
         }
         if module == FedoraIotServiceInfoModule::SSHKey.into() {
             if key == "username" {
-                let value = value
-                    .as_str()
-                    .context("Error parsing username value")?;
+                let value = value.as_str().context("Error parsing username value")?;
                 sshkey_user = Some(value.to_string());
                 log::info!("Username is: {value}");
             } else if key == "password" {
-                let value = value
-                    .as_str()
-                    .context("Error parsing password value")?;
+                let value = value.as_str().context("Error parsing password value")?;
                 sshkey_password = Some(value.to_string());
                 log::info!("Password is present");
             } else if key == "sshkeys" {
-                let value = value
-                    .as_str()
-                    .context("Error parsing sshkey value")?;
+                let value = value.as_str().context("Error parsing sshkey value")?;
                 sshkey_keys = Some(value.to_string());
                 log::info!("Keys are present");
             }
@@ -703,10 +701,14 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
         }
         if sshkey_password.is_some() {
             log::info!("SSHkey module was active, creating user with password");
-            create_user_with_password(sshkey_user.as_ref().unwrap(), sshkey_password.as_ref().unwrap()).context(format!(
+            create_user_with_password(
+                sshkey_user.as_ref().unwrap(),
+                sshkey_password.as_ref().unwrap(),
+            )
+            .context(format!(
                 "Error creating new user with password: {}",
-                sshkey_user.as_ref().unwrap() 
-            ))?;  
+                sshkey_user.as_ref().unwrap()
+            ))?;
         }
         if sshkey_keys.is_some() {
             log::info!("SSHkey module was active, installing SSH keys");
@@ -714,10 +716,15 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
                 "Error creating new user: {}",
                 sshkey_user.as_ref().unwrap()
             ))?;
-            let sshkey_keys_v: Vec<String> = sshkey_keys.unwrap().split(" ").map(|s| s.to_string()).collect();
+            let sshkey_keys_v: Vec<String> = sshkey_keys
+                .unwrap()
+                .split(' ')
+                .map(|s| s.to_string())
+                .collect();
             for key in sshkey_keys_v {
                 let key_s: String = key;
-                install_ssh_key(sshkey_user.as_ref().unwrap(), key_s.as_str()).context("Error installing SSH key")?;
+                install_ssh_key(sshkey_user.as_ref().unwrap(), key_s.as_str())
+                    .context("Error installing SSH key")?;
                 log::info!("Installed sshkey: {key_s}");
             }
         }
@@ -821,6 +828,8 @@ mod test {
 
     use super::BinaryFileInProgress;
 
+    use crate::serviceinfo::*;
+
     #[test]
     fn test_binaryfileinprogress_destination_path() {
         assert_eq!(
@@ -835,5 +844,50 @@ mod test {
             BinaryFileInProgress::destination_path(&String::from("/etc/something"), None).unwrap(),
             PathBuf::from("/etc/something")
         );
+    }
+
+    #[test]
+    fn test_pw_encryption() {
+        let type_5_encryption = "$5$ML4hMHtER3/SY9D2$2eWHscoFbfVebDC32qA2dPo3pD6FFM6CRTrvAOMpwQ";
+        assert!(is_password_encrypted(type_5_encryption));
+        let type_2b_encryption = "$2b$ML4hMHtER3/SY9D2$2eWHscoFbfVebDC32qA2dPo3pD6FFM6CRTrvAOMpwQ";
+        assert!(is_password_encrypted(type_2b_encryption));
+        let type_6_encryption = "$6$ML4hMHtER3/SY9D2$2eWHscoFbfVebDC32qA2dPo3pD6FFM6CRTrvAOMpwQ";
+        assert!(is_password_encrypted(type_6_encryption));
+        let plaintext_encryption = "testpassword";
+        assert!(!is_password_encrypted(plaintext_encryption));
+        let empty_pw = "";
+        assert!(!is_password_encrypted(empty_pw));
+    }
+
+    #[test]
+    fn test_user_creation_no_pw() {
+        let test_user = "test";
+        assert!(create_user(test_user).is_ok());
+        let empty_user = "";
+        assert!(create_user(empty_user).is_err());
+        let at_user = "test@test";
+        assert!(create_user(at_user).is_err());
+        let dash_user = "-test";
+        assert!(create_user(dash_user).is_err());
+        let digits_user = "12345";
+        assert!(create_user(digits_user).is_err());
+    }
+
+    #[test]
+    fn test_user_creation_with_pw() {
+        let test_user = "testb";
+        let test_password = "password";
+        assert!(create_user_with_password(test_user, test_password).is_ok());
+        let empty_user = "";
+        assert!(create_user_with_password(empty_user, test_password).is_err());
+        let at_user = "testb@testb";
+        assert!(create_user_with_password(at_user, test_password).is_err());
+        let dash_user = "-testb";
+        assert!(create_user_with_password(dash_user, test_password).is_err());
+        let digits_user = "123456";
+        assert!(create_user_with_password(digits_user, test_password).is_err());
+        let empty_password = "";
+        assert!(create_user_with_password(test_user, empty_password).is_ok());
     }
 }

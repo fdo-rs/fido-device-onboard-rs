@@ -7,6 +7,8 @@ use common::{Binary, LogSide, TestContext};
 
 use anyhow::{bail, Context, Result};
 
+use sha_crypt::sha256_check;
+
 const L: LogSide = LogSide::Test;
 
 #[tokio::test]
@@ -138,6 +140,7 @@ where
     env::set_var("PER_DEVICE_SERVICEINFO", "false");
     let mut ctx = TestContext::new().context("Error building test context")?;
     let new_user: &str = "testuser"; // new user to be created during onboarding
+    let new_pw: &str = "testpassword"; // new password to accompany new user during onboarding
     let encrypted_disk_loc = ctx.testpath().join("encrypted.img");
     let rendezvous_server = ctx
         .start_test_server(
@@ -156,7 +159,8 @@ where
                         &encrypted_disk_loc.to_string_lossy(),
                     );
                     if ci {
-                        cfg.insert("user", new_user)
+                        cfg.insert("user", new_user);
+                        cfg.insert("password", new_pw);
                     };
                     Ok(())
                 })?)
@@ -402,6 +406,14 @@ sshkey_default
             "User: {} is not created during onboarding",
             &new_user
         );
+        if let Some(test_user) = shadow::Shadow::from_name(new_user) {
+            pretty_assertions::assert_eq!(
+                test_user.password.is_empty(),
+                false,
+                "Password not created during onboarding"
+            );
+            assert!(sha256_check("testpassword", &test_user.password).is_ok());
+        }
     } else {
         L.l("Skipped create initial user validation
         To validate set env variable FDO_PRIVILEGED and run test as superuser");
