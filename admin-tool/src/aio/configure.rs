@@ -431,6 +431,7 @@ pub(super) fn generate_configs_and_keys(
             subject: key_subject,
             organization: config_args.cert_organization.clone(),
             country: config_args.cert_country.clone(),
+            validity_ends: 365,
             destination_dir: aio_dir.join("keys").to_string_lossy().to_string(),
         })
         .with_context(|| format!("Error creating {key_subject:?} key"))?;

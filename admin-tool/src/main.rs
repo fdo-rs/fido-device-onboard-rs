@@ -46,6 +46,7 @@ fn generate_key_and_cert(args: &GenerateKeyAndCertArguments) -> Result<(), Error
     let subject = args.subject;
     let organization_name = &args.organization;
     let country_name = &args.country;
+    let validity_ends = &args.validity_ends;
     let destination_dir = &args.destination_dir;
     let mut destination_dir_path = PathBuf::from(destination_dir);
     if !destination_dir_path.is_absolute() {
@@ -76,7 +77,7 @@ fn generate_key_and_cert(args: &GenerateKeyAndCertArguments) -> Result<(), Error
     builder.set_serial_number(&serial)?;
     builder.set_subject_name(&name)?;
     builder.set_issuer_name(&name)?;
-    builder.set_not_after(Asn1Time::days_from_now(365)?.as_ref())?;
+    builder.set_not_after(Asn1Time::days_from_now(validity_ends.to_owned())?.as_ref())?;
     builder.set_not_before(Asn1Time::days_from_now(0)?.as_ref())?;
     builder.set_pubkey(&pkey)?;
     builder.sign(&pkey, MessageDigest::sha256())?;
@@ -145,6 +146,9 @@ struct GenerateKeyAndCertArguments {
     /// Country name for the certificate
     #[clap(long, default_value_t = String::from("US"))]
     country: String,
+    /// Number of days the certificate is going to be valid
+    #[clap(long, default_value_t = 365)]
+    validity_ends: u32,
     /// Writes key and certificate to the given path
     #[clap(long, default_value_t = String::from("keys"))]
     destination_dir: String,
