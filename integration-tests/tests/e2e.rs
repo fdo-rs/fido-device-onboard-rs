@@ -566,37 +566,6 @@ where
         bail!("Failed to call cryptsetup");
     }
 
-    L.l("Adding disk encryption tests");
-    L.l("Creating empty disk image");
-    if !Command::new("truncate")
-        .arg("-s")
-        .arg("1G")
-        .arg(&encrypted_disk_loc)
-        .status()
-        .context("Error running truncate")?
-        .success()
-    {
-        bail!("Error creating empty disk image");
-    }
-
-    L.l("Encrypting disk image");
-    let mut child = Command::new("cryptsetup")
-        .arg("luksFormat")
-        .arg(&encrypted_disk_loc)
-        .arg("--force-password")
-        .stdin(std::process::Stdio::piped())
-        .spawn()
-        .context("Error starting cryptsetup luksFormat")?;
-    {
-        let mut stdin = child.stdin.take().context("Error taking stdin")?;
-        writeln!(stdin, "testpassword")?;
-        stdin.flush()?;
-    }
-
-    let output = child.wait().context("Error waiting for cryptsetup")?;
-    if !output.success() {
-        bail!("Failed to call cryptsetup");
-    }
     L.l("Binding disk image");
     let mut child = Command::new("clevis")
         .arg("luks")
