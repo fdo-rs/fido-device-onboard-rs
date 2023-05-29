@@ -26,7 +26,7 @@ lazy_static = "1.4.0"
 openssl = "0.10.48"
 libc = "0.2"
 reqwest = { version = "0.11", features = ["json"] }
-tokio = "1.25.0"
+tokio = "1.28.2"
 serde = "1"
 serde_cbor = "0.11"
 serde_json = "1.0"
