@@ -1,6 +1,6 @@
 [package]
 name = "fdo-manufacturing-server"
-version = "0.4.9"
+version = "0.4.10"
 authors = ["Patrick Uiterwijk <patrick@puiterwijk.org>"]
 edition = "2018"
 
@@ -18,7 +18,7 @@ log = "0.4"
 hex = "0.4"
 serde_yaml = "0.9"
 
-fdo-data-formats = { path = "../data-formats", version = "0.4.9" }
-fdo-http-wrapper = { path = "../http-wrapper", version = "0.4.9", features = ["server"] }
-fdo-store = { path = "../store", version = "0.4.9", features = ["directory"] }
-fdo-util = { path = "../util", version = "0.4.9" }
+fdo-data-formats = { path = "../data-formats", version = "0.4.10" }
+fdo-http-wrapper = { path = "../http-wrapper", version = "0.4.10", features = ["server"] }
+fdo-store = { path = "../store", version = "0.4.10", features = ["directory"] }
+fdo-util = { path = "../util", version = "0.4.10" }
