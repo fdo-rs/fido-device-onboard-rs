@@ -154,7 +154,7 @@ fn clevis_bind(
     log::trace!("Clevis bind successful");
 
     dev.context_handle()
-        .load::<libcryptsetup_rs::CryptParamsLuks2>(None, None)
+        .load::<()>(None, None)
         .context("Error re-loading device context")?;
 
     log::trace!("Reloaded device context");
