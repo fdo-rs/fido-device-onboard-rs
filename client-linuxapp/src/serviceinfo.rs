@@ -70,6 +70,25 @@ fn create_user(user: &str) -> Result<()> {
     Ok(())
 }
 
+fn set_passwordless_login(user: &str) -> Result<()> {
+    let user_info = passwd::Passwd::from_name(user);
+    if user_info.is_none() {
+        bail!("User {} for passwordless login missing", user);
+    }
+    log::info!("Setting passwordless login for user: {}", user);
+    Command::new("passwd")
+        .arg("-d")
+        .arg(user)
+        .spawn()
+        .context("Error spawning passwordless setup command")?
+        .wait()
+        .context(format!(
+            "Error setting up passwordless login for user {}",
+            user
+        ))?;
+    Ok(())
+}
+
 fn install_ssh_key(user: &str, key: &str) -> Result<()> {
     let user_info = passwd::Passwd::from_name(user);
     if user_info.is_none() {
@@ -629,6 +648,8 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
         ))?;
         install_ssh_key(sshkey_user.as_ref().unwrap(), sshkey_key.as_ref().unwrap())
             .context("Error installing SSH key")?;
+        set_passwordless_login(sshkey_user.as_ref().unwrap())
+            .context("Error setting up passwordless login")?;
     }
 
     // Perform RHSM
