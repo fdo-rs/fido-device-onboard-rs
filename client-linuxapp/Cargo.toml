@@ -20,6 +20,9 @@ thiserror = "1"
 libcryptsetup-rs = { version = "0.8.0", features = ["mutex"] }
 secrecy = "0.8"
 devicemapper = "0.33"
+openssl = "0.10.45"
+sha-crypt = "0.5.0"
+logtest = "2.0.0"
 
 fdo-data-formats = { path = "../data-formats", version = "0.4.10" }
 fdo-http-wrapper = { path = "../http-wrapper", version = "0.4.10", features = ["client"] }

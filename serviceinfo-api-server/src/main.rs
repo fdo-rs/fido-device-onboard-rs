@@ -234,6 +234,7 @@ async fn serviceinfo_handler(
                 if let Some(initial_user) = &per_device_settings.initial_user {
                     reply.reply.initial_user = Some(ServiceInfoApiReplyInitialUser {
                         username: initial_user.username.clone(),
+                        password: initial_user.password.clone(),
                         ssh_keys: initial_user.sshkeys.clone(),
                     });
                 }
@@ -246,6 +247,7 @@ async fn serviceinfo_handler(
                     log::debug!("serviceinfo setting from base file applied");
                     reply.reply.initial_user = Some(ServiceInfoApiReplyInitialUser {
                         username: initial_user.username.clone(),
+                        password: initial_user.password.clone(),
                         ssh_keys: initial_user.sshkeys.clone(),
                     });
                 }

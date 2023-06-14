@@ -4,6 +4,7 @@ use std::{
     fs::{File, Permissions},
     io::Write,
     path::Path,
+    str,
 };
 use std::{env, fs};
 use std::{os::unix::fs::PermissionsExt, path::PathBuf};
@@ -19,6 +20,8 @@ use fdo_data_formats::{
     types::{CborSimpleTypeExt, Hash, ServiceInfo},
 };
 use fdo_http_wrapper::client::{RequestResult, ServiceClient};
+
+use sha_crypt::{sha256_check, sha256_simple, Sha256Params};
 
 const MAX_SERVICE_INFO_LOOPS: u32 = 1000;
 
@@ -54,20 +57,84 @@ fn set_perm_mode(path: &Path, mode: u32) -> Result<()> {
 }
 
 fn create_user(user: &str) -> Result<()> {
+    // Checks if user already present
     let user_info = passwd::Passwd::from_name(user);
     if user_info.is_some() {
-        log::info!("User: {} already present", user);
+        log::info!("User: {user} already present");
         return Ok(());
     }
-    log::info!("Creating user: {}", user);
-    Command::new("useradd")
+    // Creates new user if user not present
+    log::info!("Creating user: {user}");
+    let status = Command::new("useradd")
         .arg("-m")
         .arg(user)
         .spawn()
         .context("Error spawning new user command")?
         .wait()
         .context("Error creating new user")?;
-    Ok(())
+
+    if status.success() {
+        log::info!("User {user} created successfully");
+        Ok(())
+    } else {
+        bail!(format!(
+            "User creation failed. Exit Status: {:#?}",
+            status.code()
+        ));
+    }
+}
+
+// Returns true if password is encrypted
+// is_password_encrypted functionality is taken from osbuild-composer's crypt.go:
+// https://github.com/osbuild/osbuild-composer/blob/main/internal/crypt/crypt.go
+fn is_password_encrypted(s: &str) -> bool {
+    let prefixes = ["$2b$", "$6$", "$5$"];
+
+    for prefix in prefixes {
+        if s.starts_with(prefix) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn create_user_with_password(user: &str, password: &str) -> Result<()> {
+    // Checks if user already present
+    let user_info = passwd::Passwd::from_name(user);
+    if user_info.is_some() {
+        log::info!("User {user} is already present");
+        return Ok(());
+    }
+
+    let mut str_encrypted_pw = password.to_string();
+    log::info!("Checking for password encryption");
+    if !is_password_encrypted(password) {
+        log::info!("Encrypting password");
+        let default_params: Sha256Params = Default::default();
+        str_encrypted_pw = sha256_simple(password, &default_params).expect("Hashing failed");
+        assert!(sha256_check(password, &str_encrypted_pw).is_ok());
+    }
+    // Creates new user if user not present
+    log::info!("Creating user {user} with password");
+    let status = Command::new("useradd")
+        .arg("-p")
+        .arg(str_encrypted_pw)
+        .arg(user)
+        .spawn()
+        .context("Error spawning new user command")?
+        .wait()
+        .context("Error creating new user")?;
+
+    if status.success() {
+        log::info!("User {user} created successfully with password");
+        Ok(())
+    } else {
+        bail!(format!(
+            "User creation failed. Exit Status: {:#?}",
+            status.code()
+        ));
+    }
 }
 
 fn install_ssh_key(user: &str, key: &str) -> Result<()> {
@@ -373,7 +440,8 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
     let mut active_modules: HashSet<ServiceInfoModule> = HashSet::new();
 
     let mut sshkey_user: Option<String> = None;
-    let mut sshkey_key: Option<String> = None;
+    let mut sshkey_password: Option<String> = None;
+    let mut sshkey_keys: Option<String> = None;
 
     let mut rhsm_organization_id: Option<String> = None;
     let mut rhsm_activation_key: Option<String> = None;
@@ -405,11 +473,18 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
             bail!("Non-activated module {} got request", module);
         }
         if module == FedoraIotServiceInfoModule::SSHKey.into() {
-            let value = value.as_str().context("Error parsing sshkey value")?;
             if key == "username" {
+                let value = value.as_str().context("Error parsing username value")?;
                 sshkey_user = Some(value.to_string());
-            } else if key == "key" {
-                sshkey_key = Some(value.to_string());
+                log::info!("Username is: {value}");
+            } else if key == "password" {
+                let value = value.as_str().context("Error parsing password value")?;
+                sshkey_password = Some(value.to_string());
+                log::info!("Password is present");
+            } else if key == "sshkeys" {
+                let value = value.as_str().context("Error parsing sshkey value")?;
+                sshkey_keys = Some(value.to_string());
+                log::info!("Keys are present");
             }
         } else if module == FedoraIotServiceInfoModule::Reboot.into() {
             if key == "reboot" {
@@ -617,18 +692,42 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
         }
     }
 
-    // Do SSH
+    // Perform SSH or password setup
     if active_modules.contains(&FedoraIotServiceInfoModule::SSHKey.into()) {
-        log::debug!("SSHkey module was active, installing SSH key");
-        if sshkey_user.is_none() || sshkey_key.is_none() {
-            bail!("SSHkey module missing username or key");
+        if sshkey_user.is_none() {
+            bail!("SSHkey module missing username");
+        } else if sshkey_keys.is_none() && sshkey_password.is_none() {
+            bail!("SSHkey module missing password and key");
         }
-        create_user(sshkey_user.as_ref().unwrap()).context(format!(
-            "Error creating new user: {}",
-            sshkey_user.as_ref().unwrap()
-        ))?;
-        install_ssh_key(sshkey_user.as_ref().unwrap(), sshkey_key.as_ref().unwrap())
-            .context("Error installing SSH key")?;
+        if sshkey_password.is_some() {
+            log::info!("SSHkey module was active, creating user with password");
+            create_user_with_password(
+                sshkey_user.as_ref().unwrap(),
+                sshkey_password.as_ref().unwrap(),
+            )
+            .context(format!(
+                "Error creating new user with password: {}",
+                sshkey_user.as_ref().unwrap()
+            ))?;
+        }
+        if sshkey_keys.is_some() {
+            log::info!("SSHkey module was active, installing SSH keys");
+            create_user(sshkey_user.as_ref().unwrap()).context(format!(
+                "Error creating new user: {}",
+                sshkey_user.as_ref().unwrap()
+            ))?;
+            let sshkey_keys_v: Vec<String> = sshkey_keys
+                .unwrap()
+                .split(' ')
+                .map(|s| s.to_string())
+                .collect();
+            for key in sshkey_keys_v {
+                let key_s: String = key;
+                install_ssh_key(sshkey_user.as_ref().unwrap(), key_s.as_str())
+                    .context("Error installing SSH key")?;
+                log::info!("Installed sshkey: {key_s}");
+            }
+        }
     }
 
     // Perform RHSM
@@ -729,6 +828,8 @@ mod test {
 
     use super::BinaryFileInProgress;
 
+    use crate::serviceinfo::*;
+
     #[test]
     fn test_binaryfileinprogress_destination_path() {
         assert_eq!(
@@ -743,5 +844,50 @@ mod test {
             BinaryFileInProgress::destination_path(&String::from("/etc/something"), None).unwrap(),
             PathBuf::from("/etc/something")
         );
+    }
+
+    #[test]
+    fn test_pw_encryption() {
+        let type_5_encryption = "$5$ML4hMHtER3/SY9D2$2eWHscoFbfVebDC32qA2dPo3pD6FFM6CRTrvAOMpwQ";
+        assert!(is_password_encrypted(type_5_encryption));
+        let type_2b_encryption = "$2b$ML4hMHtER3/SY9D2$2eWHscoFbfVebDC32qA2dPo3pD6FFM6CRTrvAOMpwQ";
+        assert!(is_password_encrypted(type_2b_encryption));
+        let type_6_encryption = "$6$ML4hMHtER3/SY9D2$2eWHscoFbfVebDC32qA2dPo3pD6FFM6CRTrvAOMpwQ";
+        assert!(is_password_encrypted(type_6_encryption));
+        let plaintext_encryption = "testpassword";
+        assert!(!is_password_encrypted(plaintext_encryption));
+        let empty_pw = "";
+        assert!(!is_password_encrypted(empty_pw));
+    }
+
+    #[test]
+    fn test_user_creation_no_pw() {
+        let test_user = "test";
+        assert!(create_user(test_user).is_ok());
+        let empty_user = "";
+        assert!(create_user(empty_user).is_err());
+        let at_user = "test@test";
+        assert!(create_user(at_user).is_err());
+        let dash_user = "-test";
+        assert!(create_user(dash_user).is_err());
+        let digits_user = "12345";
+        assert!(create_user(digits_user).is_err());
+    }
+
+    #[test]
+    fn test_user_creation_with_pw() {
+        let test_user = "testb";
+        let test_password = "password";
+        assert!(create_user_with_password(test_user, test_password).is_ok());
+        let empty_user = "";
+        assert!(create_user_with_password(empty_user, test_password).is_err());
+        let at_user = "testb@testb";
+        assert!(create_user_with_password(at_user, test_password).is_err());
+        let dash_user = "-testb";
+        assert!(create_user_with_password(dash_user, test_password).is_err());
+        let digits_user = "123456";
+        assert!(create_user_with_password(digits_user, test_password).is_err());
+        let empty_password = "";
+        assert!(create_user_with_password(test_user, empty_password).is_ok());
     }
 }

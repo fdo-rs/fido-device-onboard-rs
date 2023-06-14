@@ -153,7 +153,8 @@ pub fn yaml_to_cbor(val: &Value) -> Result<CborValue> {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ServiceInfoApiReplyInitialUser {
     pub username: String,
-    pub ssh_keys: Vec<String>,
+    pub password: Option<String>,
+    pub ssh_keys: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
