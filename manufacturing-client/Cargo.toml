@@ -11,7 +11,7 @@ anyhow = "1"
 clap = { version = "4.2", features = ["derive"] }
 hex = "0.4"
 log = "0.4"
-openssl = "0.10.48"
+openssl = "0.10.55"
 tokio = { version = "1", features = ["full"] }
 sys-info = "0.9"
 passwd = "0.0.1"

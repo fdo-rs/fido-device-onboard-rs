@@ -12,7 +12,7 @@ config = "0.13.3"
 tokio = { version = "1", features = ["full"] }
 thiserror= "1"
 serde = "1"
-openssl = "0.10.48"
+openssl = "0.10.55"
 warp = "0.3"
 log = "0.4"
 time = "0.3"
