@@ -64,7 +64,7 @@ fn perform_reencrypt(dev_name: &str) -> Result<()> {
         .context("Error opening device")?;
 
     dev.context_handle()
-        .load::<()>(None, None)
+        .load::<libcryptsetup_rs::CryptParamsLuks2Ref>(None, None)
         .context("Error loading device context")?;
 
     let status = dev

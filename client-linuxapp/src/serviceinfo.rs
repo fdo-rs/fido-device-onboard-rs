@@ -320,7 +320,7 @@ impl DiskEncryptionInProgress {
         log::debug!("Device initiated");
 
         dev.context_handle()
-            .load::<()>(None, None)
+            .load::<libcryptsetup_rs::CryptParamsLuks2Ref>(None, None)
             .context("Error loading device context")?;
 
         log::debug!("Device information loaded");
