@@ -70,3 +70,15 @@ podman run -d \
     -v /local/path/to/device_specific_serviceinfo:/etc/fdo/device_specific_serviceinfo/:Z \
     quay.io/fido-fdo/serviceinfo-api-server
 ```
+
+### client-linuxapp
+
+``` bash
+podman pull quay.io/fido-fdo/client-linuxapp
+
+podman run -d \
+    --name client-linuxapp \
+    -v /local/path/to/device_credential/directory:/etc/fdo/:Z \
+    -e DEVICE_CREDENTIAL=/etc/fdo/device-credentials \
+    quay.io/fido-fdo/client-linuxapp
+```
