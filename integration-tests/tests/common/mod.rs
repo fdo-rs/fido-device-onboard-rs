@@ -807,7 +807,7 @@ impl<'a> TestServerConfigurator<'a> {
                         "user",
                         users::get_current_username().unwrap().to_str().unwrap(),
                     );
-                    cfg.insert("sshkey", "sshkey_default");
+                    cfg.insert("sshkey", "ssh-ed25519 sshkey_default user@example.com");
                     cfg.insert("password", "testpassword");
                 } else {
                     L.l("per_device_serviceinfo is set, using device specific values");
@@ -815,7 +815,7 @@ impl<'a> TestServerConfigurator<'a> {
                         "user",
                         users::get_current_username().unwrap().to_str().unwrap(),
                     );
-                    cfg.insert("sshkey", "sshkey_per_device");
+                    cfg.insert("sshkey", "ssh-ed25519 sshkey_per_device user@example.com");
                     cfg.insert("password", "testpassword");
                 }
 
