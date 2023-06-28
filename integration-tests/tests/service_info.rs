@@ -271,7 +271,7 @@ where
             .context("Error reading authorized SSH keys")?,
         "
 # These keys are installed by FIDO Device Onboarding
-sshkey_default
+ssh-ed25519 sshkey_default user@example.com
 # End of FIDO Device Onboarding keys
 "
     );

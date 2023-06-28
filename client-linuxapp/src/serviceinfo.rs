@@ -718,7 +718,7 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
             ))?;
             let sshkey_keys_v: Vec<String> = sshkey_keys
                 .unwrap()
-                .split(' ')
+                .split(';')
                 .map(|s| s.to_string())
                 .collect();
             for key in sshkey_keys_v {

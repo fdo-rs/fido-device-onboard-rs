@@ -549,7 +549,7 @@ async fn perform_service_info(
             out_si.add(
                 FedoraIotServiceInfoModule::SSHKey,
                 "sshkeys",
-                &(initial_user.ssh_keys.unwrap().join(" ")),
+                &(initial_user.ssh_keys.unwrap().join(";")),
             )?;
         }
     }
