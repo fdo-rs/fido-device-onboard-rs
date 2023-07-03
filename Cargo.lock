@@ -229,6 +229,7 @@ dependencies = [
  "clang-sys",
  "lazy_static",
  "lazycell",
+ "log",
  "peeking_take_while",
  "proc-macro2",
  "quote",
@@ -236,6 +237,7 @@ dependencies = [
  "rustc-hash",
  "shlex",
  "syn 1.0.109",
+ "which",
 ]
 
 [[package]]
@@ -769,7 +771,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-admin-tool"
-version = "0.4.10"
+version = "0.4.11"
 dependencies = [
  "anyhow",
  "clap 4.3.0",
@@ -794,7 +796,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-client-linuxapp"
-version = "0.4.10"
+version = "0.4.11"
 dependencies = [
  "anyhow",
  "devicemapper",
@@ -819,7 +821,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-data"
-version = "0.4.10"
+version = "0.4.11"
 dependencies = [
  "assert-str",
  "cbindgen",
@@ -831,7 +833,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-data-formats"
-version = "0.4.10"
+version = "0.4.11"
 dependencies = [
  "aws-nitro-enclaves-cose",
  "byteorder",
@@ -859,7 +861,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-http-wrapper"
-version = "0.4.10"
+version = "0.4.11"
 dependencies = [
  "async-trait",
  "aws-nitro-enclaves-cose",
@@ -882,7 +884,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-manufacturing-client"
-version = "0.4.10"
+version = "0.4.11"
 dependencies = [
  "anyhow",
  "clap 4.3.0",
@@ -902,7 +904,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-manufacturing-server"
-version = "0.4.10"
+version = "0.4.11"
 dependencies = [
  "anyhow",
  "config",
@@ -922,7 +924,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-owner-onboarding-server"
-version = "0.4.10"
+version = "0.4.11"
 dependencies = [
  "anyhow",
  "config",
@@ -945,7 +947,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-owner-tool"
-version = "0.4.10"
+version = "0.4.11"
 dependencies = [
  "anyhow",
  "clap 4.3.0",
@@ -963,7 +965,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-rendezvous-server"
-version = "0.4.10"
+version = "0.4.11"
 dependencies = [
  "anyhow",
  "config",
@@ -982,7 +984,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-serviceinfo-api-server"
-version = "0.4.10"
+version = "0.4.11"
 dependencies = [
  "anyhow",
  "config",
@@ -1001,7 +1003,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-store"
-version = "0.4.10"
+version = "0.4.11"
 dependencies = [
  "async-trait",
  "config",
@@ -1018,7 +1020,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-util"
-version = "0.4.10"
+version = "0.4.11"
 dependencies = [
  "anyhow",
  "config",
@@ -1480,7 +1482,7 @@ dependencies = [
 
 [[package]]
 name = "integration-tests"
-version = "0.4.10"
+version = "0.4.11"
 dependencies = [
  "anyhow",
  "fdo-data-formats",
@@ -3047,6 +3049,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7b8be553262e0924410fe96404830252477f175f228081f21cb0bd87f2ccebe"
 dependencies = [
+ "bindgen",
  "pkg-config",
  "target-lexicon",
 ]
@@ -3382,6 +3385,17 @@ checksum = "3bdd9ef4e984da1187bf8110c5cf5b845fbc87a23602cdf912386a76fcd3a7c2"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "which"
+version = "4.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2441c784c52b289a054b7201fc93253e288f094e2f4be9058343127c4226a269"
+dependencies = [
+ "either",
+ "libc",
+ "once_cell",
 ]
 
 [[package]]
