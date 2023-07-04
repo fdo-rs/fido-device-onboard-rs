@@ -9,13 +9,10 @@ edition = "2018"
 [dependencies]
 fdo-data-formats = { path = "../data-formats", version = "0.4.11" }
 
-config = "0.13.3"
-futures = "0.3"
 thiserror = "1"
 async-trait = "0.1"
 log = "0.4"
 serde = { version = "1", features = ["derive"] }
-tokio = "1"
 time = "0.3"
 
 # feature-specific dependencies
