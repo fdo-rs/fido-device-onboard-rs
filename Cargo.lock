@@ -810,7 +810,6 @@ dependencies = [
  "rand",
  "secrecy",
  "serde_bytes",
- "sha-crypt",
  "sys-info",
  "thiserror",
  "tokio",
