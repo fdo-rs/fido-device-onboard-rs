@@ -27,7 +27,6 @@ tss-esapi = { version = "7.2", features = ["generate-bindings"] }
 byteorder = "1"
 
 http = "0.2"
-hyper = "0.14"
 
 openssl-kdf = { version = "0.4.1", features = ["allow_custom"] }
 

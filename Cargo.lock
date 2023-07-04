@@ -789,7 +789,6 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_yaml",
- "tera",
  "time",
  "tokio",
 ]
@@ -805,14 +804,12 @@ dependencies = [
  "fdo-util",
  "libcryptsetup-rs",
  "log",
- "logtest",
  "nix",
  "openssl",
  "passwd",
  "rand",
  "secrecy",
  "serde_bytes",
- "sha-crypt",
  "sys-info",
  "thiserror",
  "tokio",
@@ -840,7 +837,6 @@ dependencies = [
  "ciborium",
  "hex",
  "http",
- "hyper",
  "log",
  "maplit",
  "num-derive",
@@ -894,10 +890,8 @@ dependencies = [
  "hex",
  "log",
  "openssl",
- "passwd",
  "rand",
  "regex",
- "sys-info",
  "tokio",
  "tss-esapi",
 ]
@@ -1006,15 +1000,12 @@ name = "fdo-store"
 version = "0.4.11"
 dependencies = [
  "async-trait",
- "config",
  "fdo-data-formats",
- "futures",
  "log",
  "serde",
  "serde_cbor",
  "thiserror",
  "time",
- "tokio",
  "xattr",
 ]
 
@@ -1653,19 +1644,6 @@ name = "log"
 version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "518ef76f2f87365916b142844c16d8fefd85039bc5699050210a7778ee1cd1de"
-dependencies = [
- "value-bag",
-]
-
-[[package]]
-name = "logtest"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb3e43a8657c1d64516dcc9db8ca03826a4aceaf89d5ce1b37b59f6ff0e43026"
-dependencies = [
- "lazy_static",
- "log",
-]
 
 [[package]]
 name = "maplit"
@@ -3221,12 +3199,6 @@ checksum = "345444e32442451b267fc254ae85a209c64be56d2890e601a0c37ff0c3c5ecd2"
 dependencies = [
  "getrandom",
 ]
-
-[[package]]
-name = "value-bag"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4d330786735ea358f3bc09eea4caa098569c1c93f342d9aca0514915022fe7e"
 
 [[package]]
 name = "vcpkg"

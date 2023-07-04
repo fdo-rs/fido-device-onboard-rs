@@ -17,3 +17,20 @@ members = [
 
     "integration-tests",
 ]
+
+default-members = [
+    "libfdo-data",
+    "data-formats",
+    "http-wrapper",
+    "store",
+    "util",
+
+    "client-linuxapp",
+    "owner-onboarding-server",
+    "owner-tool",
+    "rendezvous-server",
+    "manufacturing-server",
+    "manufacturing-client",
+    "serviceinfo-api-server",
+    "admin-tool",
+]

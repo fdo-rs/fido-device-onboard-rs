@@ -1,4 +1,4 @@
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::{
     collections::HashSet,
     fs::{File, Permissions},
@@ -20,8 +20,6 @@ use fdo_data_formats::{
     types::{CborSimpleTypeExt, Hash, ServiceInfo},
 };
 use fdo_http_wrapper::client::{RequestResult, ServiceClient};
-
-use sha_crypt::{sha256_check, sha256_simple, Sha256Params};
 
 const MAX_SERVICE_INFO_LOOPS: u32 = 1000;
 
@@ -111,9 +109,24 @@ fn create_user_with_password(user: &str, password: &str) -> Result<()> {
     log::info!("Checking for password encryption");
     if !is_password_encrypted(password) {
         log::info!("Encrypting password");
-        let default_params: Sha256Params = Default::default();
-        str_encrypted_pw = sha256_simple(password, &default_params).expect("Hashing failed");
-        assert!(sha256_check(password, &str_encrypted_pw).is_ok());
+        let echo = Command::new("echo")
+            .arg(password)
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Error spawning echo");
+        let hasher = Command::new("openssl")
+            .arg("passwd")
+            .arg("-6")
+            .arg("-stdin")
+            .stdin(Stdio::from(
+                echo.stdout.expect("Error getting stdout from echo"),
+            ))
+            .output()
+            .expect("Error getting output of openssl");
+        str_encrypted_pw = str::from_utf8(&hasher.stdout)
+            .expect("Error converting [u8] to string")
+            .trim_end()
+            .to_string();
     }
     // Creates new user if user not present
     log::info!("Creating user {user} with password");

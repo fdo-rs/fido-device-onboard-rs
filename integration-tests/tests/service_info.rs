@@ -289,7 +289,6 @@ ssh-ed25519 sshkey_default user@example.com
                 false,
                 "Password not created during onboarding"
             );
-            assert!(sha256_check("testpassword", &test_user.password).is_ok());
         }
     } else {
         L.l("Skipped create initial user validation
