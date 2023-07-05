@@ -42,6 +42,14 @@ ssh-keygen -f "${SSH_KEY}" -N "" -q -t rsa
 SSH_OPTIONS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5)
 SSH_KEY_PUB=$(cat "${SSH_KEY}".pub)
 
+# Check key permissions
+KEY_PERMISSION_PRE=$(stat -L -c "%a %G %U" "$SSH_KEY" | grep -oP '\d+' | head -n 1)
+echo -e "${KEY_PERMISSION_PRE}"
+if [[ "${KEY_PERMISSION_PRE}" != "600" ]]; then
+   greenprint "💡 File permissions too open...Changing to 600"
+   chmod 600 "$SSH_KEY"
+fi
+
 FDO_USER=fdouser
 
 # Colorful output.
@@ -195,7 +203,14 @@ sudo ostree --repo="$PROD_REPO" remote add --no-gpg-verify edge-stage "$STAGE_RE
 
 # Prepare stage repo network
 greenprint "🔧 Prepare stage repo network"
-podman network inspect edge >/dev/null 2>&1 || podman network create --driver=bridge --subnet=192.168.200.0/24 --gateway=192.168.200.254 edge
+sudo podman network inspect edge >/dev/null 2>&1 || sudo podman network create --driver=bridge --subnet=192.168.200.0/24 --gateway=192.168.200.254 edge
+
+# Copy image from non-root user
+greenprint "🔧 Copy image from non-root user"
+podman image scp $(whoami)@localhost::localhost/manufacturing-server root@localhost::
+podman image scp $(whoami)@localhost::localhost/rendezvous-server:latest root@localhost::
+podman image scp $(whoami)@localhost::localhost/owner-onboarding-server root@localhost::
+podman image scp $(whoami)@localhost::localhost/serviceinfo-api-server:latest root@localhost::
 
 ##########################################################
 ##
@@ -221,21 +236,21 @@ sudo dnf install -y python3-pip
 sudo pip3 install yq
 
 # Configure disk encryption
-/usr/local/bin/yq -iy '.service_info.diskencryption_clevis |= [{disk_label: "/dev/vda4", reencrypt: true, binding: {pin: "tpm2", config: "{}"}}]' fdo/serviceinfo_api_server.yml
+/usr/local/bin/yq -iy '.service_info.diskencryption_clevis |= [{disk_label: "/dev/vda4", reencrypt: true, binding: {pin: "tpm2", config: "{}"}}]' fdo/serviceinfo-api-server.yml
 # FDO user does not have password, use ssh key and no sudo password instead
 /usr/local/bin/yq -iy ".service_info.initial_user |= {username: \"fdouser\", sshkeys: [\"$SSH_KEY_PUB\"]}" fdo/serviceinfo-api-server.yml
 # No sudo password required by ansible
-tee /tmp/fdouser > /dev/null << EOF
+tee fdo/fdouser > /dev/null << EOF
 $FDO_USER ALL=(ALL) NOPASSWD: ALL
 EOF
 # Configure files
 /usr/local/bin/yq -iy '.service_info.files |= [{path: "/etc/sudoers.d/fdouser", source_path: "/etc/fdo/fdouser"}]' fdo/serviceinfo-api-server.yml
 
 # Check fdo/serviceinfo_api_server.yml configuration
-cat fdo/serviceinfo_api_server.yml
+cat fdo/serviceinfo-api-server.yml
 
 greenprint "🔧 Starting fdo manufacture server"
-podman run -d \
+sudo podman run -d \
   --ip "$FDO_MANUFACTURING_ADDRESS" \
   --name manufacture-server \
   --network edge \
@@ -244,7 +259,7 @@ podman run -d \
   "localhost/manufacturing-server:latest"
 
 greenprint "🔧 Starting fdo owner onboarding server"
-podman run -d \
+sudo podman run -d \
   --ip "$FDO_OWNER_ONBOARDING_ADDRESS" \
   --name owner-onboarding-server \
   --network edge \
@@ -253,7 +268,7 @@ podman run -d \
   "localhost/owner-onboarding-server:latest"
 
 greenprint "🔧 Starting fdo rendezvous server"
-podman run -d \
+sudo podman run -d \
   --ip "$FDO_RENDEZVOUS_ADDRESS" \
   --name rendezvous-server \
   --network edge \
@@ -262,7 +277,7 @@ podman run -d \
   "localhost/rendezvous-server:latest"
 
 greenprint "🔧 Starting fdo serviceinfo api server"
-podman run -d \
+sudo podman run -d \
   --ip "$FDO_SERVICEINFO_API_ADDRESS" \
   --name serviceinfo-api-server \
   --network edge \
@@ -323,18 +338,18 @@ sudo composer-cli compose image "${COMPOSE_ID}" > /dev/null
 # Deal with stage repo image
 greenprint "🗜 Starting container"
 IMAGE_FILENAME="${COMPOSE_ID}-${CONTAINER_FILENAME}"
-podman pull "oci-archive:${IMAGE_FILENAME}"
-podman images
+sudo podman pull "oci-archive:${IMAGE_FILENAME}"
+sudo podman images
 # Run edge stage repo
 greenprint "🛰 Running edge stage repo"
 # Get image id to run image
-EDGE_IMAGE_ID=$(podman images --filter "dangling=true" --format "{{.ID}}")
-podman run -d --name rhel-edge --network edge --ip "$STAGE_REPO_ADDRESS" "$EDGE_IMAGE_ID"
+EDGE_IMAGE_ID=$(sudo podman images --filter "dangling=true" --format "{{.ID}}")
+sudo podman run -d --name rhel-edge --network edge --ip "$STAGE_REPO_ADDRESS" "$EDGE_IMAGE_ID"
 # Clear image file
 sudo rm -f "$IMAGE_FILENAME"
 
 # Wait for container to be running
-until [ "$(podman inspect -f '{{.State.Running}}' rhel-edge)" == "true" ]; do
+until [ "$(sudo podman inspect -f '{{.State.Running}}' rhel-edge)" == "true" ]; do
     sleep 1;
 done;
 
@@ -450,7 +465,7 @@ ${INSECURE_GUEST_ADDRESS}
 [ostree_guest:vars]
 ansible_python_interpreter=/usr/bin/python3
 ansible_user=admin
-ansible_private_key_file=${SSH_KEY}
+ansible_private_key_file=/tmp/id_rsa
 ansible_ssh_common_args="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 ansible_become=yes 
 ansible_become_method=sudo
@@ -579,7 +594,7 @@ ${PUB_KEY_GUEST_ADDRESS}
 [ostree_guest:vars]
 ansible_python_interpreter=/usr/bin/python3
 ansible_user=${FDO_USER}
-ansible_private_key_file=${SSH_KEY}
+ansible_private_key_file=/tmp/id_rsa
 ansible_ssh_common_args="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 ansible_become=yes 
 ansible_become_method=sudo
@@ -710,7 +725,7 @@ ${ROOT_CERT_GUEST_ADDRESS}
 [ostree_guest:vars]
 ansible_python_interpreter=/usr/bin/python3
 ansible_user=${FDO_USER}
-ansible_private_key_file=${SSH_KEY}
+ansible_private_key_file=/tmp/id_rsa
 ansible_ssh_common_args="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 ansible_become=yes
 ansible_become_method=sudo

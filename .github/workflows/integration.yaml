@@ -145,7 +145,7 @@ jobs:
         with:
           route: 'POST /repos/${{ github.repository }}/statuses/${{ needs.pr-info.outputs.sha }}'
           context: ${{ env.STATUS_NAME }}
-          state: ${{ job.status }}
+          state: error
           description: 'CentOS Stream 9 - Test got error'
           target_url: ${{ steps.job-log-url.outputs.html_url }}
         env:

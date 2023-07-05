@@ -46,22 +46,7 @@ sudo dnf install -y --nogpgcheck httpd osbuild osbuild-composer composer-cli pod
 
 # Customize repository
 sudo mkdir -p /etc/osbuild-composer/repositories
-
-case "${ID}-${VERSION_ID}" in
-    "centos-9")
-        sudo cp files/centos-stream-9.json /etc/osbuild-composer/repositories/centos-9.json;;
-    *)
-        echo "unsupported distro: ${ID}-${VERSION_ID}"
-        exit 1;;
-esac
-
-# Check ostree_key permissions
-KEY_PERMISSION_PRE=$(stat -L -c "%a %G %U" key/ostree_key | grep -oP '\d+' | head -n 1)
-echo -e "${KEY_PERMISSION_PRE}"
-if [[ "${KEY_PERMISSION_PRE}" != "600" ]]; then
-   greenprint "💡 File permissions too open...Changing to 600"
-   chmod 600 ./key/ostree_key
-fi
+sudo cp files/centos-stream-9.json /etc/osbuild-composer/repositories/centos-9.json
 
 # Start httpd server as prod ostree repo
 greenprint "Start httpd service"
@@ -122,20 +107,11 @@ polkit.addRule(function(action, subject) {
 });
 EOF
 
+# Reset selinux for /var/www/html/source
+sudo restorecon -Rv /var/www/html/source/
+
 # Basic weldr API status checking
 sudo composer-cli status show
-
-# Create source configuration file
-sudo tee "/tmp/source.toml" > /dev/null << EOF
-id = "source"
-name = "source"
-type = "yum-baseurl"
-url = "file:///var/www/html/source/"
-check_gpg = false
-system = false
-EOF
-
-sudo composer-cli sources add "/tmp/source.toml"
 
 # Source checking
 sudo composer-cli sources list
