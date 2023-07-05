@@ -1,0 +1,170 @@
+---
+- hosts: ostree_guest
+  become: no
+  vars:
+    total_counter: "0"
+    failed_counter: "0"
+
+  tasks:
+
+    # current target host's IP address
+    - debug: var=ansible_all_ipv4_addresses
+    - debug: var=ansible_facts['distribution_version']
+    - debug: var=ansible_facts['distribution']
+    - debug: var=ansible_facts['architecture']
+
+    # check BIOS or UEFI
+    - name: check bios or uefi
+      stat:
+        path: /sys/firmware/efi
+
+    # check secure boot status if it's enabled
+    - name: check secure boot status
+      command: mokutil --sb-state
+      ignore_errors: yes
+
+    # check tpm device
+    - name: check tpm device
+      stat:
+        path: /dev/tpm0
+      ignore_errors: yes
+
+    - name: check partition size
+      command: df -h
+      ignore_errors: yes
+      become: yes
+
+    - name: check disk partition table
+      command: fdisk -l
+      ignore_errors: yes
+      become: yes
+
+    - name: check rpm-ostree status
+      command: rpm-ostree status
+      ignore_errors: yes
+
+    - name: check installed kernel
+      command: uname -r
+
+    # first installed or upgraded
+    - name: determine which stage the checking is running on
+      shell: rpm-ostree status --json | jq '.deployments | length'
+      register: result_stage
+
+    - set_fact:
+        checking_stage: "{{ result_stage.stdout }}"
+
+    # case: check fdo onboarding status
+    # after fdo onboarding finished, /boot/device-credentials will be moved to /etc/device-credentials
+    - name: check if fdo onboarding completed successfully
+      block:
+        - name: wait until the file /etc/device-credentials is present before continuing
+          wait_for:
+            path: /etc/device-credentials
+      always:
+        - set_fact:
+            total_counter: "{{ total_counter | int + 1 }}"
+      rescue:
+        - name: failed count + 1
+          set_fact:
+            failed_counter: "{{ failed_counter | int + 1 }}"
+
+    # case: check ostree commit correctly updated
+    - name: get deployed ostree commit
+      shell: rpm-ostree status --json | jq -r '.deployments[0].checksum'
+      register: result_commit
+
+    - name: make a json result
+      set_fact:
+        deploy_commit: "{{ result_commit.stdout }}"
+
+    - name: check commit deployed and built
+      block:
+        - assert:
+            that:
+              - deploy_commit == ostree_commit
+            fail_msg: "deployed ostree commit is not commit built by osbuild-composer"
+            success_msg: "successful building and deployment"
+      always:
+        - set_fact:
+            total_counter: "{{ total_counter | int + 1 }}"
+      rescue:
+        - name: failed count + 1
+          set_fact:
+            failed_counter: "{{ failed_counter | int + 1 }}"
+
+    # case: check ostree ref
+    - name: check ostree ref
+      shell: rpm-ostree status --json | jq -r '.deployments[0].origin'
+      register: result_ref
+
+    - name: check ostree ref deployed
+      block:
+        - assert:
+            that:
+              - result_ref.stdout == ostree_ref
+            fail_msg: "deployed ostree ref failed"
+            success_msg: "ostree ref successful building and deployment"
+      always:
+        - set_fact:
+            total_counter: "{{ total_counter | int + 1 }}"
+      rescue:
+        - name: failed count + 1
+          set_fact:
+            failed_counter: "{{ failed_counter | int + 1 }}"
+
+    # case: check wget installed after upgrade
+    - name: check installed package
+      shell: rpm -qa | sort
+      register: result_packages
+
+    - name: check wget installed
+      block:
+        - assert:
+            that:
+              - "'wget' in result_packages.stdout"
+            fail_msg: "wget not installed, ostree upgrade might be failed"
+            success_msg: "wget installed in ostree upgrade"
+      always:
+        - set_fact:
+            total_counter: "{{ total_counter | int + 1 }}"
+      rescue:
+        - name: failed count + 1
+          set_fact:
+            failed_counter: "{{ failed_counter | int + 1 }}"
+      when: checking_stage == "2"
+
+    - name: check dmesg output
+      command: dmesg
+
+    # Check FDO status and task status
+    - name: check fdo-client-linuxapp logs
+      command: journalctl -u fdo-client-linuxapp
+      become: yes
+
+    # Check re-encryption status on x86_64
+    - name: wait for FDO re-encryption
+      block:
+        - shell: cryptsetup luksDump /dev/vda4
+          register: result
+          until: not result.stdout_lines is search("cipher_null-ecb")
+          retries: 30
+          delay: 60
+      always:
+        - set_fact:
+            total_counter: "{{ total_counter | int + 1 }}"
+      rescue:
+        - name: failed count + 1
+          set_fact:
+            failed_counter: "{{ failed_counter | int + 1 }}"
+
+    # Check FDO status and task status
+    - name: check fdo-client-linuxapp logs
+      command: journalctl -u fdo-client-linuxapp
+      become: yes
+
+    - assert:
+        that:
+          - failed_counter == "0"
+        fail_msg: "Run {{ total_counter }} tests, but {{ failed_counter }} of them failed"
+        success_msg: "Totally {{ total_counter }} test passed"

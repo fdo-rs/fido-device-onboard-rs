@@ -37,12 +37,12 @@ COMPOSE_START=${TEMPDIR}/compose-start-${IMAGE_KEY}.json
 COMPOSE_INFO=${TEMPDIR}/compose-info-${IMAGE_KEY}.json
 
 # SSH setup.
+SSH_KEY="${TEMPDIR}/id_rsa"
+ssh-keygen -f "${SSH_KEY}" -N "" -q -t rsa
 SSH_OPTIONS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5)
-SSH_KEY=key/ostree_key
 SSH_KEY_PUB=$(cat "${SSH_KEY}".pub)
-EDGE_USER_PASSWORD=foobar
+
 FDO_USER=fdouser
-SYSROOT_RO="true"
 
 # Colorful output.
 function greenprint {
@@ -215,10 +215,24 @@ DIUN_PUB_KEY_HASH=sha256:$(openssl x509 -fingerprint -sha256 -noout -in aio/keys
 greenprint "🔧 Prepare FDO key and configuration files for FDO containers"
 cp -r aio/keys fdo/
 
+# Install python3-pip
+sudo dnf install -y python3-pip
+# Install yq to modify service api server config yaml file
+sudo pip3 install yq
+
+# Configure disk encryption
+/usr/local/bin/yq -iy '.service_info.diskencryption_clevis |= [{disk_label: "/dev/vda4", reencrypt: true, binding: {pin: "tpm2", config: "{}"}}]' fdo/serviceinfo_api_server.yml
+# FDO user does not have password, use ssh key and no sudo password instead
+/usr/local/bin/yq -iy ".service_info.initial_user |= {username: \"fdouser\", sshkeys: [\"$SSH_KEY_PUB\"]}" fdo/serviceinfo-api-server.yml
 # No sudo password required by ansible
 tee /tmp/fdouser > /dev/null << EOF
 $FDO_USER ALL=(ALL) NOPASSWD: ALL
 EOF
+# Configure files
+/usr/local/bin/yq -iy '.service_info.files |= [{path: "/etc/sudoers.d/fdouser", source_path: "/etc/fdo/fdouser"}]' fdo/serviceinfo-api-server.yml
+
+# Check fdo/serviceinfo_api_server.yml configuration
+cat fdo/serviceinfo_api_server.yml
 
 greenprint "🔧 Starting fdo manufacture server"
 podman run -d \
@@ -440,11 +454,11 @@ ansible_private_key_file=${SSH_KEY}
 ansible_ssh_common_args="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 ansible_become=yes 
 ansible_become_method=sudo
-ansible_become_pass=${EDGE_USER_PASSWORD}
+ansible_become_pass=foobar
 EOF
 
 # Test IoT/Edge OS
-sudo podman run -v "$(pwd)":/work:z -v "${TEMPDIR}":/tmp:z --rm quay.io/rhel-edge/ansible-runner:latest ansible-playbook -v -i /tmp/inventory -e os_name=redhat -e ostree_commit="${INSTALL_HASH}" -e ostree_ref="${REF_PREFIX}:${OSTREE_REF}" -e fdo_credential="true" -e sysroot_ro="$SYSROOT_RO" check-ostree.yaml || RESULTS=0
+sudo podman run -v "$(pwd)":/work:z -v "${TEMPDIR}":/tmp:z --rm quay.io/rhel-edge/ansible-runner:latest ansible-playbook -v -i /tmp/inventory -e ostree_commit="${INSTALL_HASH}" -e ostree_ref="${REF_PREFIX}:${OSTREE_REF}" check-ostree.yaml || RESULTS=0
 check_result
 
 # Clean up BIOS VM
@@ -572,7 +586,7 @@ ansible_become_method=sudo
 EOF
 
 # Test IoT/Edge OS
-sudo podman run -v "$(pwd)":/work:z -v "${TEMPDIR}":/tmp:z --rm quay.io/rhel-edge/ansible-runner:latest ansible-playbook -v -i /tmp/inventory -e os_name=redhat -e ostree_commit="${INSTALL_HASH}" -e ostree_ref="${REF_PREFIX}:${OSTREE_REF}" -e fdo_credential="true" -e sysroot_ro="$SYSROOT_RO" check-ostree.yaml || RESULTS=0
+sudo podman run -v "$(pwd)":/work:z -v "${TEMPDIR}":/tmp:z --rm quay.io/rhel-edge/ansible-runner:latest ansible-playbook -v -i /tmp/inventory -e ostree_commit="${INSTALL_HASH}" -e ostree_ref="${REF_PREFIX}:${OSTREE_REF}" check-ostree.yaml || RESULTS=0
 check_result
 
 # Clean up VM
@@ -703,7 +717,7 @@ ansible_become_method=sudo
 EOF
 
 # Test IoT/Edge OS
-sudo podman run -v "$(pwd)":/work:z -v "${TEMPDIR}":/tmp:z --rm quay.io/rhel-edge/ansible-runner:latest ansible-playbook -v -i /tmp/inventory -e os_name=redhat -e ostree_commit="${INSTALL_HASH}" -e ostree_ref="${REF_PREFIX}:${OSTREE_REF}" -e fdo_credential="true" -e sysroot_ro="$SYSROOT_RO" check-ostree.yaml || RESULTS=0
+sudo podman run -v "$(pwd)":/work:z -v "${TEMPDIR}":/tmp:z --rm quay.io/rhel-edge/ansible-runner:latest ansible-playbook -v -i /tmp/inventory -e ostree_commit="${INSTALL_HASH}" -e ostree_ref="${REF_PREFIX}:${OSTREE_REF}" check-ostree.yaml || RESULTS=0
 check_result
 
 # Clean up VM
