@@ -42,7 +42,7 @@ VENDOR_TARBALL=rpmbuild/SOURCES/fido-device-onboard-rs-$(COMMIT)-vendor.tar.gz
 
 $(RPM_SPECFILE):
 	mkdir -p $(CURDIR)/rpmbuild/SPECS
-	(echo "%global commit $(COMMIT)"; git show HEAD:fido-device-onboard.spec) > $(RPM_SPECFILE)
+	sed "s/%{url}\/archive\/v%{version}\/%{name}-rs-%{version}.tar.gz/%{name}-rs-$(COMMIT).tar.gz/; s/%{name}-rs-%{version}-vendor-patched.tar.xz/%{name}-rs-$(COMMIT)-vendor.tar.gz/; s/%autosetup -p1 -n %{name}-rs-%{version}/%autosetup -p1 -n %{name}-rs-$(COMMIT)/" fido-device-onboard.spec > $(RPM_SPECFILE)
 
 $(RPM_TARBALL):
 	mkdir -p $(CURDIR)/rpmbuild/SOURCES
@@ -50,7 +50,7 @@ $(RPM_TARBALL):
 	cp ./make-vendored-tarfile.sh rpmbuild/SOURCES/make-vendored-tarfile.sh
 
 $(VENDOR_TARBALL):
-	./make-vendored-tarfile.sh $(COMMIT) $(VENDOR_TARBALL)
+	./make-vendored-tarfile.sh $(VENDOR_TARBALL)
 
 .PHONY: srpm
 srpm: $(RPM_SPECFILE) $(RPM_TARBALL) $(VENDOR_TARBALL)
