@@ -83,6 +83,7 @@ jobs:
       - name: Get Current Job Log URL
         id: job-log-url
         run: |
+          sudo dnf install -y jq
           JOB_HTML_URL=$(curl --get -Ss -H "Authorization: token ${GITHUB_TOKEN}" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/repos/fedora-iot/fido-device-onboard-rs/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=30" | jq -r --arg job_name "fido-container" '.jobs | map(select(.name == "fido-container")) | .[0].html_url')
           echo "html_url=$JOB_HTML_URL" >> $GITHUB_OUTPUT
         env:
