@@ -741,6 +741,13 @@ impl TestClientResult {
     pub fn raw_stdout(&self) -> &[u8] {
         &self.raw_stdout
     }
+
+    pub fn get_stdout(&self) -> Result<&Vec<String>> {
+        if self.stdout.is_none() {
+            bail!("Couldn't get stdout");
+        }
+        Ok(self.stdout.as_ref().unwrap())
+    }
 }
 
 #[derive(Debug)]
