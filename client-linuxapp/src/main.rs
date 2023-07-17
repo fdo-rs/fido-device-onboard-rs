@@ -274,11 +274,11 @@ async fn perform_to1(
         Ok(token) => token,
         Err(e) => match e {
             ClientError::Request(e) => {
-                send_client_error(client, e.borrow()).await;
+                send_client_error(client, &e).await;
                 bail!(e.error);
             }
             ClientError::Response(e) => {
-                send_client_error(client, e.borrow()).await;
+                send_client_error(client, &e).await;
                 bail!(e.error);
             }
         },
@@ -289,11 +289,11 @@ async fn perform_to1(
         Ok(to1d) => Ok(to1d),
         Err(e) => match e {
             ClientError::Request(e) => {
-                send_client_error(client, e.borrow()).await;
+                send_client_error(client, &e).await;
                 bail!(e.error);
             }
             ClientError::Response(e) => {
-                send_client_error(client, e.borrow()).await;
+                send_client_error(client, &e).await;
                 bail!(e.error);
             }
         },
@@ -861,11 +861,11 @@ async fn perform_to2(
         Ok(nonce5) => nonce5,
         Err(e) => match e {
             ClientError::Request(e) => {
-                send_client_error(&mut client, e.borrow()).await;
+                send_client_error(&mut client, &e).await;
                 bail!(e.error);
             }
             ClientError::Response(e) => {
-                send_client_error(&mut client, e.borrow()).await;
+                send_client_error(&mut client, &e).await;
                 bail!(e.error);
             }
         },
@@ -883,11 +883,11 @@ async fn perform_to2(
             Ok(values) => values,
             Err(e) => match e {
                 ClientError::Request(e) => {
-                    send_client_error(&mut client, e.borrow()).await;
+                    send_client_error(&mut client, &e).await;
                     bail!(e.error);
                 }
                 ClientError::Response(e) => {
-                    send_client_error(&mut client, e.borrow()).await;
+                    send_client_error(&mut client, &e).await;
                     bail!(e.error);
                 }
             },
@@ -897,11 +897,11 @@ async fn perform_to2(
         Ok(nonce6) => nonce6,
         Err(e) => match e {
             ClientError::Request(e) => {
-                send_client_error(&mut client, e.borrow()).await;
+                send_client_error(&mut client, &e).await;
                 bail!(e.error);
             }
             ClientError::Response(e) => {
-                send_client_error(&mut client, e.borrow()).await;
+                send_client_error(&mut client, &e).await;
                 bail!(e.error);
             }
         },
@@ -919,11 +919,11 @@ async fn perform_to2(
         Ok(payload) => payload,
         Err(e) => match e {
             ClientError::Request(e) => {
-                send_client_error(&mut client, e.borrow()).await;
+                send_client_error(&mut client, &e).await;
                 bail!(e.error);
             }
             ClientError::Response(e) => {
-                send_client_error(&mut client, e.borrow()).await;
+                send_client_error(&mut client, &e).await;
                 bail!(e.error);
             }
         },
@@ -941,11 +941,11 @@ async fn perform_to2(
         Ok(values) => values,
         Err(e) => match e {
             ClientError::Request(e) => {
-                send_client_error(&mut client, e.borrow()).await;
+                send_client_error(&mut client, &e).await;
                 bail!(e.error);
             }
             ClientError::Response(e) => {
-                send_client_error(&mut client, e.borrow()).await;
+                send_client_error(&mut client, &e).await;
                 bail!(e.error);
             }
         },
@@ -956,11 +956,11 @@ async fn perform_to2(
         Ok(nonce7) => nonce7,
         Err(e) => match e {
             ClientError::Request(e) => {
-                send_client_error(&mut client, e.borrow()).await;
+                send_client_error(&mut client, &e).await;
                 bail!(e.error);
             }
             ClientError::Response(e) => {
-                send_client_error(&mut client, e.borrow()).await;
+                send_client_error(&mut client, &e).await;
                 bail!(e.error);
             }
         },
@@ -980,11 +980,11 @@ async fn perform_to2(
         Ok(_) => (),
         Err(e) => match e {
             ClientError::Request(e) => {
-                send_client_error(&mut client, e.borrow()).await;
+                send_client_error(&mut client, &e).await;
                 bail!(e.error);
             }
             ClientError::Response(e) => {
-                send_client_error(&mut client, e.borrow()).await;
+                send_client_error(&mut client, &e).await;
                 bail!(e.error);
             }
         },
@@ -995,11 +995,11 @@ async fn perform_to2(
         Ok(_) => (),
         Err(e) => match e {
             ClientError::Request(e) => {
-                send_client_error(&mut client, e.borrow()).await;
+                send_client_error(&mut client, &e).await;
                 bail!(e.error);
             }
             ClientError::Response(e) => {
-                send_client_error(&mut client, e.borrow()).await;
+                send_client_error(&mut client, &e).await;
                 bail!(e.error);
             }
         },
@@ -1049,11 +1049,11 @@ async fn perform_to2(
         Ok(_) => Ok(reboot_required),
         Err(e) => match e {
             ClientError::Request(e) => {
-                send_client_error(&mut client, e.borrow()).await;
+                send_client_error(&mut client, &e).await;
                 bail!(e.error);
             }
             ClientError::Response(e) => {
-                send_client_error(&mut client, e.borrow()).await;
+                send_client_error(&mut client, &e).await;
                 bail!(e.error);
             }
         },
