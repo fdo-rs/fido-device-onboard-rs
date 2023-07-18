@@ -193,6 +193,7 @@ where
                     cfg.insert("diun_key_type", diun_key_type);
                     cfg.insert("rendezvous_port", &rendezvous_server.server_port().unwrap());
                     cfg.insert("device_identification_format", "SerialNumber");
+                    cfg.insert("plain_di", "false"); // TODO
                     Ok(())
                 })?)
             },

@@ -24,6 +24,7 @@ async fn test_device_credentials_already_active() -> Result<()> {
                     cfg.insert("rendezvous_port", "1337");
                     cfg.insert("diun_key_type", "FileSystem");
                     cfg.insert("device_identification_format", "SerialNumber");
+                    cfg.insert("plain_di", "false"); // TODO
                     Ok(())
                 })?)
             },
@@ -108,6 +109,7 @@ async fn test_device_credentials_generated_with_mac_address() -> Result<()> {
                     cfg.insert("rendezvous_port", "1337");
                     cfg.insert("diun_key_type", "FileSystem");
                     cfg.insert("device_identification_format", "MACAddress");
+                    cfg.insert("plain_di", "false"); // TODO
                     Ok(())
                 })?)
             },
@@ -182,4 +184,83 @@ async fn get_valid_iface_and_mac() -> Result<(String, String)> {
         }
     }
     bail!("No valid iface found")
+}
+
+// This is a same test with test_device_credentials_already_active but just using plain-di.
+#[tokio::test]
+async fn test_plain_di() -> Result<()> {
+    let mut ctx = TestContext::new().context("Error building test context")?;
+    let mfg_server = ctx
+        .start_test_server(
+            Binary::ManufacturingServer,
+            |cfg| {
+                let result = cfg.prepare_config_file(None, |cfg| {
+                    cfg.insert("rendezvous_port", "1337");
+                    cfg.insert("diun_key_type", "FileSystem");
+                    cfg.insert("device_identification_format", "SerialNumber");
+                    cfg.insert("plain_di", "true");
+                    Ok(())
+                })?;
+                return Ok(result);
+            },
+            |_| Ok(()),
+        )
+        .context("Error creating manufacturing server")?;
+    ctx.wait_until_servers_ready()
+        .await
+        .context("Error waiting for servers to start")?;
+
+    let diun_cert = ctx.keys_path().join("diun_key.der");
+    let hmac_cert = ctx.keys_path().join("diun_key.der");
+
+    let client_result = ctx
+        .run_client(
+            Binary::ManufacturingClient,
+            Some(&mfg_server),
+            |cfg| {
+                cfg.env("DEVICE_CREDENTIAL_FILENAME", "devicecredential.dc")
+                    //.env("MANUFACTURING_INFO", "diun_cert.pem")
+                    .env("MANUFACTURING_INFO", "testdevice")
+                    .env("DIUN_PUB_KEY_INSECURE", "true")
+                    .env("USE_PLAIN_DI", "true")
+                    .env("DI_KEY_STORAGE_TYPE", "FileSystem")
+                    .env("DI_SIGN_KEY_PATH", diun_cert)
+                    .env("DI_HMAC_KEY_PATH", hmac_cert)
+                    ;
+                Ok(())
+            },
+            Duration::from_secs(5),
+        )
+        .context("Error running manufacturing client")?;
+    client_result
+        .expect_success()
+        .context("Manufacturing client failed")?;
+
+    // No log in plain-di.
+    // client_result.expect_stderr_line("Trusting any certificate as root")?;
+
+    let dc_path = client_result.client_path().join("devicecredential.dc");
+    L.l(format!("Device Credential should be in {:?}", dc_path));
+
+    let client_result = ctx
+        .run_client(
+            Binary::ManufacturingClient,
+            Some(&mfg_server),
+            |cfg| {
+                cfg.env("DEVICE_CREDENTIAL_FILENAME", "devicecredential.dc")
+                    //.env("MANUFACTURING_INFO", "diun_cert.pem")
+                    .env("MANUFACTURING_INFO", "testdevice")
+                    .env("DEVICE_CREDENTIAL", dc_path)
+                    .env("DIUN_PUB_KEY_INSECURE", "true");
+                Ok(())
+            },
+            Duration::from_secs(5),
+        )
+        .context("Error running manufacturing client")?;
+    client_result
+        .expect_success()
+        .context("Manufacturing client failed")?;
+    client_result.expect_stderr_line("Device credential already active")?;
+
+    Ok(())
 }
