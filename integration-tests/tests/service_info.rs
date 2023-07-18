@@ -273,6 +273,10 @@ where
 # These keys are installed by FIDO Device Onboarding
 ssh-ed25519 sshkey_default user@example.com
 # End of FIDO Device Onboarding keys
+
+# These keys are installed by FIDO Device Onboarding
+ssh-ed25519 sshkey_default user@example2.com
+# End of FIDO Device Onboarding keys
 "
     );
     if ci {
