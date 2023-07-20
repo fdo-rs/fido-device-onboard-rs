@@ -289,7 +289,12 @@ Where:
       [here](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/util/src/servers/configuration/manufacturing_server.rs#L71). 
     - `allowed_key_storage_types`: list of allowed storage types. Possible
       values: `FileSystem`, `Tpm` (up-to-date list of options
-      [here](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/util/src/servers/configuration/manufacturing_server.rs#L86))
+      [here](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/util/src/servers/configuration/manufacturing_server.rs#L86)).
+      
+      In order to use the `Tpm` option you must have the kernel TPM 2 resource
+      manager (`/dev/tpmrm0`) available, or you must set your TPM 2
+      configuration via the `TPM2TOOLS_TCTI`, `TCTI` or `TEST_TCTI` environment
+      variables.
     - `key_path`: path to the diun key.
     - `pub_cert_path`: path to the diun certificate.
 - `rendezvous_info`: indicates how the Device and the Owner will find the
