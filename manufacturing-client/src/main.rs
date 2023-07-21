@@ -587,8 +587,15 @@ impl KeyReference {
     }
 
     async fn get_new_key_tpm(keytype: PublicKeyType) -> Result<Self> {
-        let tcti_conf = tss_esapi::tcti_ldr::TctiNameConf::from_environment_variable()
-            .unwrap_or_else(|_| tss_esapi::tcti_ldr::TctiNameConf::Tabrmd(Default::default()));
+        let tcti_conf = match tss_esapi::tcti_ldr::TctiNameConf::from_environment_variable() {
+            Ok(conf) => conf,
+            Err(_) => {
+                let kernel_rm = tss_esapi::tcti_ldr::DeviceConfig::from_str("/dev/tpmrm0");
+                tss_esapi::tcti_ldr::TctiNameConf::Device(
+                    kernel_rm.expect("Error initializing Kernel RM"),
+                )
+            }
+        };
         let mut tss_context =
             tss_esapi::Context::new(tcti_conf).context("Error initializing the TPM context")?;
 

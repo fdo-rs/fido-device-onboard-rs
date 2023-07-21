@@ -7,8 +7,6 @@ use common::{Binary, LogSide, TestContext};
 
 use anyhow::{bail, Context, Result};
 
-use sha_crypt::sha256_check;
-
 const L: LogSide = LogSide::Test;
 
 #[tokio::test]
