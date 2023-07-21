@@ -85,7 +85,7 @@ impl Default for Configuration {
             separate_manufacturing_and_owner_voucher_store: false,
             manufacturing_enable_plain_di: false,
             manufacturing_disable_key_storage_filesystem: false,
-            manufacturing_disable_key_storage_tpm: false,
+            manufacturing_disable_key_storage_tpm: true,
             manufacturing_use_secp256r1: false,
 
             contact_hostname: None,
