@@ -15,7 +15,6 @@ protocols:
     mfg_string_type: SerialNumber
     key_type: SECP384R1
     allowed_key_storage_types:
-      - Tpm
       - FileSystem
     key_path: /etc/fdo/keys/diun_key.der
     cert_path: /etc/fdo/keys/diun_cert.pem
