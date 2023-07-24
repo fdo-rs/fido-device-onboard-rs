@@ -652,18 +652,17 @@ Identification method to the device.
 2. If the Manufacturing server is specifically configured with a
    `mfg_string_type` set to `MACAddress` in its `diun` configuration section it
    will ask the device to identify itself with a MAC Address, in order to do so
-   the device must set `DI_MFG_STRING_TYPE_MAC_IFACE` [optional] to a valid
-   interface.
+   the user has an option to set `DI_MFG_STRING_TYPE_MAC_IFACE` [optional] to
+   a valid interface.
+  Valid interfaces are those which do not result in a `00:00:00:00:00:00` MAC Address.
    
    Please note that this `DI_MFG_STRING_TYPE_MAC_IFACE` environment variable is
    *optional* and will only be read if the server requests a `MACAddress`
-   identification mode, but if the Manufacturing server is configured as
-   described above the Device Initialize protocol will result in an early error
-   if this environment variable is not set.
-   
-   In such case, the value `DI_MFG_STRING_TYPE_MAC_IFACE` must be set to any
-   interface name of the device that does not result in `00:00:00:00:00:00` as
-   the specified MAC Address.
+   identification mode. If the Manufacturing server is configured as
+   described and the environment variable `DI_MFG_STRING_TYPE_MAC_IFACE` is not set
+   then the default active network interface will be used. This is obtained from 
+   kernel's routing table file (`/proc/net/route`).
+  
    
 3. Run the client: `fdo-manufacturing-client`.
 
@@ -675,10 +674,14 @@ identification with the Manufacturing server.
 1. `DI_MFG_STRING_TYPE`: [optional] selects the Device Identification string
    type; by default `serial_number`, other possible value is `mac_address`.
    
-   If `mac_address` is selected as `DI_MFG_STRING_TYPE` then the user *must*
-   specify a valid interface to read the MAC Address from with
-   `DI_MFG_STRING_TYPE_MAC_IFACE`. Valid interfaces are those which do not
-   result in a `00:00:00:00:00:00` MAC Address.
+   If `mac_address` is selected as `DI_MFG_STRING_TYPE` then the user has an option
+   to specify a valid interface to read the MAC Address from with
+   `DI_MFG_STRING_TYPE_MAC_IFACE` [optional] env variable. 
+   Valid interfaces are those which do not result in a `00:00:00:00:00:00` MAC Address.
+   If the user has not specified which network interface to be used then the default 
+   active network interface will be used. This is obtained from kernel's routing table 
+   file (`/proc/net/route`).
+  
    
 2. `DI_KEY_STORAGE_TYPE`: selects the storage type for the Device
    Identification keys, valid values: `filesystem` (`tpm` not yet

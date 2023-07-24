@@ -1,6 +1,7 @@
 use anyhow::{bail, Context, Result};
 use clap::{Args, Parser, Subcommand};
 use regex::Regex;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::{convert::TryFrom, fs};
 use std::{convert::TryInto, env, str::FromStr};
@@ -324,11 +325,26 @@ async fn main() -> Result<()> {
                 url = args.manufacturing_server_url;
 
                 mfg_string_type = args.mfg_string_type;
-                // ensure that we are given the iface if MACAddress is selected
-                if mfg_string_type == MfgStringType::MACAddress && args.iface.is_none() {
-                    bail!("When using MACAddress as the MfgStringType --iface is required");
+                if mfg_string_type == MfgStringType::MACAddress {
+                    // user provided iface
+                    if args.iface.is_some() {
+                        iface = args.iface;
+                    } else {
+                        // If user has not selected any specific iface then default iface will be used
+                        match get_default_network_iface() {
+                            Ok(Some(result)) => {
+                                iface = Some(result);
+                                log::info!("Default network interface found: {iface:#?}");
+                            }
+                            Err(error) => {
+                                bail!("Error retrieving default network interface: {error}");
+                            }
+                            Ok(None) => {
+                                bail!("Error retrieving default network interface, unknown reason");
+                            }
+                        }
+                    }
                 }
-                iface = args.iface;
 
                 keyref = KeyReference::str_key(args.key_ref)
                     .await
@@ -351,15 +367,31 @@ async fn main() -> Result<()> {
                 } else {
                     bail!("No DIUN root key verification methods set");
                 }
-                iface = args.iface;
 
                 log::debug!("Performing DIUN");
                 client = ServiceClient::new(ProtocolVersion::Version1_1, &url);
                 (keyref, mfg_string_type) = perform_diun(&mut client, diun_pub_key_verification)
                     .await
                     .context("Error performing DIUN")?;
-                if mfg_string_type == MfgStringType::MACAddress && iface.is_none() {
-                    bail!("Server has requested mac_address as mfg_string_type and there is no iface set");
+                if mfg_string_type == MfgStringType::MACAddress {
+                    // user provided iface
+                    if args.iface.is_some() {
+                        iface = args.iface;
+                    } else {
+                        // If user has not selected any specific iface then default iface will be used
+                        match get_default_network_iface() {
+                            Ok(Some(result)) => {
+                                iface = Some(result);
+                                log::info!("Default network interface found: {iface:#?}");
+                            }
+                            Err(error) => {
+                                bail!("Error retrieving default network interface: {error}");
+                            }
+                            Ok(None) => {
+                                bail!("Error retrieving default network interface, unknown reason");
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -388,9 +420,21 @@ async fn main() -> Result<()> {
                 format!("Unsupported MFG string type {env_mfg_string_type} requested")
             })?;
             if mfg_string_type == MfgStringType::MACAddress {
-                iface = Some(env::var("DI_MFG_STRING_TYPE_MAC_IFACE").context(
-                    "Please provide an iface for the MAC address with DI_MFG_STRING_TYPE_MAC_IFACE",
-                )?);
+                iface = match env::var("DI_MFG_STRING_TYPE_MAC_IFACE") {
+                    Ok(iface) => Some(iface),
+                    Err(_) => match get_default_network_iface() {
+                        Ok(Some(result)) => {
+                            log::info!("Default network interface found: {result:#?}");
+                            Some(result)
+                        }
+                        Err(error) => {
+                            bail!("Error determining default network interface: {error}");
+                        }
+                        Ok(None) => {
+                            bail!("Error determining default network interface, reason unknown");
+                        }
+                    },
+                };
             }
             keyref = KeyReference::env_key()
                 .await
@@ -400,17 +444,27 @@ async fn main() -> Result<()> {
             // since the mfg_string_type will be determined in the manufacturing server
             // and it might request MACAddress as the mfg_string_type. What it cannot do
             // is select the iface for the client, so we must set it ahead of time.
-            // Thereby, we are just getting this value if provided, hiding errors.
-            if env::var("DI_MFG_STRING_TYPE_MAC_IFACE").is_ok() {
-                iface = Some(env::var("DI_MFG_STRING_TYPE_MAC_IFACE").unwrap());
+            // This can be by setting DI_MFG_STRING_TYPE_MAC_IFACE env variable to required interface
+            // or else default active network interface will be assigned.
+            if let Ok(iface_var) = env::var("DI_MFG_STRING_TYPE_MAC_IFACE") {
+                iface = Some(iface_var);
             }
             (keyref, mfg_string_type) = perform_diun(&mut client, diun_pub_key_verification)
                 .await
                 .context("Error performing DIUN")?;
-            // once diun has been performed we can error ahead of time if the
-            // server has requested MACaddress but we haven't set an iface.
             if mfg_string_type == MfgStringType::MACAddress && iface.is_none() {
-                bail!("Server has requested mac_address as mfg_string_type and there is no iface (DI_MFG_STRING_TYPE_MAC_IFACE) set");
+                match get_default_network_iface() {
+                    Ok(Some(result)) => {
+                        iface = Some(result);
+                        log::info!("Default network interface found: {iface:#?}");
+                    }
+                    Err(error) => {
+                        bail!("Error retrieving default network interface: {error}");
+                    }
+                    Ok(None) => {
+                        bail!("Error retrieving default network interface, unknown reason");
+                    }
+                }
             }
         }
     }
@@ -943,4 +997,26 @@ impl KeyReference {
             }
         }
     }
+}
+
+const IPV4_DEFAULT: &str = "00000000";
+
+fn get_default_network_iface() -> Result<Option<String>, std::io::Error> {
+    // Check IPv4 addresses from /proc/net/route
+    let file = std::fs::File::open("/proc/net/route")?;
+    let reader = BufReader::new(file);
+
+    for line in reader.lines().skip(1) {
+        let line = line?;
+        let fields: Vec<_> = line.split_whitespace().collect();
+        if fields.is_empty() {
+            continue;
+        }
+        if fields[1] == IPV4_DEFAULT && fields[0] != "lo" {
+            let iface = fields[0].to_string();
+            log::info!("Default network interface is ipv4 based {iface}");
+            return Ok(Some(iface));
+        }
+    }
+    Ok(None)
 }
