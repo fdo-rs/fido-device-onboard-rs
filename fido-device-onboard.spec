@@ -64,7 +64,21 @@ install -D -m 0644 -t %{buildroot}%{_docdir}/fdo examples/config/*
 # duplicates as needed by AIO command so link them
 ln -s %{_bindir}/fdo-owner-tool  %{buildroot}%{_libexecdir}/fdo/fdo-owner-tool
 ln -s %{_bindir}/fdo-admin-tool %{buildroot}%{_libexecdir}/fdo/fdo-admin-tool
+# Create directories needed by the various services so we own them
 mkdir -p %{buildroot}%{_sysconfdir}/fdo
+mkdir -p %{buildroot}%{_sysconfdir}/fdo/keys
+mkdir -p %{buildroot}%{_sysconfdir}/fdo/stores
+mkdir -p %{buildroot}%{_sysconfdir}/fdo/stores/manufacturer_keys
+mkdir -p %{buildroot}%{_sysconfdir}/fdo/stores/manufacturing_sessions
+mkdir -p %{buildroot}%{_sysconfdir}/fdo/stores/owner_onboarding_sessions
+mkdir -p %{buildroot}%{_sysconfdir}/fdo/stores/owner_vouchers
+mkdir -p %{buildroot}%{_sysconfdir}/fdo/stores/rendezvous_registered
+mkdir -p %{buildroot}%{_sysconfdir}/fdo/stores/rendezvous_sessions
+mkdir -p %{buildroot}%{_sysconfdir}/fdo/stores/serviceinfo_api_devices
+mkdir -p %{buildroot}%{_sysconfdir}/fdo/manufacturing-server.conf.d
+mkdir -p %{buildroot}%{_sysconfdir}/fdo/owner-onboarding-server.conf.d
+mkdir -p %{buildroot}%{_sysconfdir}/fdo/rendezvous-server.conf.d
+mkdir -p %{buildroot}%{_sysconfdir}/fdo/serviceinfo-api-server.conf.d
 # Dracut manufacturing service
 install -D -m 0755 -t %{buildroot}%{dracutlibdir}/modules.d/52fdo dracut/52fdo/module-setup.sh
 install -D -m 0755 -t %{buildroot}%{dracutlibdir}/modules.d/52fdo dracut/52fdo/manufacturing-client-generator
@@ -93,6 +107,14 @@ Requires: openssl-libs >= 3.0.1-12
 
 %files -n fdo-owner-onboarding-server
 %license LICENSE LICENSE.dependencies
+%dir %{_sysconfdir}/fdo
+%dir %{_sysconfdir}/fdo/keys
+%dir %{_sysconfdir}/fdo/owner-onboarding-server.conf.d
+%dir %{_sysconfdir}/fdo/serviceinfo-api-server.conf.d
+%dir %{_sysconfdir}/fdo/stores
+%dir %{_sysconfdir}/fdo/stores/owner_onboarding_sessions
+%dir %{_sysconfdir}/fdo/stores/owner_vouchers
+%dir %{_sysconfdir}/fdo/stores/serviceinfo_api_devices
 %{_libexecdir}/fdo/fdo-owner-onboarding-server
 %{_libexecdir}/fdo/fdo-serviceinfo-api-server
 %dir %{_docdir}/fdo
@@ -122,6 +144,12 @@ License: %combined_license
 
 %files -n fdo-rendezvous-server
 %license LICENSE LICENSE.dependencies
+%dir %{_sysconfdir}/fdo
+%dir %{_sysconfdir}/fdo/keys
+%dir %{_sysconfdir}/fdo/rendezvous-server.conf.d
+%dir %{_sysconfdir}/fdo/stores
+%dir %{_sysconfdir}/fdo/stores/rendezvous_registered
+%dir %{_sysconfdir}/fdo/stores/rendezvous_sessions
 %{_libexecdir}/fdo/fdo-rendezvous-server
 %dir %{_docdir}/fdo
 %{_docdir}/fdo/rendezvous-*.yml
@@ -145,6 +173,14 @@ Requires: openssl-libs >= 3.0.1-12
 
 %files -n fdo-manufacturing-server
 %license LICENSE LICENSE.dependencies
+%dir %{_sysconfdir}/fdo
+%dir %{_sysconfdir}/fdo/keys
+%dir %{_sysconfdir}/fdo/manufacturing-server.conf.d
+%dir %{_sysconfdir}/fdo/keys
+%dir %{_sysconfdir}/fdo/stores
+%dir %{_sysconfdir}/fdo/stores/manufacturer_keys
+%dir %{_sysconfdir}/fdo/stores/manufacturing_sessions
+%dir %{_sysconfdir}/fdo/stores/owner_vouchers
 %{_libexecdir}/fdo/fdo-manufacturing-server
 %dir %{_docdir}/fdo
 %{_docdir}/fdo/manufacturing-server.yml
@@ -199,8 +235,6 @@ License: %combined_license
 Summary: FDO admin tools implementation
 License: %combined_license
 Requires: fdo-manufacturing-server = %{version}-%{release}
-Requires: fdo-init = %{version}-%{release}
-Requires: fdo-client = %{version}-%{release}
 Requires: fdo-rendezvous-server = %{version}-%{release}
 Requires: fdo-owner-onboarding-server = %{version}-%{release}
 Requires: fdo-owner-cli = %{version}-%{release}
@@ -209,10 +243,11 @@ Requires: fdo-owner-cli = %{version}-%{release}
 
 %files -n fdo-admin-cli
 %license LICENSE LICENSE.dependencies
+%dir %{_sysconfdir}/fdo
+%dir %{_sysconfdir}/fdo/keys
 %{_bindir}/fdo-admin-tool
 %{_libexecdir}/fdo/fdo-admin-tool
 %{_unitdir}/fdo-aio.service
-%dir %{_sysconfdir}/fdo
 
 %post -n fdo-admin-cli
 %systemd_post fdo-aio.service
@@ -226,6 +261,9 @@ Requires: fdo-owner-cli = %{version}-%{release}
 %changelog
 * Mon Jul 03 2023 Peter Robinson <pbrobinson@fedoraproject.org> - 0.4.11-1
 - Update to 0.4.11
+
+* Mon Jul 03 2023 Peter Robinson <pbrobinson@fedoraproject.org> - 0.4.10-2
+- Updates for eln/c9s building
 
 * Fri Jun 23 2023 Peter Robinson <pbrobinson@fedoraproject.org> - 0.4.10-1
 - Update to 0.4.10
