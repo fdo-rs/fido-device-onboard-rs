@@ -14,7 +14,7 @@ openssl = "0.10.55"
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 tokio = { version = "1", features = ["full"] }
-tss-esapi = { version = "7", features = ["generate-bindings"] }
+tss-esapi = { version = "7.2", features = ["generate-bindings"] }
 
 fdo-util = { path = "../util", version = "0.4.11" }
 fdo-data-formats = { path = "../data-formats", version = "0.4.11" }
