@@ -1,4 +1,5 @@
 mod common;
+use fdo_util::passwd_shadow;
 use std::env;
 use std::{fs, io::Write, process::Command, time::Duration};
 
@@ -401,17 +402,20 @@ ssh-ed25519 sshkey_default user@example2.com
     if ci {
         L.l("Running create initial user validation");
         pretty_assertions::assert_eq!(
-            passwd::Passwd::from_name(new_user).is_some(),
+            passwd_shadow::is_user_in_passwd(new_user)?,
             true,
             "User: {} is not created during onboarding",
             &new_user
         );
-        if let Some(test_user) = shadow::Shadow::from_name(new_user) {
-            pretty_assertions::assert_eq!(
-                test_user.password.is_empty(),
-                false,
-                "Password not created during onboarding"
-            );
+        match passwd_shadow::get_user_passwd(new_user) {
+            Ok(pass) => {
+                pretty_assertions::assert_eq!(
+                    pass.is_empty(),
+                    false,
+                    "Password not created during onboarding"
+                );
+            }
+            Err(e) => bail!(e),
         }
     } else {
         L.l("Skipped create initial user validation

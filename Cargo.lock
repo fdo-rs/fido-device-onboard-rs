@@ -800,7 +800,6 @@ dependencies = [
  "log",
  "nix",
  "openssl",
- "passwd",
  "rand",
  "secrecy",
  "serde_bytes",
@@ -1476,7 +1475,6 @@ dependencies = [
  "lazy_static",
  "libc",
  "openssl",
- "passwd",
  "paste",
  "pem",
  "pretty_assertions",
@@ -1485,7 +1483,6 @@ dependencies = [
  "serde",
  "serde_cbor",
  "serde_json",
- "shadow",
  "tempfile",
  "tera",
  "tokio",
@@ -1927,15 +1924,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c705f256449c60da65e11ff6626e0c16a0a0b96aaa348de61376b249bc340f41"
 dependencies = [
  "regex",
-]
-
-[[package]]
-name = "passwd"
-version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5499366e9469e62340d8c66d31b6c545483a28a41c97d82210703188bcd2f473"
-dependencies = [
- "libc",
 ]
 
 [[package]]
@@ -2616,15 +2604,6 @@ dependencies = [
  "cfg-if 1.0.0",
  "cpufeatures",
  "digest 0.10.7",
-]
-
-[[package]]
-name = "shadow"
-version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcaa1dbf13cc052b53af59e70dd467e8e94d6abf8d0eac1f1d15d3e165973b86"
-dependencies = [
- "libc",
 ]
 
 [[package]]
