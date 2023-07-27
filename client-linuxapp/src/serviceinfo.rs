@@ -20,6 +20,7 @@ use fdo_data_formats::{
     types::{CborSimpleTypeExt, Hash, ServiceInfo},
 };
 use fdo_http_wrapper::client::{RequestResult, ServiceClient};
+use fdo_util::passwd_shadow;
 
 const MAX_SERVICE_INFO_LOOPS: u32 = 1000;
 
@@ -56,8 +57,7 @@ fn set_perm_mode(path: &Path, mode: u32) -> Result<()> {
 
 fn create_user(user: &str) -> Result<()> {
     // Checks if user already present
-    let user_info = passwd::Passwd::from_name(user);
-    if user_info.is_some() {
+    if passwd_shadow::is_user_in_passwd(user)? {
         log::info!("User: {user} already present");
         return Ok(());
     }
@@ -99,8 +99,7 @@ fn is_password_encrypted(s: &str) -> bool {
 
 fn create_user_with_password(user: &str, password: &str) -> Result<()> {
     // Checks if user already present
-    let user_info = passwd::Passwd::from_name(user);
-    if user_info.is_some() {
+    if passwd_shadow::is_user_in_passwd(user)? {
         log::info!("User {user} is already present");
         return Ok(());
     }
@@ -151,17 +150,17 @@ fn create_user_with_password(user: &str, password: &str) -> Result<()> {
 }
 
 fn install_ssh_key(user: &str, key: &str) -> Result<()> {
-    let user_info = passwd::Passwd::from_name(user);
-    if user_info.is_none() {
-        bail!("User {} for SSH key installation missing", user);
-    }
-    let user_info = user_info.unwrap();
-    let uid = nix::unistd::Uid::from_raw(user_info.uid);
-    let gid = nix::unistd::Gid::from_raw(user_info.gid);
+    let (uid, gid, home) = match passwd_shadow::get_user_uid_gid_home(user) {
+        Ok((uid, gid, home)) => (uid, gid, home),
+        Err(e) => bail!(e),
+    };
+
+    let uid = nix::unistd::Uid::from(uid);
+    let gid = nix::unistd::Gid::from(gid);
     let key_path = if let Ok(val) = env::var("SSH_KEY_PATH") {
         PathBuf::from(&val)
     } else {
-        let ssh_dir = Path::new(&user_info.home_dir).join(".ssh");
+        let ssh_dir = Path::new(&home).join(".ssh");
         if !ssh_dir.exists() {
             log::debug!("Creating SSH directory at {}", ssh_dir.display());
             fs::create_dir(&ssh_dir).context("Error creating SSH key directory")?;
