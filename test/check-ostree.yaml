@@ -142,6 +142,35 @@
       command: journalctl -u fdo-client-linuxapp
       become: yes
 
+    # Reboot to enable disk re-encryption
+    - name: reboot system
+      reboot:
+      become: yes
+      register: result_reboot
+      until: result_reboot is success
+      retries: 10
+      delay: 5
+
+    - name: delay 10 seconds
+      pause:
+        seconds: 10
+      delegate_to: 127.0.0.1
+
+    - name: wait for connection to become reachable/usable
+      wait_for_connection:
+        delay: 30
+
+    - name: waits until instance is reachable
+      wait_for:
+        host: "{{ ansible_all_ipv4_addresses[0] }}"
+        port: 22
+        search_regex: OpenSSH
+        delay: 10
+      register: result_rollback
+      until: result_rollback is success
+      retries: 6
+      delay: 10
+
     # Check re-encryption status on x86_64
     - name: wait for FDO re-encryption
       block:

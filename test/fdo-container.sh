@@ -390,6 +390,12 @@ home = "/home/admin/"
 groups = ["wheel"]
 EOF
 
+# workaround selinux bug https://bugzilla.redhat.com/show_bug.cgi?id=2026795
+tee -a "$BLUEPRINT_FILE" > /dev/null << EOF
+[customizations.kernel]
+append = "enforcing=0"
+EOF
+
 greenprint "📄 installer blueprint"
 cat "$BLUEPRINT_FILE"
 
@@ -510,6 +516,12 @@ password = "\$6\$GRmb7S0p8vsYmXzH\$o0E020S.9JQGaHkszoog4ha4AQVs3sk8q0DvLjSMxoxHB
 key = "${SSH_KEY_PUB}"
 home = "/home/admin/"
 groups = ["wheel"]
+EOF
+
+# workaround selinux bug https://bugzilla.redhat.com/show_bug.cgi?id=2026795
+tee -a "$BLUEPRINT_FILE" > /dev/null << EOF
+[customizations.kernel]
+append = "enforcing=0"
 EOF
 
 greenprint "📄 fdosshkey blueprint"
@@ -644,6 +656,12 @@ home = "/home/admin/"
 groups = ["wheel"]
 EOF
 
+# workaround selinux bug https://bugzilla.redhat.com/show_bug.cgi?id=2026795
+tee -a "$BLUEPRINT_FILE" > /dev/null << EOF
+[customizations.kernel]
+append = "enforcing=0"
+EOF
+
 greenprint "📄 fdosshkey blueprint"
 cat "$BLUEPRINT_FILE"
 
@@ -704,7 +722,7 @@ done
 
 greenprint "Waiting for FDO user onboarding finished"
 for _ in $(seq 0 60); do
-    RESULTS=$(wait_for_fdo "$PUB_KEY_GUEST_ADDRESS")
+    RESULTS=$(wait_for_fdo "$ROOT_CERT_GUEST_ADDRESS")
     if [[ $RESULTS == 1 ]]; then
         echo "FDO user is ready to use! 🥳"
         break
