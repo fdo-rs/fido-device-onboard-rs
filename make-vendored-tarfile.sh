@@ -11,4 +11,4 @@ rm -rf winapi-x86_64-pc-windows-gnu/lib/*
 rm -rf winapi-i686-pc-windows-gnu/lib/*
 rm -rf vcpkg/test-data
 popd #vendor
-tar cjf fido-device-onboard-rs-$ver-vendor-patched.tar.xz vendor/
+tar cJf fido-device-onboard-rs-$ver-vendor-patched.tar.xz vendor/
