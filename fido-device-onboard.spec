@@ -238,6 +238,8 @@ Requires: fdo-manufacturing-server = %{version}-%{release}
 Requires: fdo-rendezvous-server = %{version}-%{release}
 Requires: fdo-owner-onboarding-server = %{version}-%{release}
 Requires: fdo-owner-cli = %{version}-%{release}
+Requires: fdo-client = %{version}-%{release}
+Requires: fdo-init = %{version}-%{release}
 %description -n fdo-admin-cli
 %{summary}
 
