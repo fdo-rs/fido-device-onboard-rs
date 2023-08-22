@@ -6,6 +6,7 @@ After=network-online.target
 Type=oneshot
 EnvironmentFile=-/boot/fdo-client-env
 Environment=LOG_LEVEL=info
+ExecStartPre=-/usr/sbin/restorecon /boot/device-credentials
 ExecStart=/usr/libexec/fdo/fdo-client-linuxapp
 ExecStartPost=-/usr/bin/mv /boot/device-credentials /etc/device-credentials
 
