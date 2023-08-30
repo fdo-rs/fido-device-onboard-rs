@@ -11,10 +11,10 @@ service_info:
     sshkeys:
     - "testkey"
   files:
-  - path: /device/etc/hosts
+  - path: /var/lib/fdo/service-info-api/files/hosts
     permissions: 644
     source_path: /server/local/etc/hosts
-  - path: /device/etc/resolv.conf
+  - path: /var/lib/fdo/service-info-api/files/resolv.conf
     source_path: /server/local/etc/resolv.conf
   commands:
   - command: ls
