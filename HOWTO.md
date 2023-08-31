@@ -446,10 +446,10 @@ service_info:
     sshkeys:
     - "testkey"
   files:
-  - path: /device/etc/hosts
+  - path: /var/lib/fdo/service-info-api/files/hosts
     permissions: 644
     source_path: /server/local/etc/hosts
-  - path: /device/etc/resolv.conf
+  - path: /var/lib/fdo/service-info-api/files/resolv.conf
     source_path: /server/local/etc/resolv.conf
   commands:
   - command: ls
@@ -493,7 +493,7 @@ Where:
   - `files`: [OPTIONAL] transfers files to a device.
     - `path`: destination path.
     - `permissions`: permissions to set on the file.
-    - `source_path`: source file path.
+    - `source_path`: source file path, must be a file under `/var/lib/fdo/`.
   - `commands`: [OPTIONAL] executes the given list of commands on the device.
       - `command`: command to execute.
       - `args`: list of arguments for the command.
