@@ -37,7 +37,7 @@ impl Message for HelloRV {
     }
 
     fn is_valid_previous_message(message_type: Option<crate::constants::MessageType>) -> bool {
-        matches!(message_type, None)
+        message_type.is_none()
     }
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
