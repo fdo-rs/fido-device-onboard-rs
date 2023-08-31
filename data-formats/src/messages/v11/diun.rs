@@ -54,7 +54,7 @@ impl Message for Connect {
     }
 
     fn is_valid_previous_message(message_type: Option<MessageType>) -> bool {
-        matches!(message_type, None)
+        message_type.is_none()
     }
 
     fn encryption_requirement() -> Option<EncryptionRequirement> {
