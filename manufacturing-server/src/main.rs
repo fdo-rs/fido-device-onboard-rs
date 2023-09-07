@@ -17,6 +17,7 @@ use fdo_data_formats::{
     constants::{KeyStorageType, MfgStringType, PublicKeyType, RendezvousVariable},
     ownershipvoucher::OwnershipVoucher,
     publickey::{PublicKey, X5Chain},
+    serializable::PlainBytes,
     types::{Guid, RendezvousInfo},
     ProtocolVersion,
 };
@@ -62,8 +63,9 @@ struct ManufacturingServiceUD {
             OwnershipVoucherStoreMetadataKey,
         >,
     >,
-    public_key_store:
-        Option<Box<dyn Store<fdo_store::ReadOnlyOpen, String, Vec<u8>, PublicKeyStoreMetadataKey>>>,
+    public_key_store: Option<
+        Box<dyn Store<fdo_store::ReadOnlyOpen, String, PlainBytes, PublicKeyStoreMetadataKey>>,
+    >,
 
     // Certificates
     manufacturer_cert: X509,

@@ -13,7 +13,7 @@ use crate::{
     constants::HashType,
     errors::Result,
     publickey::{PublicKey, X5Chain},
-    serializable::MaybeSerializable,
+    serializable::private::MaybeSerializable,
     types::{COSESign, Guid, HMac, Hash, RendezvousInfo, UnverifiedValue},
     DeserializableMany, Error, ProtocolVersion, Serializable,
 };
