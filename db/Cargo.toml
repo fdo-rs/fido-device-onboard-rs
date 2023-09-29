@@ -1,0 +1,22 @@
+[package]
+name = "fdo-db"
+version = "0.4.12"
+edition = "2021"
+
+
+[dependencies]
+anyhow = "1.0"
+diesel = { version = "2.1.0", features = ["sqlite", "postgres", "r2d2"] }
+dotenvy = "0.15"
+
+fdo-data-formats = { path = "../data-formats", version = "0.4.12" }
+
+[dev-dependencies]
+fdo-http-wrapper = { path = "../http-wrapper", version = "0.4.12", features = ["server"] }
+openssl = "0.10.55"
+
+[features]
+postgres = []
+sqlite = []
+
+default = ["postgres", "sqlite"]
