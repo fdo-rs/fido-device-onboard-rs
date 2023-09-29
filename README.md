@@ -11,10 +11,10 @@ The fido-fdo-rs implements all core components of the FIDO Device Onboard Specif
 - Manufacturing Tool both [client](https://github.com/fedora-iot/fido-device-onboard-rs/tree/main/manufacturing-client) and [server](https://github.com/fedora-iot/fido-device-onboard-rs/tree/main/manufacturing-server)
 
 ## Protocols
-- [Device Initialize Protocol (DI)](https://fidoalliance.org/specs/FDO/fido-device-onboard-v1.0-ps-20210323/#device-initialize-protocol-di)
-- [Transfer Ownership Protocol 0 (TO0)](https://fidoalliance.org/specs/FDO/fido-device-onboard-v1.0-ps-20210323/#transfer-ownership-protocol-0-to0)
-- [Transfer Ownership Protocol 1 (TO1)](https://fidoalliance.org/specs/FDO/fido-device-onboard-v1.0-ps-20210323/#transfer-ownership-protocol-1-to1)
-- [Transfer Ownership Protocol 2 (TO2)](https://fidoalliance.org/specs/FDO/fido-device-onboard-v1.0-ps-20210323/#transfer-ownership-protocol-2-to2)
+- [Device Initialize Protocol (DI)](https://fidoalliance.org/specs/FDO/FIDO-Device-Onboard-RD-v1.1-20211214/FIDO-device-onboard-spec-v1.1-rd-20211214.html#device-initialize-protocol-di)
+- [Transfer Ownership Protocol 0 (TO0)](https://fidoalliance.org/specs/FDO/FIDO-Device-Onboard-RD-v1.1-20211214/FIDO-device-onboard-spec-v1.1-rd-20211214.html#transfer-ownership-protocol-0-to0)
+- [Transfer Ownership Protocol 1 (TO1)](https://fidoalliance.org/specs/FDO/FIDO-Device-Onboard-RD-v1.1-20211214/FIDO-device-onboard-spec-v1.1-rd-20211214.html#transfer-ownership-protocol-1-to1)
+- [Transfer Ownership Protocol 2 (TO2)](https://fidoalliance.org/specs/FDO/FIDO-Device-Onboard-RD-v1.1-20211214/FIDO-device-onboard-spec-v1.1-rd-20211214.html#transfer-ownership-protocol-2-to2)
 
 ## Crates and parts
 - `fdo-client-linuxapp`: Performs TO1 and TO2 client side protocols.
