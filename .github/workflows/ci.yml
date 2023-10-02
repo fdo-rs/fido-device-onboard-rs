@@ -87,7 +87,7 @@ jobs:
     steps:
       - name: Install deps
         run: |
-          dnf install -y make gcc openssl openssl-devel findutils golang git tpm2-tss-devel swtpm swtpm-tools git clevis clevis-luks cryptsetup cryptsetup-devel clang-devel cracklib-dicts
+          dnf install -y make gcc openssl openssl-devel findutils golang git tpm2-tss-devel swtpm swtpm-tools git clevis clevis-luks cryptsetup cryptsetup-devel clang-devel cracklib-dicts sqlite sqlite-devel libpq libpq-devel
       - uses: actions/checkout@v3
         with:
           persist-credentials: false
@@ -112,7 +112,19 @@ jobs:
         env:
           FDO_PRIVILEGED: true
           PER_DEVICE_SERVICEINFO: false
-        run: cargo test --workspace
+          SQLITE_MANUFACTURER_DATABASE_URL: ../ci-manufacturer-db.sqlite
+          SQLITE_OWNER_DATABASE_URL: ../ci-owner-db.sqlite
+          SQLITE_RENDEZVOUS_DATABASE_URL: ../ci-rendezvous-db.sqlite
+        run: |
+          # prep for database tests
+          cargo install --force diesel_cli --no-default-features --features sqlite
+          diesel migration run --migration-dir ./migrations_manufacturing_server_sqlite --database-url ./ci-manufacturer-db.sqlite
+          diesel migration run --migration-dir ./migrations_owner_onboarding_server_sqlite --database-url ./ci-owner-db.sqlite
+          diesel migration run --migration-dir ./migrations_rendezvous_server_sqlite --database-url ./ci-rendezvous-db.sqlite
+          # run tests
+          cargo test --workspace
+          # delete sqlite databases
+          rm -f ./ci-manufacturer-db.sqlite ./ci-owner-db.sqlite ./ci-rendezvous-db.sqlite
       - name: Check aio
         run: |
           mkdir aio-dir/
