@@ -34,7 +34,7 @@ The API version for this specification is `1`.
 The modules are comma-separated.
 
 Whether a response is deemed successful is determined purely by the HTTP status code.
-If any status other than 200 is returned, the Owner Onborading Server will cancel the onboarding procedure, and the device will retry later.
+If any status other than 200 is returned, the Owner Onboarding Server will cancel the onboarding procedure, and the device will retry later.
 
 A successful response will be a JSON object.
 The server can send as many keys of the following list as it has available: every key is optional.
