@@ -28,4 +28,4 @@ The module name of this module during the TO2 protocol is *org.fedoraiot.diskenc
 | --- | --- | --- |
 | `disk-label` | `tstr` | The filesystem/Device Mapper label of the disk |
 | `reencrypt-initiated` | `bool` | Indicates whether a re-encrypt has been initiated |
-| `bound` | `bool` | Indicates whether rebinding to the new Clevis PIN completed succesfully |
+| `bound` | `bool` | Indicates whether rebinding to the new Clevis PIN completed successfully |
