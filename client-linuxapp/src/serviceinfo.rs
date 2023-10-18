@@ -10,11 +10,14 @@ use std::{env, fs};
 use std::{os::unix::fs::PermissionsExt, path::PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
+use mediatype::names::{APPLICATION, PKCS7_MIME, PKIX_CERT};
+use mediatype::MediaType;
+use openssl::base64;
 
 use fdo_data_formats::{
     constants::{
-        FedoraIotServiceInfoModule, HashType, RedHatComServiceInfoModule, ServiceInfoModule,
-        StandardServiceInfoModule,
+        FDOServiceInfoModule, FedoraIotServiceInfoModule, HashType, RedHatComServiceInfoModule,
+        ServiceInfoModule, StandardServiceInfoModule,
     },
     messages::v11::to2::{DeviceServiceInfo, OwnerServiceInfo},
     types::{CborSimpleTypeExt, Hash, ServiceInfo},
@@ -43,7 +46,16 @@ fn find_available_modules() -> Result<Vec<ServiceInfoModule>> {
         module_list.push(FedoraIotServiceInfoModule::DiskEncryptionClevis.into());
     }
 
+    if module_csr_is_available() {
+        module_list.push(FDOServiceInfoModule::CSR.into());
+    }
+
     Ok(module_list)
+}
+
+fn module_csr_is_available() -> bool {
+    return Path::new("/usr/bin/update-ca-trust").exists()
+        && Path::new("/usr/bin/openssl").exists();
 }
 
 fn set_perm_mode(path: &Path, mode: u32) -> Result<()> {
@@ -198,6 +210,144 @@ fn install_ssh_key(user: &str, key: &str) -> Result<()> {
     nix::unistd::chown(&key_path, Some(uid), Some(gid))?;
 
     Ok(())
+}
+
+fn trust_cacerts(trusted_cacerts: &str) -> Result<()> {
+    let cacerts_dir = Path::new("/etc/pki/ca-trust/source/anchors");
+
+    let (filename, contents) = decode_cacerts_res(trusted_cacerts)
+        .expect(format!("Failed to decode 'cacerts-res': {trusted_cacerts}").as_str());
+    log::trace!("Decoded 'filename' => '{filename}'");
+    log::trace!("Decoded 'contents' => '{contents}'",);
+
+    let filepath = cacerts_dir
+        .join(PathBuf::from(filename))
+        .to_string_lossy()
+        .to_string();
+
+    log::trace!("Creating file: {filepath}");
+    let mut file = File::create(&filepath)?;
+    log::trace!("Writing contents to file: {filepath}");
+    file.write_all(contents.as_bytes())?;
+
+    log::trace!("Running 'update-ca-trust' command");
+    Command::new("update-ca-trust")
+        .spawn()
+        .context("Error spawning 'update-ca-trust' command")?
+        .wait()
+        .context("Error running 'update-ca-trust' command")?;
+
+    log::trace!("Command 'update-ca-trust' command finished successfully");
+
+    Ok(())
+}
+
+fn decode_cacerts_res(cacerts_res: &str) -> Result<(String, String)> {
+    let mut content_type = "";
+    let mut content_transfer_encoding = "";
+    let mut content_disposition = "";
+    let mut file_contents = "";
+    let mut certs_only = false;
+    let mut filename = "fdo-trusted-cacerts.pem";
+
+    let pkcs7_mime_media_type = MediaType::new(APPLICATION, PKCS7_MIME);
+    let pkix_cert_media_type = MediaType::new(APPLICATION, PKIX_CERT);
+
+    let lines: Vec<&str> = cacerts_res.lines().collect();
+
+    for line in lines {
+        if line.is_empty() {
+            continue;
+        };
+        let parts: Vec<&str> = line.split(":").collect();
+        match parts.len() {
+            1 => file_contents = parts[0],
+            2 => match parts[0].trim() {
+                "Content-Type" => content_type = parts[1].trim(),
+                "Content-Transfer-Encoding" => content_transfer_encoding = parts[1].trim(),
+                "Content-Disposition" => content_disposition = parts[1].trim(),
+                _ => bail!("Unexpected content in cacerts-res: {:?}", parts[0]),
+            },
+            _ => bail!("Unexpected line in cacerts-res: {line}"),
+        }
+    }
+
+    let media_type = MediaType::parse(content_type).expect(
+        format!("Unable to parse 'Content-Type' in cacerts-res: '{content_type}'").as_str(),
+    );
+
+    for (name, value) in media_type.params.iter() {
+        if name == "smime-type" && value == "certs-only" {
+            certs_only = true;
+        }
+        if name == "name" {
+            filename = value.as_str();
+        }
+    }
+
+    if media_type.essence() != pkcs7_mime_media_type || !certs_only {
+        bail!("Unsupported 'Content-Type' in cacerts-res: '{content_type}'")
+    };
+
+    if !content_transfer_encoding.eq("base64") {
+        bail!(
+            "Unsupported 'Content-Transfer-Encoding' in cacerts-res: '{content_transfer_encoding}'",
+        );
+    };
+
+    if !content_disposition.is_empty() {
+        let disposition: Vec<&str> = content_disposition.split(";").collect();
+        content_disposition = disposition[0].trim();
+        if content_disposition != "attachment" {
+            bail!("Unsupported 'Content-Disposition' in cacerts-res: '{content_disposition}'")
+        }
+        for param in disposition.iter().skip(1) {
+            let param: Vec<&str> = param.split("=").collect();
+            if param.len() == 2 && param[0].trim() == "filename" {
+                filename = param[1].trim();
+            }
+        }
+    }
+
+    let der_content = base64::decode_block(file_contents)
+        .expect(format!("Error decoding from base64: {:?}", file_contents).as_str());
+
+    let mut openssl_cmd = Command::new("openssl");
+
+    if media_type.essence() == pkcs7_mime_media_type {
+        openssl_cmd.args(["pkcs7", "-inform", "DER", "-print_certs"]);
+    } else if media_type.essence() == pkix_cert_media_type {
+        openssl_cmd.args(["x509", "-inform", "DER"]);
+    } else {
+        bail!("Unsupported 'Content-Type' in cacerts-res: '{content_type}'");
+    };
+
+    log::debug!(
+        "Running 'openssl' with the following args: {:?}",
+        openssl_cmd.get_args()
+    );
+    let mut spawned_openssl_cmd = openssl_cmd
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("Error spawning 'openssl' command");
+
+    log::debug!("Writing DER content to 'openssl' command stdin");
+    spawned_openssl_cmd
+        .stdin
+        .take()
+        .expect("Unable to take stdin from 'openssl' command")
+        .write_all(&der_content)
+        .expect("Unable to write DER content to 'openssl' command stdin");
+
+    log::debug!("Reading 'openssl' command stdout");
+    let result = spawned_openssl_cmd
+        .wait_with_output()
+        .expect("Error running 'openssl' command");
+
+    let output = String::from_utf8_lossy(&result.stdout).to_string();
+    log::debug!("Command 'openssl' finished successfully ");
+    Ok((String::from(filename), output))
 }
 
 fn perform_rhsm(organization_id: &str, activation_key: &str, perform_insights: bool) -> Result<()> {
@@ -465,6 +615,8 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
     let mut command_in_progress = CommandInProgress::new();
     let mut disk_encryption_in_progress = DiskEncryptionInProgress::new();
 
+    let mut trusted_cacerts: Option<String> = None;
+
     let mut reboot_requested = false;
 
     for (module, key, value) in si_in.iter() {
@@ -503,6 +655,15 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
                 let value = value.as_bool().context("Error parsing reboot value")?;
                 reboot_requested = value;
                 log::trace!("Got reboot value: {value}");
+            }
+        } else if module == FDOServiceInfoModule::CSR.into() {
+            log::info!("found csr param: {key}");
+            if key == "cacerts-res" {
+                let value = value
+                    .as_str()
+                    .with_context(|| format!("Error parsing cacerts {key} value"))?;
+                trusted_cacerts = Some(value.to_string());
+                log::info!("Trusted CA certificates are: {value}");
             }
         } else if module == RedHatComServiceInfoModule::SubscriptionManager.into() {
             if key == "organization_id" {
@@ -757,6 +918,15 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
             rhsm_perform_insights.unwrap(),
         )
         .context("Error performing RHSM enrollment")?;
+    }
+
+    // Perform CSR
+    if active_modules.contains(&FDOServiceInfoModule::CSR.into()) {
+        log::info!("CSR module is active");
+        if !trusted_cacerts.is_none() {
+            log::info!("Received CA certs to be trusted");
+            trust_cacerts(trusted_cacerts.as_ref().unwrap())?;
+        }
     }
 
     Ok(reboot_requested)
