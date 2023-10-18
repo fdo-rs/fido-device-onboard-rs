@@ -38,3 +38,5 @@ service_info:
       config: "{}"
     reencrypt: true
   after_onboarding_reboot: true
+  certificates_enrollment:
+    trusted_cacerts: /etc/device_certificates/trusted_cacerts/ca.p7c

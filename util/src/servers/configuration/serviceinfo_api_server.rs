@@ -32,6 +32,8 @@ pub struct ServiceInfoSettings {
     pub additional_serviceinfo: Option<HashMap<ServiceInfoModule, Vec<(String, String)>>>,
 
     pub after_onboarding_reboot: Option<bool>,
+
+    pub certificate_enrollment: Option<ServiceInfoCSR>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -79,4 +81,9 @@ pub struct ServiceInfoInitialUser {
     pub username: String,
     pub password: Option<String>,
     pub sshkeys: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ServiceInfoCSR {
+    pub trusted_cacerts: Option<String>,
 }
