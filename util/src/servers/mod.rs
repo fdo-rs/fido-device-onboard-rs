@@ -74,6 +74,9 @@ pub fn settings_per_device(guid: &str) -> Result<ServiceInfoSettings> {
             path.push(file_name);
             path.to_string_lossy().into_owned()
         }
+        StoreConfig::DataBase {} => {
+            bail!("Per-device settings with database not implemented yet");
+        }
     };
     let config = Config::builder()
         .add_source(config::File::from(Path::new(&path_per_device_store)))
