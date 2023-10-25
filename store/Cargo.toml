@@ -7,6 +7,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = { version = "1", optional = true}
+
 fdo-data-formats = { path = "../data-formats", version = "0.4.13" }
 
 thiserror = "1"
@@ -27,6 +29,6 @@ diesel = { version = "2.1.0", features = ["sqlite", "postgres", "r2d2"], optiona
 
 [features]
 directory = ["xattr", "serde_cbor"]
-db = ["diesel"]
+db = ["diesel", "anyhow"]
 
 default = ["directory", "db"]
