@@ -722,17 +722,14 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
                 sshkey_user.as_ref().unwrap()
             ))?;
         }
-        if sshkey_keys.is_some() {
+        if let Some(sshkey_keys) = sshkey_keys {
             log::info!("SSHkey module was active, installing SSH keys");
             create_user(sshkey_user.as_ref().unwrap()).context(format!(
                 "Error creating new user: {}",
                 sshkey_user.as_ref().unwrap()
             ))?;
-            let sshkey_keys_v: Vec<String> = sshkey_keys
-                .unwrap()
-                .split(';')
-                .map(|s| s.to_string())
-                .collect();
+            let sshkey_keys_v: Vec<String> =
+                sshkey_keys.split(';').map(|s| s.to_string()).collect();
             for key in sshkey_keys_v {
                 let key_s: String = key;
                 install_ssh_key(sshkey_user.as_ref().unwrap(), key_s.as_str())

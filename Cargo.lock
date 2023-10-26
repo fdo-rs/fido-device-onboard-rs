@@ -1828,9 +1828,9 @@ dependencies = [
 
 [[package]]
 name = "openssl-kdf"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a1fa996d05b13619516a4a4a76da9d0c1ffd60b1d1f3f3523f0bd5d27c12f27"
+checksum = "feda4b74ded511c6d8543db00166f70f572ca7e5eb72f4817bf08628b5bbc1f4"
 dependencies = [
  "foreign-types",
  "libc",
