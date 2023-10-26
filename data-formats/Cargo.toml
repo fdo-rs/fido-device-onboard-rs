@@ -28,14 +28,14 @@ byteorder = "1"
 
 http = "0.2"
 
-openssl-kdf = { version = "0.4.1", features = ["allow_custom"] }
+openssl-kdf = { version = "0.4.2", features = ["allow_custom"] }
 
 [features]
 # Whether to use a non-interoperable KDF.
 use_noninteroperable_kdf = []
 
 [build-dependencies]
-openssl-kdf = { version = "0.4.1", features = ["allow_custom"] }
+openssl-kdf = { version = "0.4.2", features = ["allow_custom"] }
 
 [dev-dependencies]
 maplit = "1.0"
