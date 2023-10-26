@@ -14,10 +14,11 @@ Copy the configuration file from the examples provided and edit as needed.
 
 - [manufacturing-server.yml](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/config/manufacturing-server.yml)
 - [owner-onboarding-server.yml](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/config/owner-onboarding-server.yml)
-- [rendezvous-server.yml](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/config/owner-onboarding-server.yml)
-- [serviceinfo-api-server.yml](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/config/owner-onboarding-server.yml) 
+- [rendezvous-server.yml](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/config/rendezvous-server.yml)
+- [serviceinfo-api-server.yml](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/config/serviceinfo-api-server.yml)
 
 ## Running the FDO containers
+
 ### manufacturing-server 
 
 ``` bash
@@ -68,4 +69,16 @@ podman run -d \
     -v /local/path/to/config:/etc/fdo/serviceinfo-api-server.conf.d/:Z \
     -v /local/path/to/device_specific_serviceinfo:/etc/fdo/device_specific_serviceinfo/:Z \
     quay.io/fido-fdo/serviceinfo-api-server
+```
+
+### client-linuxapp
+
+``` bash
+podman pull quay.io/fido-fdo/client-linuxapp
+
+podman run -d \
+    --name client-linuxapp \
+    -v /local/path/to/device_credential/directory:/etc/fdo/:Z \
+    -e DEVICE_CREDENTIAL=/etc/fdo/device-credentials \
+    quay.io/fido-fdo/client-linuxapp
 ```

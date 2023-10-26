@@ -8,8 +8,10 @@ admin_auth_token: TestAdminToken
 service_info:
   initial_user:
     username: {{ user }}
+    password: {{ password }}
     sshkeys:
-    - {{ sshkey }}
+    - {{ sshkey1 }}
+    - {{ sshkey2 }}
   files:
   - path: /etc/hosts
     permissions: 644

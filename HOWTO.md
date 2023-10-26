@@ -9,11 +9,11 @@
   - How to extend an OV with the Owner's Certificate
   - How to convert a PEM (plain-text) format OV to a COSE (binary) format OV
 - Configuration Files
-  - `manufacturing_server.yml`
-    - `rendezvous_info` field and `rendezvous_info.yml`
-  - `owner_onboarding_server.yml`
-  - `rendezvous_server.yml`
-  - `serviceinfo_api_server.yml`
+  - `manufacturing-server.yml`
+    - `rendezvous_info` field and `rendezvous-info.yml`
+  - `owner-onboarding-server.yml`
+  - `rendezvous-server.yml`
+  - `serviceinfo-api-server.yml`
 - How to run the servers:
   - Manufacturing Server
   - Owner Onboarding Server
@@ -48,28 +48,24 @@ Use `fdo-admin-tool generate-key-and-cert` to generate the required keys for
 `diun`, `manufacturer`, `device-ca` or `owner`. 
 
 ```bash
-USAGE:
-    fdo-admin-tool generate-key-and-cert [OPTIONS] <SUBJECT>
+Usage: fdo-admin-tool generate-key-and-cert [OPTIONS] <SUBJECT>
 
-ARGS:
-    <SUBJECT>    Subject of the key and certificate [possible values: diun, manufacturer,
-                 device-ca, owner]
+Arguments:
+  <SUBJECT>  Subject of the key and certificate [possible values: diun, manufacturer, device-ca, owner]
 
-OPTIONS:
-        --country <COUNTRY>
-            Country name for the certificate [default: US]
-
-        --destination-dir <DESTINATION_DIR>
-            Writes key and certificate to the given path [default: keys]
-
-    -h, --help
-            Print help information
-
-        --organization <ORGANIZATION>
-            Organization name for the certificate [default: Example]
-
-    -V, --version
-            Print version information
+Options:
+      --organization <ORGANIZATION>
+          Organization name for the certificate [default: Example]
+      --country <COUNTRY>
+          Country name for the certificate [default: US]
+      --validity-ends <VALIDITY_ENDS>
+          Number of days the certificate is going to be valid [default: 365]
+      --destination-dir <DESTINATION_DIR>
+          Writes key and certificate to the given path [default: keys]
+  -h, --help
+          Print help
+  -V, --version
+          Print version
 ```
 
 Note in the results that `.der` indicate private keys and `.pem` certificates.
@@ -106,7 +102,7 @@ seen in [How To Generate Keys and
 Certificates](#how-to-generate-keys-and-certificates) and the argument for
 `--rendezvous-info` is a YAML file containing a list of contact information for the
 different Rendezvous Servers (see [Configuration
-Files/rendezvous_info.yml](#rendezvous_info-field-and-rendezvous_infoyml)).
+Files/rendezvous-info.yml](#rendezvous_info-field-and-rendezvous-infoyml)).
 
 ```bash
   $ fdo-owner-tool initialize-device \
@@ -232,7 +228,7 @@ directory of this project.
 - When a field is required but its sub-fields are all optional you may put a
   null value (`~`) there.
 
-### `manufacturing_server.yml`
+### `manufacturing-server.yml`
 
 The most up-to-date configuration settings will be on [util/src/servers/configuration/manufacturing_server.rs](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/util/src/servers/configuration/manufacturing_server.rs).
 
@@ -293,7 +289,12 @@ Where:
       [here](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/util/src/servers/configuration/manufacturing_server.rs#L71). 
     - `allowed_key_storage_types`: list of allowed storage types. Possible
       values: `FileSystem`, `Tpm` (up-to-date list of options
-      [here](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/util/src/servers/configuration/manufacturing_server.rs#L86))
+      [here](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/util/src/servers/configuration/manufacturing_server.rs#L86)).
+      
+      In order to use the `Tpm` option you must have the kernel TPM 2 resource
+      manager (`/dev/tpmrm0`) available, or you must set your TPM 2
+      configuration via the `TPM2TOOLS_TCTI`, `TCTI` or `TEST_TCTI` environment
+      variables.
     - `key_path`: path to the diun key.
     - `pub_cert_path`: path to the diun certificate.
 - `rendezvous_info`: indicates how the Device and the Owner will find the
@@ -322,16 +323,16 @@ Where:
   - `owner_cert_path`: [OPTIONAL] path to the Owner's certificate of this
     Manufacturing server.
 
-#### `rendezvous_info` field and `rendezvous_info.yml`
+#### `rendezvous_info` field and `rendezvous-info.yml`
 
 The `rendezvous_info` field was previously named `rendezvous_info_path`, which
 instead of containing a list of contact methods to reach different Rendezvous
-Servers it contained the path to a configuration file (`rendezvous_info.yml`)
+Servers it contained the path to a configuration file (`rendezvous-info.yml`)
 that had this same info.
 
 If you are using the `fdo-owner-tool` to initialize a device you will need to
-pass a `rendezvous_info.yml` YAML file (not to be confused with the
-`rendezvous_server.yml`) as one of the configuration parameters.
+pass a `rendezvous-info.yml` YAML file (not to be confused with the
+`rendezvous-server.yml`) as one of the configuration parameters.
 
 ```yml
 ---
@@ -345,10 +346,10 @@ pass a `rendezvous_info.yml` YAML file (not to be confused with the
   protocol: http
 ```
 
-The fields of this `rendezvous_info.yml` file are the same ones that can be
-found in the `rendezvous_info` field of the `manufacturing_server.yml`.
+The fields of this `rendezvous-info.yml` file are the same ones that can be
+found in the `rendezvous_info` field of the `manufacturing-server.yml`.
 
-### `owner_onboarding_server.yml`
+### `owner-onboarding-server.yml`
 
 ```yml
 ---
@@ -403,7 +404,7 @@ Where:
 - `report_to_rendezvous_endpoint_enabled`: whether reporting to the Rendezvous
   Server is enabled or not, boolean.
 
-### `rendezvous_server.yml`
+### `rendezvous-server.yml`
 
 ```yml
 ---
@@ -429,7 +430,7 @@ Where:
   TO1 protocols (default 2592000).
 - `bind`: IP address and port that the Rendezvous Server will take.
 
-### `serviceinfo_api_server.yml`
+### `serviceinfo-api-server.yml`
 
 ```yml
 ---
@@ -445,10 +446,10 @@ service_info:
     sshkeys:
     - "testkey"
   files:
-  - path: /device/etc/hosts
+  - path: /var/lib/fdo/service-info-api/files/hosts
     permissions: 644
     source_path: /server/local/etc/hosts
-  - path: /device/etc/resolv.conf
+  - path: /var/lib/fdo/service-info-api/files/resolv.conf
     source_path: /server/local/etc/resolv.conf
   commands:
   - command: ls
@@ -492,7 +493,7 @@ Where:
   - `files`: [OPTIONAL] transfers files to a device.
     - `path`: destination path.
     - `permissions`: permissions to set on the file.
-    - `source_path`: source file path.
+    - `source_path`: source file path, must be a file under `/var/lib/fdo/`.
   - `commands`: [OPTIONAL] executes the given list of commands on the device.
       - `command`: command to execute.
       - `args`: list of arguments for the command.
@@ -528,9 +529,9 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
    certificate and the Device's private key and certificate.
 
 2. Configure `manufacturing-server.yml`, see [Configuration
-   Files/manufacturing_server.yml](#manufacturing_serveryml) and place it either in
+   Files/manufacturing-server.yml](#manufacturing-serveryml) and place it either in
    `/usr/share/fdo`, `/etc/fdo/` or
-   `/etc/fdo/manufacturing-serverr.conf.d/`. The paths will be checked in that
+   `/etc/fdo/manufacturing-server.conf.d/`. The paths will be checked in that
    same order.
 
 3. Execute `fdo-manufacturing-server` or run it as a service, see sample
@@ -543,7 +544,7 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
    keys and certificates](#how-to-generate-keys-and-certificates).
 
 2. Configure `owner-onboarding-server.yml`, see [Configuration
-   Files/owner_onboarding_server.yml](#owner_onboarding_serveryml) and place it
+   Files/owner-onboarding-server.yml](#owner-onboarding-serveryml) and place it
    either in `/usr/share/fdo`, `/etc/fdo/` or
    `/etc/fdo/owner-onboarding-server.conf.d/`. The paths will be checked in
    that same order.
@@ -558,7 +559,7 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
    Rename the generated OV to its Device GUID (see [How to get information about an
    OV](#how-to-get-information-about-an-ov) to identify its Device GUID) and
    store it in the path given to the `ownership_voucher_store_driver` field in
-   the `owner_onboarding_server.yml` of the previous step.
+   the `owner-onboarding-server.yml` of the previous step.
 
 4. Execute `fdo-owner-onboarding-server` or run it as a service, see sample
    file in [examples/systemd](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/systemd/fdo-owner-onboarding-server.service).
@@ -566,7 +567,7 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
 ### Rendezvous Server
 
 1. Configure `rendezvous-server.yml`, see [Configuration
-   Files/rendezvous_server.yml](#rendezvous_serveryml) and place it either in
+   Files/rendezvous-server.yml](#rendezvous-serveryml) and place it either in
    `/usr/share/fdo`, `/etc/fdo/` or `/etc/fdo/rendezvous-server.conf.d/`. The
    paths will be checked in that same order.
 
@@ -576,7 +577,7 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
 ### Service Info API Server
 
 1. Configure `serviceinfo-api-server.yml`, see [Configuration
-   Files/serviceinfo_api_server.yml](#serviceinfo_api_serveryml), and place it either in
+   Files/serviceinfo-api-server.yml](#serviceinfo-api-serveryml), and place it either in
    `/usr/share/fdo`, `/etc/fdo/` or `/etc/fdo/serviceinfo-api-server.conf.d/`. The
    paths will be checked in that same order.
 
@@ -651,18 +652,17 @@ Identification method to the device.
 2. If the Manufacturing server is specifically configured with a
    `mfg_string_type` set to `MACAddress` in its `diun` configuration section it
    will ask the device to identify itself with a MAC Address, in order to do so
-   the device must set `DI_MFG_STRING_TYPE_MAC_IFACE` [optional] to a valid
-   interface.
+   the user has an option to set `DI_MFG_STRING_TYPE_MAC_IFACE` [optional] to
+   a valid interface.
+  Valid interfaces are those which do not result in a `00:00:00:00:00:00` MAC Address.
    
    Please note that this `DI_MFG_STRING_TYPE_MAC_IFACE` environment variable is
    *optional* and will only be read if the server requests a `MACAddress`
-   identification mode, but if the Manufacturing server is configured as
-   described above the Device Initialize protocol will result in an early error
-   if this environment variable is not set.
-   
-   In such case, the value `DI_MFG_STRING_TYPE_MAC_IFACE` must be set to any
-   interface name of the device that does not result in `00:00:00:00:00:00` as
-   the specified MAC Address.
+   identification mode. If the Manufacturing server is configured as
+   described and the environment variable `DI_MFG_STRING_TYPE_MAC_IFACE` is not set
+   then the default active network interface will be used. This is obtained from 
+   kernel's routing table file (`/proc/net/route`).
+  
    
 3. Run the client: `fdo-manufacturing-client`.
 
@@ -674,10 +674,14 @@ identification with the Manufacturing server.
 1. `DI_MFG_STRING_TYPE`: [optional] selects the Device Identification string
    type; by default `serial_number`, other possible value is `mac_address`.
    
-   If `mac_address` is selected as `DI_MFG_STRING_TYPE` then the user *must*
-   specify a valid interface to read the MAC Address from with
-   `DI_MFG_STRING_TYPE_MAC_IFACE`. Valid interfaces are those which do not
-   result in a `00:00:00:00:00:00` MAC Address.
+   If `mac_address` is selected as `DI_MFG_STRING_TYPE` then the user has an option
+   to specify a valid interface to read the MAC Address from with
+   `DI_MFG_STRING_TYPE_MAC_IFACE` [optional] env variable. 
+   Valid interfaces are those which do not result in a `00:00:00:00:00:00` MAC Address.
+   If the user has not specified which network interface to be used then the default 
+   active network interface will be used. This is obtained from kernel's routing table 
+   file (`/proc/net/route`).
+  
    
 2. `DI_KEY_STORAGE_TYPE`: selects the storage type for the Device
    Identification keys, valid values: `filesystem` (`tpm` not yet
@@ -743,9 +747,9 @@ still required to be set by the user (`DI_SIGN_KEY_PATH`, `DI_HMAC_KEY_PATH`).
 
   Using this feature the user can choose to apply different serviceinfo settings on different devices.
   For that the user needs to provide a path to a `per-device serviceinfo` file under the `device_specific_store_driver` field
-  present in the `serviceinfo_api_server.yml` file.
+  present in the `serviceinfo-api-server.yml` file.
   If other devices do not have their `per-device serviceinfo` file under `device_specific_store_driver` they will get onboarded
-  with settings from the main file, which is `serviceinfo_api_server.yml`.
+  with settings from the main file, which is `serviceinfo-api-server.yml`.
   
   1. Initialize the device as mentioned in [How to generate an Ownership Voucher and Credential for a Device](#how-to-generate-an-ownership-voucher-ov-and-credential-for-a-device-device-initialization).
 

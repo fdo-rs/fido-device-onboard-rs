@@ -107,12 +107,12 @@ jobs:
         with:
           toolchain: stable
       - name: Build
-        run: cargo build
+        run: cargo build --workspace
       - name: Run tests
         env:
           FDO_PRIVILEGED: true
           PER_DEVICE_SERVICEINFO: false
-        run: cargo test
+        run: cargo test --workspace
       - name: Check aio
         run: |
           mkdir aio-dir/
@@ -167,4 +167,4 @@ jobs:
       - name: Build devcontainer
         run: devcontainer build --image-name devcontainer-fdo-rs .
       - name: Test building in devcontainer
-        run: docker run --rm -v `pwd`:/code:z --workdir /code --user root devcontainer-fdo-rs cargo build --verbose
+        run: docker run --rm -v `pwd`:/code:z --workdir /code --user root devcontainer-fdo-rs cargo build --workspace --verbose

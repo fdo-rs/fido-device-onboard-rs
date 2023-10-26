@@ -85,7 +85,7 @@ impl Default for Configuration {
             separate_manufacturing_and_owner_voucher_store: false,
             manufacturing_enable_plain_di: false,
             manufacturing_disable_key_storage_filesystem: false,
-            manufacturing_disable_key_storage_tpm: false,
+            manufacturing_disable_key_storage_tpm: true,
             manufacturing_use_secp256r1: false,
 
             contact_hostname: None,
@@ -431,6 +431,7 @@ pub(super) fn generate_configs_and_keys(
             subject: key_subject,
             organization: config_args.cert_organization.clone(),
             country: config_args.cert_country.clone(),
+            validity_ends: 365,
             destination_dir: aio_dir.join("keys").to_string_lossy().to_string(),
         })
         .with_context(|| format!("Error creating {key_subject:?} key"))?;

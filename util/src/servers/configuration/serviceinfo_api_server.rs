@@ -77,5 +77,6 @@ pub struct ServiceInfoCommand {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ServiceInfoInitialUser {
     pub username: String,
-    pub sshkeys: Vec<String>,
+    pub password: Option<String>,
+    pub sshkeys: Option<Vec<String>>,
 }

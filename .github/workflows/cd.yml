@@ -77,3 +77,12 @@ jobs:
         tags: ${{ steps.build.outputs.tags }}
         username: ${{ secrets.QUAY_USERNAME }}
         password: ${{ secrets.QUAY_ROBOT_TOKEN }}
+
+    - name: Push client-linuxapp to quay.io
+      uses: redhat-actions/push-to-registry@v2
+      with:
+        registry: "quay.io/${{ env.quay_org }}"
+        image: client-linuxapp
+        tags: ${{ steps.build.outputs.tags }}
+        username: ${{ secrets.QUAY_USERNAME }}
+        password: ${{ secrets.QUAY_ROBOT_TOKEN }}

@@ -26,7 +26,6 @@ protocols:
     mfg_string_type: SerialNumber
     allowed_key_storage_types:
     - FileSystem
-    - Tpm
 manufacturing:
   manufacturer_cert_path: /path/to/keys/manufacturer_cert.pem
   manufacturer_private_key: /path/to/keys/manufacturer_key.der

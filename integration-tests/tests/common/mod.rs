@@ -741,6 +741,13 @@ impl TestClientResult {
     pub fn raw_stdout(&self) -> &[u8] {
         &self.raw_stdout
     }
+
+    pub fn get_stdout(&self) -> Result<&Vec<String>> {
+        if self.stdout.is_none() {
+            bail!("Couldn't get stdout");
+        }
+        Ok(self.stdout.as_ref().unwrap())
+    }
 }
 
 #[derive(Debug)]
@@ -807,14 +814,18 @@ impl<'a> TestServerConfigurator<'a> {
                         "user",
                         users::get_current_username().unwrap().to_str().unwrap(),
                     );
-                    cfg.insert("sshkey", "sshkey_default");
+                    cfg.insert("sshkey1", "ssh-ed25519 sshkey_default user@example.com");
+                    cfg.insert("sshkey2", "ssh-ed25519 sshkey_default user@example2.com");
+                    cfg.insert("password", "testpassword");
                 } else {
                     L.l("per_device_serviceinfo is set, using device specific values");
                     cfg.insert(
                         "user",
                         users::get_current_username().unwrap().to_str().unwrap(),
                     );
-                    cfg.insert("sshkey", "sshkey_per_device");
+                    cfg.insert("sshkey1", "ssh-ed25519 sshkey_per_device user@example.com");
+                    cfg.insert("sshkey2", "ssh-ed25519 sshkey_per_device user@example2.com");
+                    cfg.insert("password", "testpassword");
                 }
 
                 // TODO: Insert more defaults

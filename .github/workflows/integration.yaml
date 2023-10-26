@@ -1,0 +1,160 @@
+---
+name: FDO container test
+
+on:
+  issue_comment:
+    types:
+      - created
+
+jobs:
+  pr-info:
+    if: ${{ github.event.issue.pull_request &&
+            (startsWith(github.event.comment.body, '/test-all') ||
+            startsWith(github.event.comment.body, '/test-container')) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query author repository permissions
+        uses: octokit/request-action@v2.x
+        id: user_permission
+        with:
+          route: GET /repos/${{ github.repository }}/collaborators/${{ github.event.sender.login }}/permission
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # restrict running of tests to users with admin or write permission for the repository
+      # see https://docs.github.com/en/free-pro-team@latest/rest/reference/repos#get-repository-permissions-for-a-user
+      - name: Check if user does have correct permissions
+        if: contains('admin write', fromJson(steps.user_permission.outputs.data).permission)
+        id: check_user_perm
+        run: |
+          echo "User '${{ github.event.sender.login }}' has permission '${{ fromJson(steps.user_permission.outputs.data).permission }}' allowed values: 'admin', 'write'"
+          echo "allowed_user=true" >> $GITHUB_OUTPUT
+      - name: Get information for pull request
+        uses: octokit/request-action@v2.x
+        id: pr-api
+        with:
+          route: GET /repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    outputs:
+      allowed_user: ${{ steps.check_user_perm.outputs.allowed_user }}
+      sha: ${{ fromJson(steps.pr-api.outputs.data).head.sha }}
+
+  pre-fido-container:
+    needs: pr-info
+    if: ${{ needs.pr-info.outputs.allowed_user == 'true' }} &&
+            (startsWith(github.event.comment.body, '/test-all') ||
+            startsWith(github.event.comment.body, '/test-container'))}}
+    runs-on: ubuntu-latest
+    env:
+      STATUS_NAME: fido-container-test
+
+    steps:
+      - name: Get Current Job Log URL
+        id: job-log-url
+        run: |
+          JOB_HTML_URL=$(curl --get -Ss -H "Authorization: token ${GITHUB_TOKEN}" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/repos/fedora-iot/fido-device-onboard-rs/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=30" | jq -r --arg job_name "pre-fido-container" '.jobs | map(select(.name == "pre-fido-container")) | .[0].html_url')
+          echo "html_url=$JOB_HTML_URL" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create in-progress status
+        uses: octokit/request-action@v2.x
+        with:
+          route: 'POST /repos/${{ github.repository }}/statuses/${{ needs.pr-info.outputs.sha }}'
+          context: ${{ env.STATUS_NAME }}
+          state: pending
+          description: 'CentOS Stream 9 - Runner has been deploying...'
+          target_url: ${{ steps.job-log-url.outputs.html_url }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  fido-container:
+    needs: [pr-info, pre-fido-container]
+    if: ${{ needs.pr-info.outputs.allowed_user == 'true' }} &&
+            (startsWith(github.event.comment.body, '/test-all') ||
+            startsWith(github.event.comment.body, '/test-container'))}}
+    runs-on: [kite, x86_64, gcp, centos-stream-9, medium]
+    env:
+      STATUS_NAME: fido-container-test
+
+    steps:
+      - name: Get Current Job Log URL
+        id: job-log-url
+        run: |
+          sudo dnf install -y jq
+          JOB_HTML_URL=$(curl --get -Ss -H "Authorization: token ${GITHUB_TOKEN}" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/repos/fedora-iot/fido-device-onboard-rs/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=30" | jq -r --arg job_name "fido-container" '.jobs | map(select(.name == "fido-container")) | .[0].html_url')
+          echo "html_url=$JOB_HTML_URL" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create in-progress status
+        uses: octokit/request-action@v2.x
+        with:
+          route: 'POST /repos/${{ github.repository }}/statuses/${{ needs.pr-info.outputs.sha }}'
+          context: ${{ env.STATUS_NAME }}
+          state: pending
+          description: 'CentOS Stream 9 - Test has been running...'
+          target_url: ${{ steps.job-log-url.outputs.html_url }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install required packages
+        run: sudo dnf install -y make gcc openssl openssl-devel findutils golang git tpm2-tss-devel swtpm swtpm-tools git clevis clevis-luks cryptsetup cryptsetup-devel clang-devel cracklib-dicts rust-toolset rpmdevtools python3-docutils createrepo_c podman buildah skopeo
+
+      - name: Clone repository
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ needs.pr-info.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Build fido containers
+        uses: ./.github/actions/build_containers
+
+      - name: Build fido PRM pakcages
+        run: make rpm
+
+      - name: Prepare
+        run: |
+          sudo mkdir -p /var/www/html/source
+          sudo cp ./rpmbuild/RPMS/x86_64/* /var/www/html/source/ 2>/dev/null || :
+          sudo createrepo_c /var/www/html/source
+          sudo ls -al /var/www/html/source
+
+      - name: Run fdo-container.sh test
+        run: ./fdo-container.sh
+        working-directory: test
+        timeout-minutes: 100
+
+      - name: Set non cancelled result status
+        if: ${{ !cancelled() }}
+        uses: octokit/request-action@v2.x
+        with:
+          route: 'POST /repos/${{ github.repository }}/statuses/${{ needs.pr-info.outputs.sha }}'
+          context: ${{ env.STATUS_NAME }}
+          state: ${{ job.status }}
+          description: 'CentOS Stream 9 - Test got ${{ job.status }}'
+          target_url: ${{ steps.job-log-url.outputs.html_url }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set cancelled result status
+        if: ${{ cancelled() }}
+        uses: octokit/request-action@v2.x
+        with:
+          route: 'POST /repos/${{ github.repository }}/statuses/${{ needs.pr-info.outputs.sha }}'
+          context: ${{ env.STATUS_NAME }}
+          state: error
+          description: 'CentOS Stream 9 - Test got error'
+          target_url: ${{ steps.job-log-url.outputs.html_url }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/upload-artifact@v3
+        if: ${{ always() }}
+        with:
+          name: fido-container
+          path: |
+            *.json
+            *.log

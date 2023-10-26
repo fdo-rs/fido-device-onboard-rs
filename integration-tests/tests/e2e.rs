@@ -1,6 +1,6 @@
 mod common;
+use fdo_util::passwd_shadow;
 use std::env;
-#[allow(unused_imports)]
 use std::{fs, io::Write, process::Command, time::Duration};
 
 use common::{Binary, LogSide, TestContext};
@@ -138,6 +138,7 @@ where
     env::set_var("PER_DEVICE_SERVICEINFO", "false");
     let mut ctx = TestContext::new().context("Error building test context")?;
     let new_user: &str = "testuser"; // new user to be created during onboarding
+    let new_pw: &str = "testpassword"; // new password to accompany new user during onboarding
     let encrypted_disk_loc = ctx.testpath().join("encrypted.img");
     let rendezvous_server = ctx
         .start_test_server(
@@ -156,7 +157,8 @@ where
                         &encrypted_disk_loc.to_string_lossy(),
                     );
                     if ci {
-                        cfg.insert("user", new_user)
+                        cfg.insert("user", new_user);
+                        cfg.insert("password", new_pw);
                     };
                     Ok(())
                 })?)
@@ -390,18 +392,31 @@ where
             .context("Error reading authorized SSH keys")?,
         "
 # These keys are installed by FIDO Device Onboarding
-sshkey_default
+ssh-ed25519 sshkey_default user@example.com
+# End of FIDO Device Onboarding keys\n
+# These keys are installed by FIDO Device Onboarding
+ssh-ed25519 sshkey_default user@example2.com
 # End of FIDO Device Onboarding keys
 "
     );
     if ci {
         L.l("Running create initial user validation");
         pretty_assertions::assert_eq!(
-            passwd::Passwd::from_name(new_user).is_some(),
+            passwd_shadow::is_user_in_passwd(new_user)?,
             true,
             "User: {} is not created during onboarding",
             &new_user
         );
+        match passwd_shadow::get_user_passwd(new_user) {
+            Ok(pass) => {
+                pretty_assertions::assert_eq!(
+                    pass.is_empty(),
+                    false,
+                    "Password not created during onboarding"
+                );
+            }
+            Err(e) => bail!(e),
+        }
     } else {
         L.l("Skipped create initial user validation
         To validate set env variable FDO_PRIVILEGED and run test as superuser");
@@ -566,37 +581,6 @@ where
         bail!("Failed to call cryptsetup");
     }
 
-    L.l("Adding disk encryption tests");
-    L.l("Creating empty disk image");
-    if !Command::new("truncate")
-        .arg("-s")
-        .arg("1G")
-        .arg(&encrypted_disk_loc)
-        .status()
-        .context("Error running truncate")?
-        .success()
-    {
-        bail!("Error creating empty disk image");
-    }
-
-    L.l("Encrypting disk image");
-    let mut child = Command::new("cryptsetup")
-        .arg("luksFormat")
-        .arg(&encrypted_disk_loc)
-        .arg("--force-password")
-        .stdin(std::process::Stdio::piped())
-        .spawn()
-        .context("Error starting cryptsetup luksFormat")?;
-    {
-        let mut stdin = child.stdin.take().context("Error taking stdin")?;
-        writeln!(stdin, "testpassword")?;
-        stdin.flush()?;
-    }
-
-    let output = child.wait().context("Error waiting for cryptsetup")?;
-    if !output.success() {
-        bail!("Failed to call cryptsetup");
-    }
     L.l("Binding disk image");
     let mut child = Command::new("clevis")
         .arg("luks")
@@ -669,7 +653,10 @@ where
             .context("Error reading authorized per device SSH keys")?,
         "
 # These keys are installed by FIDO Device Onboarding
-sshkey_per_device
+ssh-ed25519 sshkey_per_device user@example.com
+# End of FIDO Device Onboarding keys\n
+# These keys are installed by FIDO Device Onboarding
+ssh-ed25519 sshkey_per_device user@example2.com
 # End of FIDO Device Onboarding keys
 "
     );

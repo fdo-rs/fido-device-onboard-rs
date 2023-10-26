@@ -538,8 +538,19 @@ async fn perform_service_info(
             "username",
             &initial_user.username,
         )?;
-        for key in initial_user.ssh_keys.iter() {
-            out_si.add(FedoraIotServiceInfoModule::SSHKey, "key", &key)?;
+        if initial_user.password.is_some() {
+            out_si.add(
+                FedoraIotServiceInfoModule::SSHKey,
+                "password",
+                &initial_user.password,
+            )?;
+        }
+        if initial_user.ssh_keys.is_some() {
+            out_si.add(
+                FedoraIotServiceInfoModule::SSHKey,
+                "sshkeys",
+                &(initial_user.ssh_keys.unwrap().join(";")),
+            )?;
         }
     }
 
