@@ -217,11 +217,26 @@ pub trait Store<OT: StoreOpenMode, K, V, MKT: MetadataLocalKey>: Send + Sync {
 mod directory;
 
 #[derive(Debug, Serialize, Deserialize)]
+pub enum DBType {
+    Sqlite,
+    Postgres,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum ServerType {
+    Manufacturer,
+    Owner,
+    Rendezvous,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub enum StoreConfig {
     #[cfg(feature = "directory")]
     Directory { path: std::path::PathBuf },
     #[cfg(feature = "db")]
-    DataBase {},
+    Sqlite(ServerType),
+    #[cfg(feature = "db")]
+    Postgres(ServerType),
 }
 
 mod db;
@@ -239,7 +254,9 @@ impl StoreConfig {
             #[cfg(feature = "directory")]
             StoreConfig::Directory { path } => directory::initialize(path),
             #[cfg(feature = "db")]
-            StoreConfig::DataBase {} => db::initialize(),
+            StoreConfig::Sqlite(server) => db::initialize(DBType::Sqlite, server),
+            #[cfg(feature = "db")]
+            StoreConfig::Postgres(server) => db::initialize(DBType::Postgres, server),
         }
     }
 }

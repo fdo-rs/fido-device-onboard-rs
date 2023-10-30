@@ -4,6 +4,8 @@ use fdo_data_formats::ownershipvoucher::OwnershipVoucher;
 use fdo_db::*;
 use std::marker::PhantomData;
 
+use crate::DBType;
+use crate::ServerType;
 use crate::Store;
 use crate::StoreError;
 use crate::{FilterType, MetadataLocalKey, MetadataValue, ValueIter};
@@ -16,17 +18,33 @@ struct SqliteManufacturerStore<K, V> {
 
 impl<K, V> SqliteManufacturerStore<K, V> where K: std::string::ToString {}
 
-pub(super) fn initialize<OT, K, V, MKT>() -> Result<Box<dyn Store<OT, K, V, MKT>>, StoreError>
+pub(super) fn initialize<OT, K, V, MKT>(
+    db_type: DBType,
+    server_type: &ServerType,
+) -> Result<Box<dyn Store<OT, K, V, MKT>>, StoreError>
 where
     OT: crate::StoreOpenMode,
     K: std::str::FromStr + std::string::ToString + Send + Sync + 'static,
     V: Serializable + Send + Sync + Clone + 'static,
     MKT: crate::MetadataLocalKey + 'static,
 {
-    Ok(Box::new(SqliteManufacturerStore {
-        phantom_k: PhantomData,
-        phantom_v: PhantomData,
-    }))
+    match db_type {
+        DBType::Postgres => todo!(),
+        DBType::Sqlite => match server_type {
+            ServerType::Manufacturer => Ok(Box::new(SqliteManufacturerStore {
+                phantom_k: PhantomData,
+                phantom_v: PhantomData,
+            })),
+            ServerType::Owner => Ok(Box::new(SqliteOwnerStore {
+                phantom_k: PhantomData,
+                phantom_v: PhantomData,
+            })),
+            ServerType::Rendezvous => Ok(Box::new(SqliteRendezvousStore {
+                phantom_k: PhantomData,
+                phantom_v: PhantomData,
+            })),
+        },
+    }
 }
 
 pub struct SqliteManufacturerStoreFilterType {
