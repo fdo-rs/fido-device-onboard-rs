@@ -167,6 +167,7 @@ impl Configuration {
             diskencryption_clevis: None,
             additional_serviceinfo: None,
             after_onboarding_reboot: Some(false),
+            certificate_enrollment: None,
         })
     }
 }

@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use fdo_data_formats::{
-    constants::{FedoraIotServiceInfoModule, HashType, ServiceInfoModule},
+    constants::{FDOServiceInfoModule, FedoraIotServiceInfoModule, HashType, ServiceInfoModule},
     types::{Guid, Hash},
 };
 use fdo_store::Store;
@@ -9,8 +9,12 @@ use fdo_util::servers::{
     settings_for, settings_per_device, ServiceInfoApiReply, ServiceInfoApiReplyInitialUser,
     ServiceInfoApiReplyReboot,
 };
+use mediatype::names::{APPLICATION, PKCS7_MIME};
+use mediatype::{MediaType, WriteParams};
+use openssl::base64;
+use openssl::pkcs7::Pkcs7;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, str::FromStr};
+use std::{collections::HashSet, fs, path::Path, str::FromStr};
 use tokio::signal::unix::{signal, SignalKind};
 use warp::Filter;
 
@@ -361,6 +365,26 @@ async fn serviceinfo_handler(
 
     if query_info
         .modules
+        .contains(&FDOServiceInfoModule::CSR.into())
+    {
+        if let Some(certificate_enrollment) = &user_data
+            .service_info_configuration
+            .settings
+            .certificate_enrollment
+        {
+            if let Some(trusted_cacerts) = &certificate_enrollment.trusted_cacerts {
+                match encode_cacerts(trusted_cacerts) {
+                    Ok(cacerts_res) => {
+                        reply.add_extra(FDOServiceInfoModule::CSR, "cacerts-res", &cacerts_res)
+                    }
+                    Err(error) => log::error!("{error}"),
+                }
+            }
+        }
+    }
+
+    if query_info
+        .modules
         .contains(&FedoraIotServiceInfoModule::Reboot.into())
     {
         if let Some(reboot) = &user_data
@@ -388,6 +412,37 @@ async fn serviceinfo_handler(
         }
     }
     Ok(warp::reply::json(&reply.reply))
+}
+
+fn encode_cacerts(trusted_cacerts: &str) -> Result<String> {
+    let trusted_cacert_path = Path::new(trusted_cacerts);
+    let filename = trusted_cacert_path.file_name().unwrap().to_str().unwrap();
+    let mut content_type = MediaType::new(APPLICATION, PKCS7_MIME);
+    content_type.set_param(
+        mediatype::Name::new("smime-type").unwrap(),
+        mediatype::Value::new("certs-only").unwrap(),
+    );
+    content_type.set_param(
+        mediatype::Name::new("name").unwrap(),
+        mediatype::Value::new(filename).unwrap(),
+    );
+    let trusted_cacerts = fs::read(&trusted_cacerts)?;
+    let pkcs7: Pkcs7;
+    pkcs7 = match Pkcs7::from_pem(&trusted_cacerts) {
+        Ok(pkcs7) => pkcs7,
+        Err(_) => Pkcs7::from_der(&trusted_cacerts)?,
+    };
+    let der = pkcs7
+        .to_der()
+        .expect("unable to convert PKCS7 to DER format");
+    let b64_content = base64::encode_block(&der);
+    let cacerts_res = format!(
+        "Content-Type: {content_type}\n\
+         Content-Transfer-Encoding: base64\n\
+         Content-Disposition: attachment; filename={filename}\n\
+         {b64_content}"
+    );
+    Ok(cacerts_res)
 }
 
 fn deserialize_from_str<'de, D>(deserializer: D) -> Result<fdo_data_formats::types::Guid, D::Error>

@@ -20,3 +20,5 @@ fdo-http-wrapper = { path = "../http-wrapper", version = "0.4.12", features = ["
 fdo-data-formats = { path = "../data-formats", version = "0.4.12" }
 fdo-store = { path = "../store", version = "0.4.12", features = ["directory"] }
 fdo-util = { path = "../util", version = "0.4.12" }
+openssl = "0.10.57"
+mediatype = "0.19.15"

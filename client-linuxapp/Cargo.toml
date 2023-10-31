@@ -24,3 +24,4 @@ openssl = "0.10.55"
 fdo-data-formats = { path = "../data-formats", version = "0.4.12" }
 fdo-http-wrapper = { path = "../http-wrapper", version = "0.4.12", features = ["client"] }
 fdo-util = { path = "../util", version = "0.4.12" }
+mediatype = "0.19.15"
