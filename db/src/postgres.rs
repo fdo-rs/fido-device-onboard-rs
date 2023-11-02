@@ -58,7 +58,15 @@ impl DBStoreManufacturer<PgConnection> for PostgresManufacturerDB {
         let result = super::schema::manufacturer_vouchers::dsl::manufacturer_vouchers
             .filter(super::schema::manufacturer_vouchers::guid.eq(guid))
             .first(conn)
-            .expect("Error geting manufacturer OVs");
+            .expect("Error geting manufacturer OV");
+        Ok(result)
+    }
+
+    fn get_all_ovs(conn: &mut PgConnection) -> Result<Vec<ManufacturerOV>> {
+        let result = super::schema::manufacturer_vouchers::dsl::manufacturer_vouchers
+            .select(ManufacturerOV::as_select())
+            .load(conn)
+            .expect("Error getting manufacturer OVs");
         Ok(result)
     }
 

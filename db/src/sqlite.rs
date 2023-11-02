@@ -60,7 +60,15 @@ impl DBStoreManufacturer<SqliteConnection> for SqliteManufacturerDB {
         let result = super::schema::manufacturer_vouchers::dsl::manufacturer_vouchers
             .filter(super::schema::manufacturer_vouchers::guid.eq(guid))
             .first(conn)
-            .expect("Error geting manufacturer OVs");
+            .expect(&format!("Error geting manufacturer OV {guid}"));
+        Ok(result)
+    }
+
+    fn get_all_ovs(conn: &mut SqliteConnection) -> Result<Vec<ManufacturerOV>> {
+        let result = super::schema::manufacturer_vouchers::dsl::manufacturer_vouchers
+            .select(ManufacturerOV::as_select())
+            .load(conn)
+            .expect("Error getting manufacturer OVs");
         Ok(result)
     }
 

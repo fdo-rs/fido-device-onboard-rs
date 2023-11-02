@@ -1,7 +1,9 @@
-use std::{convert::TryFrom, fs, io::Write, path::Path, str::FromStr};
+use std::{convert::TryFrom, env, fs, io::Write, path::Path, str::FromStr};
 
 use anyhow::{bail, Context, Error, Result};
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
+use fdo_db::models::ManufacturerOV;
+use fdo_db::{postgres::PostgresManufacturerDB, sqlite::SqliteManufacturerDB, DBStoreManufacturer};
 use openssl::{
     asn1::{Asn1Integer, Asn1Time},
     bn::BigNum,
@@ -14,6 +16,7 @@ use openssl::{
     x509::{X509Builder, X509NameBuilder, X509NameRef, X509},
 };
 use serde_yaml::Value;
+use std::fs::File;
 use tss_esapi::{structures::Public as TssPublic, traits::UnMarshall};
 
 use fdo_data_formats::{
@@ -42,6 +45,8 @@ enum Commands {
     DumpDeviceCredential(DumpDeviceCredentialArguments),
     /// Extends an ownership voucher for a new owner
     ExtendOwnershipVoucher(ExtendOwnershipVoucherArguments),
+    /// Exports a single or all the ownership vouchers present in the Manufacturer DB
+    ExportManufacturerVouchers(ExportManufacturerVouchersArguments),
 }
 
 #[derive(Args)]
@@ -99,6 +104,24 @@ struct ExtendOwnershipVoucherArguments {
     new_owner_cert: String,
 }
 
+#[derive(Args)]
+struct ExportManufacturerVouchersArguments {
+    /// Type of the Manufacturer DB holding the OVs
+    db_type: DBType,
+    /// DB connection URL or path to the DB file
+    db_url: String,
+    /// Path to dir where the OVs will be exported
+    path: String,
+    /// GUID of the voucher to be exported, if no GUID is given all the OVs will be exported
+    guid: Option<String>,
+}
+
+#[derive(Copy, Clone, ValueEnum)]
+enum DBType {
+    Sqlite,
+    Postgres,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     fdo_util::add_version!();
@@ -109,6 +132,7 @@ async fn main() -> Result<()> {
         Commands::DumpOwnershipVoucher(args) => dump_voucher(&args),
         Commands::DumpDeviceCredential(args) => dump_devcred(&args),
         Commands::ExtendOwnershipVoucher(args) => extend_voucher(&args),
+        Commands::ExportManufacturerVouchers(args) => export_manufacturer_vouchers(&args),
     }
 }
 
@@ -586,5 +610,63 @@ fn extend_voucher(args: &ExtendOwnershipVoucherArguments) -> Result<(), Error> {
     fs::rename(newname, args.path.clone())
         .context("Error moving new ownership voucher in place")?;
 
+    Ok(())
+}
+
+fn _write_ov_to_disk(db_ov: &ManufacturerOV, path: &Path) -> Result<()> {
+    let new_path = path.join(&db_ov.guid);
+    let file = File::create(new_path)?;
+    let ov = OwnershipVoucher::from_pem_or_raw(&db_ov.contents).expect("Error serializing OV");
+    OwnershipVoucher::serialize_to_writer(&ov, &file)?;
+    Ok(())
+}
+
+fn export_manufacturer_vouchers(args: &ExportManufacturerVouchersArguments) -> Result<()> {
+    let path = Path::new(&args.path);
+    if !path.is_dir() {
+        bail!("Please provide a path to a valid directory.");
+    }
+    match &args.guid {
+        Some(guid) => {
+            // export single
+            let db_ov = match args.db_type {
+                DBType::Sqlite => {
+                    env::set_var("SQLITE_MANUFACTURER_DATABASE_URL", &args.db_url);
+                    let pool = SqliteManufacturerDB::get_conn_pool();
+                    let conn = &mut pool.get()?;
+                    SqliteManufacturerDB::get_ov(guid, conn)?
+                }
+                DBType::Postgres => {
+                    env::set_var("POSTGRES_MANUFACTURER_DATABASE_URL", &args.db_url);
+                    let pool = PostgresManufacturerDB::get_conn_pool();
+                    let conn = &mut pool.get()?;
+                    PostgresManufacturerDB::get_ov(guid, conn)?
+                }
+            };
+            _write_ov_to_disk(&db_ov, path)?;
+            println!("OV {guid} exported.")
+        }
+        None => {
+            // export all
+            let db_ovs = match args.db_type {
+                DBType::Sqlite => {
+                    env::set_var("SQLITE_MANUFACTURER_DATABASE_URL", &args.db_url);
+                    let pool = SqliteManufacturerDB::get_conn_pool();
+                    let conn = &mut pool.get()?;
+                    SqliteManufacturerDB::get_all_ovs(conn)?
+                }
+                DBType::Postgres => {
+                    env::set_var("POSTGRES_MANUFACTURER_DATABASE_URL", &args.db_url);
+                    let pool = PostgresManufacturerDB::get_conn_pool();
+                    let conn = &mut pool.get()?;
+                    PostgresManufacturerDB::get_all_ovs(conn)?
+                }
+            };
+            for db_ov in db_ovs {
+                _write_ov_to_disk(&db_ov, path)?;
+            }
+            println!("OV/s exported.");
+        }
+    }
     Ok(())
 }

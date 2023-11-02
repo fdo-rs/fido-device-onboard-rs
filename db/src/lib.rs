@@ -31,6 +31,9 @@ where
     /// Gets an OV
     fn get_ov(guid: &str, conn: &mut T) -> Result<ManufacturerOV>;
 
+    /// Returns all the OVs in the DB
+    fn get_all_ovs(conn: &mut T) -> Result<Vec<ManufacturerOV>>;
+
     /// Deletes an OV
     fn delete_ov(guid: &str, conn: &mut T) -> Result<()>;
 
