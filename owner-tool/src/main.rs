@@ -3,6 +3,9 @@ use std::{convert::TryFrom, env, fs, io::Write, path::Path, str::FromStr};
 use anyhow::{bail, Context, Error, Result};
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 use fdo_db::models::ManufacturerOV;
+use fdo_db::postgres::PostgresOwnerDB;
+use fdo_db::sqlite::SqliteOwnerDB;
+use fdo_db::DBStoreOwner;
 use fdo_db::{postgres::PostgresManufacturerDB, sqlite::SqliteManufacturerDB, DBStoreManufacturer};
 use openssl::{
     asn1::{Asn1Integer, Asn1Time},
@@ -47,6 +50,8 @@ enum Commands {
     ExtendOwnershipVoucher(ExtendOwnershipVoucherArguments),
     /// Exports a single or all the ownership vouchers present in the Manufacturer DB
     ExportManufacturerVouchers(ExportManufacturerVouchersArguments),
+    /// Imports into the Owner DB a single ownership voucher or all the ownership vouchers present at a given path
+    ImportOwnershipVouchers(ImportOwnershipVouchersArguments),
 }
 
 #[derive(Args)]
@@ -122,6 +127,16 @@ enum DBType {
     Postgres,
 }
 
+#[derive(Args)]
+struct ImportOwnershipVouchersArguments {
+    /// Type of the Owner DB to import the OVs
+    db_type: DBType,
+    /// DB connection URL or path to DB file
+    db_url: String,
+    /// Path to the OV to be imported, or path to a directory where all the OVs to be imported are located
+    source_path: String,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     fdo_util::add_version!();
@@ -133,6 +148,7 @@ async fn main() -> Result<()> {
         Commands::DumpDeviceCredential(args) => dump_devcred(&args),
         Commands::ExtendOwnershipVoucher(args) => extend_voucher(&args),
         Commands::ExportManufacturerVouchers(args) => export_manufacturer_vouchers(&args),
+        Commands::ImportOwnershipVouchers(args) => import_ownership_vouchers(&args),
     }
 }
 
@@ -667,6 +683,114 @@ fn export_manufacturer_vouchers(args: &ExportManufacturerVouchersArguments) -> R
             }
             println!("OV/s exported.");
         }
+    }
+    Ok(())
+}
+
+fn import_ownership_vouchers(args: &ImportOwnershipVouchersArguments) -> Result<()> {
+    let source_path = Path::new(&args.source_path);
+    let mut error_buff: Vec<String> = vec![];
+    if source_path.is_dir() {
+        // Import all the OVs in a directory, we will read them one by one and
+        // insert them, if there is an error, we will copy it in a buffer and
+        // log it afterwards.
+        for path in fs::read_dir(source_path)? {
+            let ov_path = match &path {
+                Ok(path) => path.path(),
+                Err(e) => {
+                    error_buff.push(format!("Error {e} with path {:?}", &path));
+                    continue;
+                }
+            };
+            let content = match fs::read(&ov_path) {
+                Ok(value) => value,
+                Err(e) => {
+                    error_buff.push(format!("Error {e} reading path {:?}", &ov_path));
+                    continue;
+                }
+            };
+            let ov = match OwnershipVoucher::from_pem_or_raw(&content) {
+                Ok(value) => value,
+                Err(e) => {
+                    error_buff.push(format!(
+                        "Error {e} serializing OV contents at path {:?}",
+                        &ov_path
+                    ));
+                    continue;
+                }
+            };
+            let ret = match args.db_type {
+                DBType::Postgres => {
+                    env::set_var("POSTGRES_OWNER_DATABASE_URL", &args.db_url);
+                    let pool = PostgresOwnerDB::get_conn_pool();
+                    let conn = &mut match pool.get() {
+                        Ok(val) => val,
+                        Err(e) => {
+                            error_buff.push(format!(
+                                "Error {e} getting a connection from the DB pool with OV {} from path {:?}",
+                                ov.header().guid().to_string(),
+                                &ov_path
+                            ));
+                            continue;
+                        }
+                    };
+                    PostgresOwnerDB::insert_ov(&ov, None, None, conn)
+                }
+                DBType::Sqlite => {
+                    env::set_var("SQLITE_OWNER_DATABASE_URL", &args.db_url);
+                    let pool = SqliteOwnerDB::get_conn_pool();
+                    let conn = &mut match pool.get() {
+                        Ok(val) => val,
+                        Err(e) => {
+                            error_buff.push(format!(
+                                "Error {e} getting a connection from the DB pool with OV {} from path {:?}",
+                                ov.header().guid().to_string(),
+                                &ov_path
+                            ));
+                            continue;
+                        }
+                    };
+                    SqliteOwnerDB::insert_ov(&ov, None, None, conn)
+                }
+            };
+            if ret.is_err() {
+                error_buff.push(format!(
+                    "Error {:?} inserting OV {} from path {:?}",
+                    ret.err(),
+                    ov.header().guid().to_string(),
+                    &ov_path
+                ));
+            }
+        }
+        if !error_buff.is_empty() {
+            println!(
+                "Unable to import all OVs. OV import operations yielded the following error/s:"
+            );
+            for error in error_buff {
+                println!("- {error}");
+            }
+        } else {
+            println!("OV import finished.")
+        }
+    } else {
+        // import a single OV
+        let content = fs::read(&args.source_path)?;
+        let ov = OwnershipVoucher::from_pem_or_raw(&content)?;
+        match args.db_type {
+            DBType::Postgres => {
+                env::set_var("POSTGRES_OWNER_DATABASE_URL", &args.db_url);
+                let pool = PostgresOwnerDB::get_conn_pool();
+                let conn = &mut pool.get()?;
+                PostgresOwnerDB::insert_ov(&ov, None, None, conn)?;
+            }
+            DBType::Sqlite => {
+                env::set_var("SQLITE_OWNER_DATABASE_URL", &args.db_url);
+                let pool = SqliteOwnerDB::get_conn_pool();
+                let conn = &mut pool.get()?;
+                SqliteOwnerDB::insert_ov(&ov, None, None, conn)?;
+            }
+        }
+        println!("OV import finished.");
     }
     Ok(())
 }
