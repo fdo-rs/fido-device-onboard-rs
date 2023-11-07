@@ -537,7 +537,7 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
    Additionally, set up the `MANUFACTURING_SERVER_CONF` environment variable to point
    to the path of the configuration file if running in a dev container.
 
-4. Execute `fdo-manufacturing-server` or run it as a service, see sample
+3. Execute `fdo-manufacturing-server` or run it as a service, see sample
    file in
    [examples/systemd](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/systemd/fdo-manufacturing-server.service).
 
@@ -555,7 +555,7 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
    Additionally, set up the `OWNER_ONBOARDING_SERVER_CONF` environment variable to point
    to the path of the configuration file if running in a dev container.
 
-4. Generate an Ownership Voucher (see [How to generate an Ownership
+3. Generate an Ownership Voucher (see [How to generate an Ownership
    Voucher](#how-to-generate-an-ownership-voucher-ov-and-credential-for-a-device-device-initialization)),
    extend it with the Owner's Certificate (see [How to extend an OV with the
    Owner's Certificate](#how-to-extend-an-ov-with-the-owners-certificate)) and
@@ -567,7 +567,7 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
    store it in the path given to the `ownership_voucher_store_driver` field in
    the `owner-onboarding-server.yml` of the previous step.
 
-5. Execute `fdo-owner-onboarding-server` or run it as a service, see sample
+4. Execute `fdo-owner-onboarding-server` or run it as a service, see sample
    file in [examples/systemd](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/systemd/fdo-owner-onboarding-server.service).
 
 ### Rendezvous Server
@@ -580,7 +580,7 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
    Additionally, set up the `RENDEZVOUS_SERVER_CONF` environment variable to point
    to the path of the configuration file if running in a dev container.
 
-3. Execute `fdo-rendezvous-server` or run it as a service, see sample file in
+2. Execute `fdo-rendezvous-server` or run it as a service, see sample file in
    [examples/systemd](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/systemd/fdo-rendezvous-server.service).
 
 ### Service Info API Server
@@ -593,7 +593,7 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
    Additionally, set up the `SERVICEINFO_API_SERVER_CONF` environment variable to point
    to the path of the configuration file if running in a dev container.
 
-3. Execute `fdo-serviceinfo-api-server` or run it as a service, see sample file
+2. Execute `fdo-serviceinfo-api-server` or run it as a service, see sample file
    in
    [examples/systemd](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/systemd/fdo-serviceinfo-api-server.service).
 
