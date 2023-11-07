@@ -46,29 +46,26 @@ impl DBStoreManufacturer<SqliteConnection> for SqliteManufacturerDB {
     fn insert_ov(ov: &OV, ttl: Option<i64>, conn: &mut SqliteConnection) -> Result<()> {
         let new_ov_manufacturer = NewManufacturerOV {
             guid: ov.header().guid().to_string(),
-            contents: ov.serialize_data().expect("Error serializing OV"),
+            contents: ov.serialize_data()?,
             ttl,
         };
         diesel::insert_into(super::schema::manufacturer_vouchers::table)
             .values(new_ov_manufacturer)
-            .execute(conn)
-            .expect("Error saving OV");
+            .execute(conn)?;
         Ok(())
     }
 
     fn get_ov(guid: &str, conn: &mut SqliteConnection) -> Result<ManufacturerOV> {
         let result = super::schema::manufacturer_vouchers::dsl::manufacturer_vouchers
             .filter(super::schema::manufacturer_vouchers::guid.eq(guid))
-            .first(conn)
-            .expect(&format!("Error geting manufacturer OV {guid}"));
+            .first(conn)?;
         Ok(result)
     }
 
     fn get_all_ovs(conn: &mut SqliteConnection) -> Result<Vec<ManufacturerOV>> {
         let result = super::schema::manufacturer_vouchers::dsl::manufacturer_vouchers
             .select(ManufacturerOV::as_select())
-            .load(conn)
-            .expect("Error getting manufacturer OVs");
+            .load(conn)?;
         Ok(result)
     }
 
@@ -124,22 +121,20 @@ impl DBStoreOwner<SqliteConnection> for SqliteOwnerDB {
     ) -> Result<()> {
         let new_ov_owner = NewOwnerOV {
             guid: ov.header().guid().to_string(),
-            contents: ov.serialize_data().expect("Error serializing OV"),
+            contents: ov.serialize_data()?,
             to2_performed: to2,
             to0_accept_owner_wait_seconds: to0,
         };
         diesel::insert_into(super::schema::owner_vouchers::table)
             .values(new_ov_owner)
-            .execute(conn)
-            .expect("Error saving OV");
+            .execute(conn)?;
         Ok(())
     }
 
     fn get_ov(guid: &str, conn: &mut SqliteConnection) -> Result<OwnerOV> {
         let result = super::schema::owner_vouchers::dsl::owner_vouchers
             .filter(super::schema::owner_vouchers::guid.eq(guid))
-            .first(conn)
-            .expect("Error getting owner OV");
+            .first(conn)?;
         Ok(result)
     }
 
@@ -158,8 +153,7 @@ impl DBStoreOwner<SqliteConnection> for SqliteOwnerDB {
         let result = super::schema::owner_vouchers::dsl::owner_vouchers
             .filter(super::schema::owner_vouchers::to2_performed.eq(to2_performed))
             .select(OwnerOV::as_select())
-            .load(conn)
-            .expect("Error getting owner OVs");
+            .load(conn)?;
         Ok(result)
     }
 
@@ -168,8 +162,7 @@ impl DBStoreOwner<SqliteConnection> for SqliteOwnerDB {
         let result = super::schema::owner_vouchers::dsl::owner_vouchers
             .filter(super::schema::owner_vouchers::to0_accept_owner_wait_seconds.lt(to0_max))
             .select(OwnerOV::as_select())
-            .load(conn)
-            .expect("Error getting owner OVs");
+            .load(conn)?;
         Ok(result)
     }
 
@@ -245,16 +238,14 @@ impl DBStoreRendezvous<SqliteConnection> for SqliteRendezvousDB {
         };
         diesel::insert_into(super::schema::rendezvous_vouchers::table)
             .values(&new_ov_rendezvous)
-            .execute(conn)
-            .expect("Error saving OV");
+            .execute(conn)?;
         Ok(())
     }
 
     fn get_ov(guid: &str, conn: &mut SqliteConnection) -> Result<RendezvousOV> {
         let result = super::schema::rendezvous_vouchers::dsl::rendezvous_vouchers
             .filter(super::schema::rendezvous_vouchers::guid.eq(guid))
-            .first(conn)
-            .expect("Error getting rendezvous OV");
+            .first(conn)?;
         Ok(result)
     }
 
