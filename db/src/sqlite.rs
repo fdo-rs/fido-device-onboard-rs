@@ -14,7 +14,6 @@ use crate::schema::rendezvous_vouchers;
 use std::env;
 
 use anyhow::Result;
-use dotenvy::dotenv;
 
 use super::models::{NewOwnerOV, NewRendezvousOV, OwnerOV, RendezvousOV};
 
@@ -26,14 +25,12 @@ pub struct SqliteManufacturerDB {}
 
 impl DBStoreManufacturer<SqliteConnection> for SqliteManufacturerDB {
     fn get_connection() -> SqliteConnection {
-        dotenv().ok();
         let database_url = env::var("SQLITE_MANUFACTURER_DATABASE_URL")
             .expect("SQLITE_MANUFACTURER_DATABASE_URL must be set");
         SqliteConnection::establish(&database_url).expect("Error connecting to database")
     }
 
     fn get_conn_pool() -> Pool<ConnectionManager<SqliteConnection>> {
-        dotenv().ok();
         let database_url = env::var("SQLITE_MANUFACTURER_DATABASE_URL")
             .expect("SQLITE_MANUFACTURER_DATABASE_URL must be set");
         let manager = ConnectionManager::<SqliteConnection>::new(database_url);
@@ -96,14 +93,12 @@ pub struct SqliteOwnerDB {}
 
 impl DBStoreOwner<SqliteConnection> for SqliteOwnerDB {
     fn get_connection() -> SqliteConnection {
-        dotenv().ok();
         let database_url =
             env::var("SQLITE_OWNER_DATABASE_URL").expect("SQLITE_OWNER_DATABASE_URL must be set");
         SqliteConnection::establish(&database_url).expect("Error connecting to database")
     }
 
     fn get_conn_pool() -> Pool<ConnectionManager<SqliteConnection>> {
-        dotenv().ok();
         let database_url =
             env::var("SQLITE_OWNER_DATABASE_URL").expect("SQLITE_OWNER_DATABASE_URL must be set");
         let manager = ConnectionManager::<SqliteConnection>::new(database_url);
@@ -208,14 +203,12 @@ pub struct SqliteRendezvousDB {}
 
 impl DBStoreRendezvous<SqliteConnection> for SqliteRendezvousDB {
     fn get_connection() -> SqliteConnection {
-        dotenv().ok();
         let database_url = env::var("SQLITE_RENDEZVOUS_DATABASE_URL")
             .expect("SQLITE_RENDEZVOUS_DATABASE_URL must be set");
         SqliteConnection::establish(&database_url).expect("Error connecting to database")
     }
 
     fn get_conn_pool() -> Pool<ConnectionManager<SqliteConnection>> {
-        dotenv().ok();
         let database_url = env::var("SQLITE_RENDEZVOUS_DATABASE_URL")
             .expect("SQLITE_RENDEZVOUS_DATABASE_URL must be set");
         let manager = ConnectionManager::<SqliteConnection>::new(database_url);

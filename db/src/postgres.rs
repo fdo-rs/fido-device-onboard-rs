@@ -13,7 +13,6 @@ use diesel::PgConnection;
 use std::env;
 
 use anyhow::Result;
-use dotenvy::dotenv;
 
 use super::models::{ManufacturerOV, NewOwnerOV, NewRendezvousOV, OwnerOV, RendezvousOV};
 
@@ -24,14 +23,12 @@ pub struct PostgresManufacturerDB {}
 
 impl DBStoreManufacturer<PgConnection> for PostgresManufacturerDB {
     fn get_connection() -> PgConnection {
-        dotenv().ok();
         let database_url = env::var("POSTGRES_MANUFACTURER_DATABASE_URL")
             .expect("POSTGRES_MANUFACTURER_DATABASE_URL must be set");
         PgConnection::establish(&database_url).expect("Error connecting to database")
     }
 
     fn get_conn_pool() -> Pool<ConnectionManager<PgConnection>> {
-        dotenv().ok();
         let database_url = env::var("POSTGRES_MANUFACTURER_DATABASE_URL")
             .expect("POSTGRES_MANUFACTURER_DATABASE_URL must be set");
         let manager = ConnectionManager::<PgConnection>::new(database_url);
@@ -94,14 +91,12 @@ pub struct PostgresOwnerDB {}
 
 impl DBStoreOwner<PgConnection> for PostgresOwnerDB {
     fn get_connection() -> PgConnection {
-        dotenv().ok();
         let database_url = env::var("POSTGRES_OWNER_DATABASE_URL")
             .expect("POSTGRES_OWNER_DATABASE_URL must be set");
         PgConnection::establish(&database_url).expect("Error connecting to database")
     }
 
     fn get_conn_pool() -> Pool<ConnectionManager<PgConnection>> {
-        dotenv().ok();
         let database_url = env::var("POSTGRES_OWNER_DATABASE_URL")
             .expect("POSTGRES_OWNER_DATABASE_URL must be set");
         let manager = ConnectionManager::<PgConnection>::new(database_url);
@@ -206,14 +201,12 @@ pub struct PostgresRendezvousDB {}
 
 impl DBStoreRendezvous<PgConnection> for PostgresRendezvousDB {
     fn get_connection() -> PgConnection {
-        dotenv().ok();
         let database_url = env::var("POSTGRES_RENDEZVOUS_DATABASE_URL")
             .expect("POSTGRES_RENDEZVOUS_DATABASE_URL must be set");
         PgConnection::establish(&database_url).expect("Error connecting to database")
     }
 
     fn get_conn_pool() -> Pool<ConnectionManager<PgConnection>> {
-        dotenv().ok();
         let database_url = env::var("POSTGRES_RENDEZVOUS_DATABASE_URL")
             .expect("POSTGRES_RENDEZVOUS_DATABASE_URL must be set");
         let manager = ConnectionManager::<PgConnection>::new(database_url);
