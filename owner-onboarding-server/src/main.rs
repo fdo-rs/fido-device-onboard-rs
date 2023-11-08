@@ -1,5 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 use std::fs;
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyhow::{bail, Context, Result};
@@ -32,8 +33,15 @@ use fdo_util::servers::{
     configuration::{owner_onboarding_server::OwnerOnboardingServerSettings, AbsolutePathBuf},
     settings_for, OwnershipVoucherStoreMetadataKey,
 };
+use hyper::server::conn::AddrIncoming;
+use std::convert::Infallible;
+use tls_listener::TlsListener;
+
+pub mod tls_config;
 
 mod handlers;
+mod ov_management;
+use crate::ov_management::ov_filter;
 
 pub(crate) struct OwnerServiceUD {
     // Trusted keys
@@ -278,6 +286,7 @@ async fn main() -> Result<()> {
 
     // Bind information
     let bind_addr = settings.bind.clone();
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8081));
 
     // Trusted keys
     let trusted_device_keys = {
@@ -423,32 +432,48 @@ async fn main() -> Result<()> {
                 .or(handler_to2_prove_device)
                 .or(handler_to2_device_service_info_ready)
                 .or(handler_to2_device_service_info)
-                .or(handler_to2_done),
+                .or(handler_to2_done)
+                .or(ov_filter(user_data.clone())),
         )
         .recover(fdo_http_wrapper::server::handle_rejection)
         .with(warp::log("owner-onboarding-service"));
 
-    log::info!("Listening on {}", bind_addr);
-    let server = warp::serve(routes);
+    log::info!("Listening on {}", addr);
 
-    let maintenance_runner =
-        tokio::spawn(async move { perform_maintenance(user_data.clone()).await });
+    let service = warp::service(routes);
 
-    let server = server
-        .bind_with_graceful_shutdown(bind_addr, async {
-            signal(SignalKind::terminate()).unwrap().recv().await;
-            log::info!("Terminating");
-        })
-        .1;
-    let server = tokio::spawn(server);
-
-    tokio::select!(
-    _ = server => {
-        log::info!("Server terminated");
-    },
-    _ = maintenance_runner => {
-        log::info!("Maintenance runner terminated");
+    let make_svc = hyper::service::make_service_fn(move |_| {
+        let svc = service.clone();
+        async move { Ok::<_, Infallible>(svc) }
     });
+
+    let incoming = TlsListener::new(
+        tls_config::tls_config::tls_acceptor(),
+        AddrIncoming::bind(&addr)?,
+    );
+    let server = hyper::Server::builder(incoming).serve(make_svc);
+    log::info!("starting at https://{}", addr);
+    server.await?;
+    // let server = warp::serve(routes);
+
+    // let maintenance_runner =
+    //     tokio::spawn(async move { perform_maintenance(user_data.clone()).await });
+
+    // let server = server
+    //     .bind_with_graceful_shutdown(bind_addr, async {
+    //         signal(SignalKind::terminate()).unwrap().recv().await;
+    //         log::info!("Terminating");
+    //     })
+    //     .1;
+    // let server = tokio::spawn(server);
+
+    // tokio::select!(
+    // _ = server => {
+    //     log::info!("Server terminated");
+    // },
+    // _ = maintenance_runner => {
+    //     log::info!("Maintenance runner terminated");
+    // });
 
     Ok(())
 }
