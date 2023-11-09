@@ -1,4 +1,3 @@
-use anyhow::bail;
 use async_trait::async_trait;
 use fdo_data_formats::ownershipvoucher::OwnershipVoucher;
 use fdo_db::*;
@@ -134,11 +133,11 @@ where
         // NOTE: this function is only used in the owner onboarding server
         // when we need to filter the OVs that haven't done the To2 and still
         // have ttl. It is not used in the manufacturing server.
-        // This is why we are returning dummy things to comply with the trait.
-        Ok(Box::new(SqliteManufacturerStoreFilterType {
-            neqs: Vec::new(),
-            lts: Vec::new(),
-        }))
+        Err(StoreError::MethodNotAvailable)
+    }
+
+    async fn query_ovs_db(&self) -> Result<Vec<OwnershipVoucher>, StoreError> {
+        Err(StoreError::MethodNotAvailable)
     }
 
     async fn store_data(&self, _key: K, value: V) -> Result<(), StoreError> {
@@ -296,7 +295,33 @@ where
     }
 
     async fn query_data(&self) -> crate::QueryResult<V, MKT> {
-        todo!();
+        Err(StoreError::MethodNotAvailable)
+    }
+
+    async fn query_ovs_db(&self) -> Result<Vec<OwnershipVoucher>, StoreError> {
+        let mut ret = vec![];
+        let pool = fdo_db::sqlite::SqliteOwnerDB::get_conn_pool();
+        let conn = &mut pool
+            .get()
+            .map_err(|e| StoreError::Unspecified(format!("Error connecting to DB {e:?}")))?;
+        let db_ovs = fdo_db::sqlite::SqliteOwnerDB::select_ov_to2_performed_and_ov_to0_less_than(
+            false,
+            time::OffsetDateTime::now_utc().unix_timestamp(),
+            conn,
+        )
+        .map_err(|e| {
+            StoreError::Unspecified(format!(
+                "Error selecting OVs filtering by to2 and to0: {e:?}"
+            ))
+        })?;
+        for db_ov in db_ovs {
+            ret.push(
+                OwnershipVoucher::from_pem_or_raw(&db_ov.contents).map_err(|e| {
+                    StoreError::Unspecified(format!("Error parsing OV contents from DB: {e:?}"))
+                })?,
+            );
+        }
+        Ok(ret)
     }
 
     async fn store_data(&self, _key: K, value: V) -> Result<(), StoreError> {
@@ -325,7 +350,8 @@ where
 
     async fn perform_maintenance(&self) -> Result<(), StoreError> {
         // This is not used in the owner onboarding server since the OVs there
-        // do not have a ttl.
+        // do not have a ttl, but we still need to return Ok since the method
+        // will be called.
         Ok(())
     }
 }
@@ -424,11 +450,11 @@ where
         // NOTE: this function is only used in the owner onboarding server
         // when we need to filter the OVs that haven't done the To2 and still
         // have ttl. It is not used in the rendezvous server.
-        // This is why we are returning dummy things to comply with the trait.
-        Ok(Box::new(SqliteRendezvousStoreFilterType {
-            neqs: Vec::new(),
-            lts: Vec::new(),
-        }))
+        Err(StoreError::MethodNotAvailable)
+    }
+
+    async fn query_ovs_db(&self) -> Result<Vec<OwnershipVoucher>, StoreError> {
+        Err(StoreError::MethodNotAvailable)
     }
 
     async fn store_data(&self, _key: K, value: V) -> Result<(), StoreError> {
