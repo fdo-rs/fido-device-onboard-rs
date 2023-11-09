@@ -27,7 +27,7 @@ use fdo_data_formats::{
     publickey::PublicKey,
     types::{Guid, TO2AddressEntry},
 };
-use fdo_store::Store;
+use fdo_store::{Store, StoreError};
 use fdo_util::servers::{
     configuration::{owner_onboarding_server::OwnerOnboardingServerSettings, AbsolutePathBuf},
     settings_for, OwnershipVoucherStoreMetadataKey,
@@ -72,42 +72,69 @@ fn load_private_key(path: &AbsolutePathBuf) -> Result<PKey<Private>> {
     Ok(PKey::private_key_from_der(&contents)?)
 }
 
-async fn report_to_rendezvous(udt: OwnerServiceUDT) -> Result<()> {
-    let mut ft = udt.ownership_voucher_store.query_data().await?;
-    ft.neq(
-        &fdo_store::MetadataKey::Local(OwnershipVoucherStoreMetadataKey::To2Performed),
-        &true,
-    );
-    ft.lt(
-        &fdo_store::MetadataKey::Local(OwnershipVoucherStoreMetadataKey::To0AcceptOwnerWaitSeconds),
-        time::OffsetDateTime::now_utc().unix_timestamp(),
-    );
-
-    let ov_iter = ft.query().await?;
-    if let Some(ovs) = ov_iter {
-        for ov in ovs {
-            match report_ov_to_rendezvous(&ov, &udt.owner_addresses, &udt.owner_key).await {
-                Ok(wait_seconds) => {
-                    udt.ownership_voucher_store
-                        .store_metadata(
-                            ov.header().guid(),
-                            &fdo_store::MetadataKey::Local(
-                                OwnershipVoucherStoreMetadataKey::To0AcceptOwnerWaitSeconds,
-                            ),
-                            &time::Duration::new(wait_seconds.into(), 0),
-                        )
-                        .await?;
-                }
-                Err(e) => {
-                    log::warn!(
-                        "OV({}): failed to report to rendezvous: {}",
-                        ov.header().guid().to_string(),
-                        e
-                    );
-                }
-            };
+async fn _handle_report_to_rendezvous(udt: &OwnerServiceUDT, ov: &OwnershipVoucher) -> Result<()> {
+    match report_ov_to_rendezvous(ov, &udt.owner_addresses, &udt.owner_key).await {
+        Ok(wait_seconds) => {
+            udt.ownership_voucher_store
+                .store_metadata(
+                    ov.header().guid(),
+                    &fdo_store::MetadataKey::Local(
+                        OwnershipVoucherStoreMetadataKey::To0AcceptOwnerWaitSeconds,
+                    ),
+                    &time::Duration::new(wait_seconds.into(), 0),
+                )
+                .await?;
+            Ok(())
+        }
+        Err(e) => {
+            log::warn!(
+                "OV({}): failed to report to rendezvous: {}",
+                ov.header().guid().to_string(),
+                e
+            );
+            Ok(())
         }
     }
+}
+
+async fn report_to_rendezvous(udt: OwnerServiceUDT) -> Result<()> {
+    match udt.ownership_voucher_store.query_data().await {
+        Ok(mut ft) => {
+            ft.neq(
+                &fdo_store::MetadataKey::Local(OwnershipVoucherStoreMetadataKey::To2Performed),
+                &true,
+            );
+            ft.lt(
+                &fdo_store::MetadataKey::Local(
+                    OwnershipVoucherStoreMetadataKey::To0AcceptOwnerWaitSeconds,
+                ),
+                time::OffsetDateTime::now_utc().unix_timestamp(),
+            );
+            let ov_iter = ft.query().await?;
+            if let Some(ovs) = ov_iter {
+                for ov in ovs {
+                    _handle_report_to_rendezvous(&udt, &ov).await?;
+                }
+            }
+        }
+        Err(StoreError::MethodNotAvailable) => {
+            match udt.ownership_voucher_store.query_ovs_db().await {
+                Ok(ovs) => {
+                    for ov in ovs {
+                        _handle_report_to_rendezvous(&udt, &ov).await?
+                    }
+                }
+                Err(StoreError::Unspecified(txt)) => {
+                    log::warn!("DB error: {txt:?}")
+                }
+                Err(StoreError::MethodNotAvailable) => bail!("Unreachable"),
+                Err(e) => {
+                    log::warn!("DB error: {e:?}")
+                }
+            }
+        }
+        Err(e) => log::warn!("Error querying data: {e:?}"),
+    };
     Ok(())
 }
 
