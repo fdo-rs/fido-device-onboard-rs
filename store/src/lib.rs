@@ -14,6 +14,8 @@ pub enum StoreError {
     Configuration(String),
     #[error("Method not available")]
     MethodNotAvailable,
+    #[error("Internal database error: {0}")]
+    Database(String),
 }
 
 mod private {

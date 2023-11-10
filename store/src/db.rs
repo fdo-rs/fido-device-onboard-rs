@@ -105,7 +105,7 @@ where
             .expect("Unable to convert");
         fdo_db::sqlite::SqliteManufacturerDB::update_ov_ttl(&key.to_string(), Some(val), conn)
             .map_err(|e| {
-                StoreError::Unspecified(format!(
+                StoreError::Database(format!(
                     "Unable to update OV with guid {} with {val}: {e:?}",
                     key.to_string()
                 ))
@@ -121,7 +121,7 @@ where
         let conn = &mut pool.get().expect("Couldn't establish a connection");
         fdo_db::sqlite::SqliteManufacturerDB::update_ov_ttl(&key.to_string(), None, conn).map_err(
             |e| {
-                StoreError::Unspecified(format!(
+                StoreError::Database(format!(
                     "Unable to set 'None' metadata on OV {}: {e:?}",
                     key.to_string()
                 ))
@@ -146,7 +146,7 @@ where
         let raw = V::serialize_data(&value).expect("Error serializing data");
         let ov = OwnershipVoucher::from_pem_or_raw(&raw).expect("Error converting OV");
         fdo_db::sqlite::SqliteManufacturerDB::insert_ov(&ov, None, conn).map_err(|e| {
-            StoreError::Unspecified(format!(
+            StoreError::Database(format!(
                 "Error inserting OV with guid {}: {e:?}",
                 ov.header().guid().to_string()
             ))
@@ -157,7 +157,7 @@ where
         let pool = fdo_db::sqlite::SqliteManufacturerDB::get_conn_pool();
         let conn = &mut pool.get().expect("Couldn't establish a connection");
         fdo_db::sqlite::SqliteManufacturerDB::delete_ov(&key.to_string(), conn).map_err(|e| {
-            StoreError::Unspecified(format!(
+            StoreError::Database(format!(
                 "Error deleting OV with guid {}: {e:?}",
                 key.to_string()
             ))
@@ -169,7 +169,7 @@ where
         let conn = &mut pool.get().expect("Couldn't establish a connection");
         let now = time::OffsetDateTime::now_utc().unix_timestamp();
         fdo_db::sqlite::SqliteManufacturerDB::delete_ov_ttl_le(now, conn).map_err(|e| {
-            StoreError::Unspecified(format!("Error deleting OVs with ttl <= {now}: {e:?}"))
+            StoreError::Database(format!("Error deleting OVs with ttl <= {now}: {e:?}"))
         })
     }
 }
@@ -242,7 +242,7 @@ where
                     .expect("Unable to convert string to bool");
                 fdo_db::sqlite::SqliteOwnerDB::update_ov_to2(&key.to_string(), Some(val), conn)
                     .map_err(|e| {
-                        StoreError::Unspecified(format!(
+                        StoreError::Database(format!(
                             "Unable to update OV (guid {}) to2 with value {val}: {e:?}",
                             &key.to_string()
                         ))
@@ -259,14 +259,14 @@ where
                     conn,
                 )
                 .map_err(|e| {
-                    StoreError::Unspecified(format!(
+                    StoreError::Database(format!(
                         "Unable to update OV (guid {}) to0 with value {val}: {e:?}",
                         &key.to_string()
                     ))
                 })
             }
             _ => Err(StoreError::Unspecified(format!(
-                "Unable to hanlde metadata key {}",
+                "Unable to handle metadata key {}",
                 metadata_key.to_key()
             ))),
         }
@@ -281,13 +281,13 @@ where
         let conn = &mut pool.get().expect("Couldn't establish a connection");
         fdo_db::sqlite::SqliteOwnerDB::update_ov_to0_wait_seconds(&key.to_string(), None, conn)
             .map_err(|e| {
-                StoreError::Unspecified(format!(
+                StoreError::Database(format!(
                     "Unable to set 'None' to0 metadata on OV {}: {e:?}",
                     key.to_string()
                 ))
             })?;
         fdo_db::sqlite::SqliteOwnerDB::update_ov_to2(&key.to_string(), None, conn).map_err(|e| {
-            StoreError::Unspecified(format!(
+            StoreError::Database(format!(
                 "Unable to set 'None' to2 metadata on OV {}: {e:?}",
                 key.to_string()
             ))
@@ -303,14 +303,14 @@ where
         let pool = fdo_db::sqlite::SqliteOwnerDB::get_conn_pool();
         let conn = &mut pool
             .get()
-            .map_err(|e| StoreError::Unspecified(format!("Error connecting to DB {e:?}")))?;
+            .map_err(|e| StoreError::Database(format!("Error connecting to DB {e:?}")))?;
         let db_ovs = fdo_db::sqlite::SqliteOwnerDB::select_ov_to2_performed_and_ov_to0_less_than(
             false,
             time::OffsetDateTime::now_utc().unix_timestamp(),
             conn,
         )
         .map_err(|e| {
-            StoreError::Unspecified(format!(
+            StoreError::Database(format!(
                 "Error selecting OVs filtering by to2 and to0: {e:?}"
             ))
         })?;
@@ -330,7 +330,7 @@ where
         let raw = V::serialize_data(&value).expect("Error serializing data");
         let ov = OwnershipVoucher::from_pem_or_raw(&raw).expect("Error converting OV");
         fdo_db::sqlite::SqliteOwnerDB::insert_ov(&ov, None, None, conn).map_err(|e| {
-            StoreError::Unspecified(format!(
+            StoreError::Database(format!(
                 "Error inserting OV with guid {}: {e:?}",
                 ov.header().guid().to_string()
             ))
@@ -341,7 +341,7 @@ where
         let pool = fdo_db::sqlite::SqliteOwnerDB::get_conn_pool();
         let conn = &mut pool.get().expect("Couldn't establish a connection");
         fdo_db::sqlite::SqliteOwnerDB::delete_ov(&key.to_string(), conn).map_err(|e| {
-            StoreError::Unspecified(format!(
+            StoreError::Database(format!(
                 "Error deleting OV with guid {}: {e:?}",
                 &key.to_string()
             ))
@@ -422,7 +422,7 @@ where
             .expect("Unable to convert");
         fdo_db::sqlite::SqliteRendezvousDB::update_ov_ttl(&key.to_string(), Some(val), conn)
             .map_err(|e| {
-                StoreError::Unspecified(format!(
+                StoreError::Database(format!(
                     "Unable to update OV with guid {} with {val}: {e:?}",
                     key.to_string()
                 ))
@@ -438,7 +438,7 @@ where
         let conn = &mut pool.get().expect("Couldn't establish a connection");
         fdo_db::sqlite::SqliteRendezvousDB::update_ov_ttl(&key.to_string(), None, conn).map_err(
             |e| {
-                StoreError::Unspecified(format!(
+                StoreError::Database(format!(
                     "Unable to set 'None' ttl on OV {}: {e:?}",
                     key.to_string()
                 ))
@@ -463,7 +463,7 @@ where
         let raw = V::serialize_data(&value).expect("Error serializing data");
         let ov = OwnershipVoucher::from_pem_or_raw(&raw).expect("Error converting OV");
         fdo_db::sqlite::SqliteRendezvousDB::insert_ov(&ov, None, conn).map_err(|e| {
-            StoreError::Unspecified(format!(
+            StoreError::Database(format!(
                 "Error inserting OV with guid {}: {e:?}",
                 ov.header().guid().to_string()
             ))
@@ -474,7 +474,7 @@ where
         let pool = fdo_db::sqlite::SqliteRendezvousDB::get_conn_pool();
         let conn = &mut pool.get().expect("Couldn't establish a connection");
         fdo_db::sqlite::SqliteRendezvousDB::delete_ov(&key.to_string(), conn).map_err(|e| {
-            StoreError::Unspecified(format!(
+            StoreError::Database(format!(
                 "Error deleting OV with guid {}: {e:?}",
                 key.to_string()
             ))
@@ -486,7 +486,7 @@ where
         let conn = &mut pool.get().expect("Couldn't establish a connection");
         let now = time::OffsetDateTime::now_utc().unix_timestamp();
         fdo_db::sqlite::SqliteRendezvousDB::delete_ov_ttl_le(now, conn).map_err(|e| {
-            StoreError::Unspecified(format!("Error deleting OVs with ttl <= {now}: {e:?}"))
+            StoreError::Database(format!("Error deleting OVs with ttl <= {now}: {e:?}"))
         })
     }
 }
