@@ -167,8 +167,16 @@ impl DBStoreOwner<SqliteConnection> for SqliteOwnerDB {
         conn: &mut SqliteConnection,
     ) -> Result<Vec<OwnerOV>> {
         let result = super::schema::owner_vouchers::dsl::owner_vouchers
-            .filter(super::schema::owner_vouchers::to0_accept_owner_wait_seconds.lt(to0_max))
-            .filter(super::schema::owner_vouchers::to2_performed.eq(to2_performed))
+            .filter(
+                super::schema::owner_vouchers::to0_accept_owner_wait_seconds
+                    .lt(to0_max)
+                    .or(super::schema::owner_vouchers::to0_accept_owner_wait_seconds.is_null()),
+            )
+            .filter(
+                super::schema::owner_vouchers::to2_performed
+                    .eq(to2_performed)
+                    .or(super::schema::owner_vouchers::to2_performed.is_null()),
+            )
             .select(OwnerOV::as_select())
             .load(conn)?;
         Ok(result)
