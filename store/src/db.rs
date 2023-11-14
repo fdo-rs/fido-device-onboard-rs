@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use fdo_data_formats::ownershipvoucher::OwnershipVoucher;
+use fdo_data_formats::StoredItem;
 use fdo_db::*;
 use std::marker::PhantomData;
 
@@ -457,17 +458,18 @@ where
         Err(StoreError::MethodNotAvailable)
     }
 
-    async fn store_data(&self, _key: K, value: V) -> Result<(), StoreError> {
+    async fn store_data(&self, key: K, value: V) -> Result<(), StoreError> {
         let pool = fdo_db::sqlite::SqliteRendezvousDB::get_conn_pool();
         let conn = &mut pool.get().expect("Couldn't establish a connection");
         let raw = V::serialize_data(&value).expect("Error serializing data");
-        let ov = OwnershipVoucher::from_pem_or_raw(&raw).expect("Error converting OV");
-        fdo_db::sqlite::SqliteRendezvousDB::insert_ov(&ov, None, conn).map_err(|e| {
-            StoreError::Database(format!(
-                "Error inserting OV with guid {}: {e:?}",
-                ov.header().guid().to_string()
-            ))
-        })
+        let stored = StoredItem::deserialize_data(&raw).expect("Error converting StoredItem");
+        fdo_db::sqlite::SqliteRendezvousDB::insert_ov(&stored, &key.to_string(), None, conn)
+            .map_err(|e| {
+                StoreError::Database(format!(
+                    "Error inserting StoredItem with guid {}: {e:?}",
+                    &key.to_string()
+                ))
+            })
     }
 
     async fn destroy_data(&self, key: &K) -> Result<(), StoreError> {
