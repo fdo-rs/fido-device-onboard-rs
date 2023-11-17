@@ -808,21 +808,19 @@ impl<'a> TestServerConfigurator<'a> {
                     &self.test_context.runner_path(&self.server_number),
                 );
 
+                let output = Command::new("whoami").output().unwrap();
+
+                let cur_user = String::from_utf8(output.stdout).unwrap();
+
                 if !per_device {
                     L.l("per_device_serviceinfo is not set, using default values");
-                    cfg.insert(
-                        "user",
-                        users::get_current_username().unwrap().to_str().unwrap(),
-                    );
+                    cfg.insert("user", &cur_user);
                     cfg.insert("sshkey1", "ssh-ed25519 sshkey_default user@example.com");
                     cfg.insert("sshkey2", "ssh-ed25519 sshkey_default user@example2.com");
                     cfg.insert("password", "testpassword");
                 } else {
                     L.l("per_device_serviceinfo is set, using device specific values");
-                    cfg.insert(
-                        "user",
-                        users::get_current_username().unwrap().to_str().unwrap(),
-                    );
+                    cfg.insert("user", &cur_user);
                     cfg.insert("sshkey1", "ssh-ed25519 sshkey_per_device user@example.com");
                     cfg.insert("sshkey2", "ssh-ed25519 sshkey_per_device user@example2.com");
                     cfg.insert("password", "testpassword");
