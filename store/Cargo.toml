@@ -20,5 +20,13 @@ time = "0.3"
 xattr = { version = "1.0", default-features = false, optional = true }  # We *need* xattrs to store TTL
 serde_cbor = { version = "0.11", optional = true }
 
+# database
+fdo-db = { path = "../db", version = "0.4.12"}
+
+diesel = { version = "2.1.0", features = ["sqlite", "postgres", "r2d2"], optional = true }
+
 [features]
 directory = ["xattr", "serde_cbor"]
+db = ["diesel"]
+
+default = ["directory", "db"]

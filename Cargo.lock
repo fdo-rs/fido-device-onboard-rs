@@ -672,7 +672,7 @@ version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d98235fdc2f355d330a8244184ab6b4b33c28679c0b4158f63138e51d6cf7e88"
 dependencies = [
- "bitflags 2.4.0",
+ "bitflags 2.4.1",
  "byteorder",
  "diesel_derives",
  "itoa",
@@ -924,6 +924,7 @@ dependencies = [
  "fdo-data-formats",
  "fdo-http-wrapper",
  "openssl",
+ "dotenvy",
 ]
 
 [[package]]
@@ -1071,7 +1072,9 @@ name = "fdo-store"
 version = "0.4.13"
 dependencies = [
  "async-trait",
+ "diesel",
  "fdo-data-formats",
+ "fdo-db",
  "log",
  "serde",
  "serde_cbor",

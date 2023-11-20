@@ -220,7 +220,11 @@ mod directory;
 pub enum StoreConfig {
     #[cfg(feature = "directory")]
     Directory { path: std::path::PathBuf },
+    #[cfg(feature = "db")]
+    DataBase {},
 }
+
+mod db;
 
 impl StoreConfig {
     pub fn initialize<OT, K, V, MKT>(&self) -> Result<Box<dyn Store<OT, K, V, MKT>>, StoreError>
@@ -234,6 +238,8 @@ impl StoreConfig {
         match self {
             #[cfg(feature = "directory")]
             StoreConfig::Directory { path } => directory::initialize(path),
+            #[cfg(feature = "db")]
+            StoreConfig::DataBase {} => db::initialize(),
         }
     }
 }
