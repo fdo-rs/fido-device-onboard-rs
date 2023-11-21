@@ -22,3 +22,6 @@ fdo-data-formats = { path = "../data-formats", version = "0.4.13" }
 fdo-http-wrapper = { path = "../http-wrapper", version = "0.4.13", features = ["server"] }
 fdo-store = { path = "../store", version = "0.4.13", features = ["directory"] }
 fdo-util = { path = "../util", version = "0.4.13" }
+
+hyper = { version = "0.14", features = ["tcp"] }
+tls-listener = { version = "0.7.0", features = ["openssl", "hyper-h1"]}

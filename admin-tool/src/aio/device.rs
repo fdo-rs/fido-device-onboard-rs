@@ -95,7 +95,7 @@ async fn manufacture_device(
         "MANUFACTURING_SERVER_URL",
         format!(
             "http://localhost:{}", //DevSkim: ignore DS137138
-            configuration.listen_port_manufacturing_server
+            configuration.listen_port_http_manufacturing_server
         ),
     )
     .env("DI_MFG_STRING_TYPE", "serialnumber")
