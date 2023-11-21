@@ -125,7 +125,7 @@ async fn print_device_credential(
     let status =
         tokio::process::Command::new(binary_path.join(ChildBinary::OwnerTool.binary_name()))
             .arg("dump-device-credential")
-            .args(device_credential_path)
+            .arg(device_credential_path)
             .status()
             .await
             .context("Error running owner-tool to dump device credential")?;
