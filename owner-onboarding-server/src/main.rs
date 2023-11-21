@@ -177,7 +177,7 @@ async fn report_ov_to_rendezvous(
             );
 
             let mut rv_client =
-                fdo_http_wrapper::client::ServiceClient::new(ProtocolVersion::Version1_1, &rv_url);
+                fdo_http_wrapper::client::ServiceClient::new(ProtocolVersion::Version1_1, &rv_url)?;
 
             // Send: Hello, Receive: HelloAck
             let hello_ack: RequestResult<messages::v11::to0::HelloAck> = rv_client

@@ -349,7 +349,7 @@ async fn main() -> Result<()> {
                 keyref = KeyReference::str_key(args.key_ref)
                     .await
                     .context("Error determining key for DI")?;
-                client = ServiceClient::new(ProtocolVersion::Version1_1, &url);
+                client = ServiceClient::new(ProtocolVersion::Version1_1, &url)?;
             }
             Commands::NoPlainDI(args) => {
                 url = args.manufacturing_server_url;
@@ -369,7 +369,7 @@ async fn main() -> Result<()> {
                 }
 
                 log::debug!("Performing DIUN");
-                client = ServiceClient::new(ProtocolVersion::Version1_1, &url);
+                client = ServiceClient::new(ProtocolVersion::Version1_1, &url)?;
                 (keyref, mfg_string_type) = perform_diun(&mut client, diun_pub_key_verification)
                     .await
                     .context("Error performing DIUN")?;
@@ -400,7 +400,7 @@ async fn main() -> Result<()> {
 
         url = env::var("MANUFACTURING_SERVER_URL")
             .context("Please provide MANUFACTURING_SERVER_URL")?;
-        client = ServiceClient::new(ProtocolVersion::Version1_1, &url);
+        client = ServiceClient::new(ProtocolVersion::Version1_1, &url)?;
 
         let use_plain_di = match env::var("USE_PLAIN_DI") {
             Ok(val) => val == "true",
