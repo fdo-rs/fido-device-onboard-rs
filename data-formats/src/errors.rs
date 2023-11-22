@@ -71,4 +71,6 @@ pub enum Error {
     UnsupportedVersion(Option<crate::constants::ProtocolVersion>),
     #[error("TPM/TSS error: {0:?}")]
     TssError(#[from] tss_esapi::Error),
+    #[error("Empty data")]
+    EmptyData,
 }

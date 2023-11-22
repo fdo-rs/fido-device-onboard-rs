@@ -175,6 +175,9 @@ impl OwnershipVoucher {
     }
 
     pub fn from_pem(data: &[u8]) -> Result<Self> {
+        if data.is_empty() {
+            return Err(Error::EmptyData);
+        }
         let parsed = pem::parse(data)?;
         if parsed.tag() != VOUCHER_PEM_TAG {
             return Err(Error::InvalidPemTag(parsed.tag().to_string()));
@@ -183,6 +186,9 @@ impl OwnershipVoucher {
     }
 
     pub fn many_from_pem(data: &[u8]) -> Result<Vec<Self>> {
+        if data.is_empty() {
+            return Err(Error::EmptyData);
+        }
         pem::parse_many(data)?
             .into_iter()
             .map(|parsed| {
@@ -196,6 +202,9 @@ impl OwnershipVoucher {
     }
 
     pub fn from_pem_or_raw(data: &[u8]) -> Result<Self> {
+        if data.is_empty() {
+            return Err(Error::EmptyData);
+        }
         if data[0] == data[1] && data[0] == b'-' {
             Self::from_pem(data)
         } else {
