@@ -1,6 +1,5 @@
 use std::convert::{TryFrom, TryInto};
 use std::fs;
-use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyhow::{bail, Context, Result};
@@ -38,12 +37,13 @@ use std::convert::Infallible;
 use tls_listener::TlsListener;
 
 pub mod tls_config;
+use tls_config::tls_acceptor;
 
 mod handlers;
 mod ov_management;
 use crate::ov_management::ov_filter;
 
-pub(crate) struct OwnerServiceUD {
+pub struct OwnerServiceUD {
     // Trusted keys
     #[allow(dead_code)]
     trusted_device_keys: X5Bag,
@@ -58,6 +58,8 @@ pub(crate) struct OwnerServiceUD {
         >,
     >,
     session_store: Arc<fdo_http_wrapper::server::SessionStore>,
+    owner_server_https_cert: AbsolutePathBuf,
+    owner_server_https_key: AbsolutePathBuf,
 
     // Our keys
     owner_key: PKey<Private>,
@@ -285,8 +287,8 @@ async fn main() -> Result<()> {
         .context("Error parsing configuration")?;
 
     // Bind information
-    let bind_addr = settings.bind.clone();
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8081));
+    let bind_http_addr = settings.bind_http.clone();
+    let bind_https_addr = settings.bind_https.clone();
 
     // Trusted keys
     let trusted_device_keys = {
@@ -352,6 +354,8 @@ async fn main() -> Result<()> {
         // Stores
         ownership_voucher_store,
         session_store: session_store.clone(),
+        owner_server_https_cert: settings.owner_server_https_cert,
+        owner_server_https_key: settings.owner_server_https_key,
 
         // Trusted keys
         trusted_device_keys,
@@ -424,23 +428,23 @@ async fn main() -> Result<()> {
     let routes = warp::post()
         .and(
             hello
-                .or(handler_ping)
-                .or(handler_report_to_rendezvous)
+                .or(handler_ping.clone())
+                .or(handler_report_to_rendezvous.clone())
                 // TO2
-                .or(handler_to2_hello_device)
-                .or(handler_to2_get_ov_next_entry)
-                .or(handler_to2_prove_device)
-                .or(handler_to2_device_service_info_ready)
-                .or(handler_to2_device_service_info)
-                .or(handler_to2_done)
+                .or(handler_to2_hello_device.clone())
+                .or(handler_to2_get_ov_next_entry.clone())
+                .or(handler_to2_prove_device.clone())
+                .or(handler_to2_device_service_info_ready.clone())
+                .or(handler_to2_device_service_info.clone())
+                .or(handler_to2_done.clone())
                 .or(ov_filter(user_data.clone())),
         )
         .recover(fdo_http_wrapper::server::handle_rejection)
-        .with(warp::log("owner-onboarding-service"));
+        .with(warp::log(
+            "owner-onboarding-service to handle http and https",
+        ));
 
-    log::info!("Listening on {}", addr);
-
-    let service = warp::service(routes);
+    let service = warp::service(routes.clone());
 
     let make_svc = hyper::service::make_service_fn(move |_| {
         let svc = service.clone();
@@ -448,32 +452,51 @@ async fn main() -> Result<()> {
     });
 
     let incoming = TlsListener::new(
-        tls_config::tls_config::tls_acceptor(),
-        AddrIncoming::bind(&addr)?,
+        tls_acceptor(user_data.clone()),
+        AddrIncoming::bind(&bind_https_addr.into())?,
     );
-    let server = hyper::Server::builder(incoming).serve(make_svc);
-    log::info!("starting at https://{}", addr);
-    server.await?;
-    // let server = warp::serve(routes);
+    let https_server = hyper::Server::builder(incoming).serve(make_svc);
+    let https_server = https_server.with_graceful_shutdown(async {
+        signal(SignalKind::terminate()).unwrap().recv().await;
+        log::info!("Terminating HTTPS server");
+    });
+    let https_server_handle = tokio::spawn(https_server);
 
-    // let maintenance_runner =
-    //     tokio::spawn(async move { perform_maintenance(user_data.clone()).await });
+    let http_server = warp::serve(routes.clone());
+    let http_server = http_server
+        .bind_with_graceful_shutdown(bind_http_addr, async {
+            signal(SignalKind::terminate()).unwrap().recv().await;
+            log::info!("Terminating HTTP server");
+        })
+        .1;
+    let http_server_handle = tokio::spawn(http_server);
 
-    // let server = server
-    //     .bind_with_graceful_shutdown(bind_addr, async {
-    //         signal(SignalKind::terminate()).unwrap().recv().await;
-    //         log::info!("Terminating");
-    //     })
-    //     .1;
-    // let server = tokio::spawn(server);
+    let maintenance_runner_handle =
+        tokio::spawn(async move { perform_maintenance(user_data.clone()).await });
 
-    // tokio::select!(
-    // _ = server => {
-    //     log::info!("Server terminated");
-    // },
-    // _ = maintenance_runner => {
-    //     log::info!("Maintenance runner terminated");
-    // });
+    log::info!("starting both servers with http & https support");
+    // Join all the three handlers and wait
+    let (http_result, https_result, maintenance_result) = tokio::join!(
+        http_server_handle,
+        https_server_handle,
+        maintenance_runner_handle
+    );
+
+    // Check the results and handle accordingly since we have joined
+    match http_result {
+        Ok(_) => log::info!("HTTP server terminated successfully"),
+        Err(err) => log::error!("HTTP server terminated with an error: {:?}", err),
+    }
+
+    match https_result {
+        Ok(_) => log::info!("HTTPS server terminated successfully"),
+        Err(err) => log::error!("HTTPS server terminated with an error: {:?}", err),
+    }
+
+    match maintenance_result {
+        Ok(_) => log::info!("Maintenance runner terminated successfully"),
+        Err(err) => log::error!("Maintenance runner terminated with an error: {:?}", err),
+    }
 
     Ok(())
 }

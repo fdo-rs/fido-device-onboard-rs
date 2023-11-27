@@ -25,7 +25,9 @@ pub(super) struct Configuration {
     #[clap(long, default_value_t = 8080)]
     pub listen_port_manufacturing_server: u16,
     #[clap(long, default_value_t = 8081)]
-    pub listen_port_owner_onboarding_server: u16,
+    pub listen_port_http_owner_onboarding_server: u16,
+    #[clap(long, default_value_t = 8085)]
+    pub listen_port_https_owner_onboarding_server: u16,
     #[clap(long, default_value_t = 8082)]
     pub listen_port_rendezvous_server: u16,
     #[clap(long, default_value_t = 8083)]
@@ -78,7 +80,8 @@ impl Default for Configuration {
 
             listen_ip_address: String::from("0.0.0.0"),
             listen_port_manufacturing_server: 8080,
-            listen_port_owner_onboarding_server: 8081,
+            listen_port_http_owner_onboarding_server: 8081,
+            listen_port_https_owner_onboarding_server: 8085,
             listen_port_rendezvous_server: 8082,
             listen_port_serviceinfo_api_server: 8083,
 
@@ -155,7 +158,7 @@ impl Configuration {
         Ok(vec![fdo_data_formats::types::RemoteConnection::new(
             fdo_data_formats::types::RemoteTransport::Http,
             owner_addresses,
-            self.listen_port_owner_onboarding_server,
+            self.listen_port_http_owner_onboarding_server,
         )])
     }
 
@@ -309,7 +312,17 @@ fn generate_configs(aio_dir: &Path, config_args: &Configuration) -> Result<(), E
                 path: aio_dir.join("stores").join("owner_onboarding_sessions"),
             },
 
-            bind: get_bind(config_args.listen_port_owner_onboarding_server)?,
+            owner_server_https_cert: AbsolutePathBuf::new(
+                aio_dir.join("keys").join("owner_server_https_cert.crt"),
+            )
+            .unwrap(),
+            owner_server_https_key: AbsolutePathBuf::new(
+                aio_dir.join("keys").join("owner_server_https_key.key"),
+            )
+            .unwrap(),
+
+            bind_http: get_bind(config_args.listen_port_http_owner_onboarding_server)?,
+            bind_https: get_bind(config_args.listen_port_https_owner_onboarding_server)?,
 
             ownership_voucher_store_driver: StoreConfig::Directory {
                 path: aio_dir.join("stores").join("owner_vouchers"),

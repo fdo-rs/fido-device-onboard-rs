@@ -26,7 +26,8 @@ pub(crate) fn ov_filter(
         .and(warp::body::bytes())
         .map(move |count, content_type, body| (count, content_type, body, session_store.clone()))
         .untuple_one()
-        .and_then(add_ov);
+        .and_then(add_ov)
+        .recover(recover_err);
 
     let delete = baseurl
         .and(warp::post())
@@ -139,8 +140,8 @@ async fn add_ov(
                         StatusCode::BAD_REQUEST,
                     )));
                 }
-                ErrorCode::InvalidVoucherSignatureDescription() => {
-                    let message = ErrorCode::generate(ErrorCode::InvalidVoucherSignature(i));
+                ErrorCode::InvalidVoucherSignaturesDescription() => {
+                    let message = ErrorCode::generate(ErrorCode::InvalidVoucherSignatures(i));
                     return Ok(Box::new(warp::reply::with_status(
                         warp::reply::json(&message),
                         StatusCode::BAD_REQUEST,
@@ -253,13 +254,13 @@ async fn recover_err(e: Rejection) -> Result<impl warp::Reply, warp::Rejection> 
 enum ErrorCode {
     #[error("Voucher count should be positive integer")]
     VoucherCountError,
-    #[error("Content-type should be application/x-pem-file,application/cbor")]
+    #[error("Content-type should be application/x-pem-file or application/cbor")]
     RequireContentTypeHeader,
     #[error("Ownership voucher not found")]
     NoOwnershipVoucherFound,
     #[error("Unable to parse UUID")]
     UuidParseError,
-    #[error("Pem format error")]
+    #[error("PEM format error")]
     ParseError,
     #[error("{0}")]
     StoreError(String),
@@ -270,17 +271,17 @@ enum ErrorCode {
     #[error("{0:?}")]
     UnknownDevice(Vec<String>),
     #[error("Voucher signature not valid")]
-    InvalidVoucherSignature(usize),
+    InvalidVoucherSignatures(usize),
     #[error("Incomplete Voucher")]
     IncompleteVoucher(usize),
-    #[error("Error parsing pem file")]
+    #[error("Error parsing PEM file")]
     PemParseError(usize),
     #[error("")]
     PemParseErrorDescription(),
     #[error("")]
     IncompleteVoucherDescription(),
     #[error("")]
-    InvalidVoucherSignatureDescription(),
+    InvalidVoucherSignaturesDescription(),
     #[error("Something is wrong here, please try again")]
     MiscError,
 }
@@ -310,7 +311,7 @@ impl ErrorCode {
                 error_details: json! ({"error": ErrorCode::ParseError.to_string()})
             }),
             ErrorCode::InvalidNumberOfVouchers(e) => json!(ErrorMsg {
-                error_code: "invalid_number_of_voucher",
+                error_code: "invalid_number_of_vouchers",
                 error_details: json!({ "parsed": e })
             }),
             ErrorCode::UnwonedVoucher(e) => json!(ErrorMsg {
@@ -321,9 +322,9 @@ impl ErrorCode {
                 error_code: "unknown_device",
                 error_details: json!({ "unknown": e })
             }),
-            ErrorCode::InvalidVoucherSignature(idx) => json!(ErrorMsg {
-                error_code: "invalid_voucher_signature",
-                error_details: json! ({"failed_at_index": idx,"description": &ErrorCode::InvalidVoucherSignature(idx).to_string()})
+            ErrorCode::InvalidVoucherSignatures(idx) => json!(ErrorMsg {
+                error_code: "invalid_voucher_signatures",
+                error_details: json! ({"failed_at_index": idx,"description": &ErrorCode::InvalidVoucherSignatures(idx).to_string()})
             }),
             ErrorCode::IncompleteVoucher(idx) => json!(ErrorMsg {
                 error_code: "incomplete_voucher",
@@ -344,14 +345,13 @@ fn validate_ov<'a>(
 ) -> Result<bool, ErrorCode> {
     ov.iter_entries()
         .map_err(|_e| ErrorCode::PemParseErrorDescription())?
-        .into_iter()
         .next()
         .ok_or(|| ErrorCode::ParseError)
         .map_err(|_| ErrorCode::ParseError)?
         .map_err(|_e| ErrorCode::IncompleteVoucherDescription())?
         .public_key()
         .matches_pkey(owner_key)
-        .map_err(|_e| ErrorCode::InvalidVoucherSignatureDescription())
+        .map_err(|_e| ErrorCode::InvalidVoucherSignaturesDescription())
 }
 
 fn validate_count(count: HeaderValue) -> Result<usize, ErrorCode> {
