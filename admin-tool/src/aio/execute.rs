@@ -203,7 +203,7 @@ impl ChildBinary {
     fn port(&self, config: &Configuration) -> u16 {
         match self {
             ChildBinary::ManufacturingServer => config.listen_port_manufacturing_server,
-            ChildBinary::OwnerOnboardingServer => config.listen_port_owner_onboarding_server,
+            ChildBinary::OwnerOnboardingServer => config.listen_port_http_owner_onboarding_server,
             ChildBinary::RendezvousServer => config.listen_port_rendezvous_server,
             ChildBinary::ServiceInfoApiServer => config.listen_port_serviceinfo_api_server,
             _ => unreachable!(),

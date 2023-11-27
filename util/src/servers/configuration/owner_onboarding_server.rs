@@ -20,9 +20,12 @@ pub struct OwnerOnboardingServerSettings {
     // Our private owner key
     pub owner_private_key_path: AbsolutePathBuf,
     pub owner_public_key_path: AbsolutePathBuf,
+    pub owner_server_https_cert: AbsolutePathBuf,
+    pub owner_server_https_key: AbsolutePathBuf,
 
     // Bind information
-    pub bind: Bind,
+    pub bind_http: Bind,
+    pub bind_https: Bind,
 
     // Service Info API Server
     pub service_info_api_url: String,
