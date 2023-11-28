@@ -62,9 +62,9 @@ yq -yi '.storage_driver += {"Postgres": "Rendezvous"}' test/fdo/rendezvous-serve
 # Prepare postgres db init sql script
 greenprint "🔧 Prepare postgres db init sql script"
 mkdir -p initdb
-cp migrations_manufacturing_server_postgres/2023-10-03-152801_create_db/up.sql initdb/manufacturing.sql
-cp migrations_owner_onboarding_server_postgres/2023-10-03-152801_create_db/up.sql initdb/owner-onboarding.sql
-cp migrations_rendezvous_server_postgres/2023-10-03-152801_create_db/up.sql initdb/rendezvous.sql
+cp migrations/migrations_manufacturing_server_postgres/2023-10-03-152801_create_db/up.sql initdb/manufacturing.sql
+cp migrations/migrations_owner_onboarding_server_postgres/2023-10-03-152801_create_db/up.sql initdb/owner-onboarding.sql
+cp migrations/migrations_rendezvous_server_postgres/2023-10-03-152801_create_db/up.sql initdb/rendezvous.sql
 
 greenprint "🔧 Starting postgres"
 sudo podman run -d \

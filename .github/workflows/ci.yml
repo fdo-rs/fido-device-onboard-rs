@@ -118,9 +118,9 @@ jobs:
         run: |
           # prep for database tests
           cargo install --force diesel_cli --no-default-features --features sqlite
-          diesel migration run --migration-dir ./migrations_manufacturing_server_sqlite --database-url ./ci-manufacturer-db.sqlite
-          diesel migration run --migration-dir ./migrations_owner_onboarding_server_sqlite --database-url ./ci-owner-db.sqlite
-          diesel migration run --migration-dir ./migrations_rendezvous_server_sqlite --database-url ./ci-rendezvous-db.sqlite
+          diesel migration run --migration-dir ./migrations/migrations_manufacturing_server_sqlite --database-url ./ci-manufacturer-db.sqlite
+          diesel migration run --migration-dir ./migrations/migrations_owner_onboarding_server_sqlite --database-url ./ci-owner-db.sqlite
+          diesel migration run --migration-dir ./migrations/migrations_rendezvous_server_sqlite --database-url ./ci-rendezvous-db.sqlite
           # run tests
           cargo test --workspace
           # delete sqlite databases
