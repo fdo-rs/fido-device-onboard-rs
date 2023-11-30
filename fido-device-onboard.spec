@@ -10,8 +10,6 @@ License:        BSD-3-Clause
 
 URL:            https://github.com/fdo-rs/fido-device-onboard-rs
 Source0:        %{url}/archive/v%{version}/%{name}-rs-%{version}.tar.gz
-# See make-vendored-tarfile.sh in upstream repo
-Source1:        %{name}-rs-%{version}-vendor-patched.tar.xz
 
 # Because nobody cares
 ExcludeArch: %{ix86}
@@ -38,9 +36,9 @@ BuildRequires:  tpm2-tss-devel
 %if 0%{?rhel}
 %cargo_prep -V 1
 %else
-%cargo_prep
+cargo vendor
+%cargo_prep -v vendor
 %generate_buildrequires
-%cargo_generate_buildrequires -a
 %endif
 
 %build

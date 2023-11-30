@@ -38,29 +38,23 @@ help:
 
 RPM_SPECFILE=rpmbuild/SPECS/fido-device-onboard-rs-$(COMMIT).spec
 RPM_TARBALL=rpmbuild/SOURCES/fido-device-onboard-rs-$(COMMIT).tar.gz
-VENDOR_TARBALL=rpmbuild/SOURCES/fido-device-onboard-rs-$(COMMIT)-vendor-patched.tar.xz
 
 $(RPM_SPECFILE):
 	mkdir -p $(CURDIR)/rpmbuild/SPECS
-	sed "s/%{url}\/archive\/v%{version}\/%{name}-rs-%{version}.tar.gz/%{name}-rs-$(COMMIT).tar.gz/; s/%{name}-rs-%{version}-vendor-patched.tar.xz/%{name}-rs-$(COMMIT)-vendor-patched.tar.xz/; s/%autosetup -p1 -n %{name}-rs-%{version}/%autosetup -p1 -n %{name}-rs-$(COMMIT)/" fido-device-onboard.spec > $(RPM_SPECFILE)
+	sed "s/%{url}\/archive\/v%{version}\/%{name}-rs-%{version}.tar.gz/%{name}-rs-$(COMMIT).tar.gz/; s/%autosetup -p1 -n %{name}-rs-%{version}/%autosetup -p1 -n %{name}-rs-$(COMMIT)/" fido-device-onboard.spec > $(RPM_SPECFILE)
 
 $(RPM_TARBALL):
 	mkdir -p $(CURDIR)/rpmbuild/SOURCES
 	git archive --prefix=fido-device-onboard-rs-$(COMMIT)/ --format=tar.gz HEAD > $(RPM_TARBALL)
-	cp ./make-vendored-tarfile.sh rpmbuild/SOURCES/make-vendored-tarfile.sh
-
-$(VENDOR_TARBALL):
-	./make-vendored-tarfile.sh $(COMMIT)
-	cp fido-device-onboard-rs-$(COMMIT)-vendor-patched.tar.xz rpmbuild/SOURCES
 
 .PHONY: srpm
-srpm: $(RPM_SPECFILE) $(RPM_TARBALL) $(VENDOR_TARBALL)
+srpm: $(RPM_SPECFILE) $(RPM_TARBALL)
 	rpmbuild -bs \
 		--define "_topdir $(CURDIR)/rpmbuild" \
 		$(RPM_SPECFILE)
 
 .PHONY: rpm
-rpm: $(RPM_SPECFILE) $(RPM_TARBALL) $(VENDOR_TARBALL)
+rpm: $(RPM_SPECFILE) $(RPM_TARBALL)
 	rpmbuild -bb \
 		--define "_topdir $(CURDIR)/rpmbuild" \
 		$(RPM_SPECFILE)

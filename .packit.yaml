@@ -1,48 +1,37 @@
+---
 # https://packit.dev/docs/configuration/
-
 specfile_path: fido-device-onboard.spec
-
 files_to_sync:
-    - fido-device-onboard.spec
-    - .packit.yaml
-
+  - fido-device-onboard.spec
+  - .packit.yaml
 upstream_package_name: fido-device-onboard
 downstream_package_name: fido-device-onboard
-
 upstream_tag_template: v{version}
 copy_upstream_release_description: true
-
 srpm_build_deps:
-- cargo
-
+  - cargo
 actions:
   create-archive:
-  - "cargo vendor vendor"
-  - bash -c "git archive --prefix=fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}/ --format=tar HEAD > fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}.tar"
-  - bash -c "tar -xvf fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}.tar"
-  - bash -c "cp -Ra vendor fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}"
-  - bash -c "tar -czf fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}.tar.gz fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}"
-  - bash -c "rm -rf fido-device-onboard-rs-${PACKIT_PROJECT_VERSION} fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}.tar vendor"
-  - bash -c "ls -1 ./fido-device-onboard-rs-*.tar.gz"
+    - bash -c "git archive --prefix=fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}/ --format=tar.gz HEAD > fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}.tar.gz"
+    - bash -c "ls -1 ./fido-device-onboard-rs-*.tar.gz"
   fix-spec-file:
-  - sed -i fido-device-onboard.spec -e "s/with_packit 0/with_packit 1/"
-  - bash -c "sed -i -r \"s/Release:(\s*)\S+/Release:\1${PACKIT_RPMSPEC_RELEASE}%{?dist}/\" fido-device-onboard.spec"
-
+    - sed -i fido-device-onboard.spec -e "s/with_packit 0/with_packit 1/"
+    - bash -c "sed -i -r \"s/Release:(\s*)\S+/Release:\1${PACKIT_RPMSPEC_RELEASE}%{?dist}/\" fido-device-onboard.spec"
 jobs:
-- job: copr_build
-  trigger: pull_request
-  targets:
-  - centos-stream-9-aarch64
-  - centos-stream-9-x86_64
-  - fedora-development-aarch64
-  - fedora-development
-- job: copr_build
-  trigger: commit
-  branch: main
-  owner: "@fedora-iot" # copr repo namespace
-  project: fedora-iot  # copr repo name so you can consume the builds
-  targets:
-  - centos-stream-9-aarch64
-  - centos-stream-9-x86_64
-  - fedora-development-aarch64
-  - fedora-development
+  - job: copr_build
+    trigger: pull_request
+    targets:
+      - centos-stream-9-aarch64
+      - centos-stream-9-x86_64
+      - fedora-development-aarch64
+      - fedora-development
+  - job: copr_build
+    trigger: commit
+    branch: main
+    owner: "@fedora-iot" # copr repo namespace
+    project: fedora-iot # copr repo name so you can consume the builds
+    targets:
+      - centos-stream-9-aarch64
+      - centos-stream-9-x86_64
+      - fedora-development-aarch64
+      - fedora-development
