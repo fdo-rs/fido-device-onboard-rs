@@ -168,3 +168,5 @@ jobs:
         run: devcontainer build --image-name devcontainer-fdo-rs .
       - name: Test building in devcontainer
         run: docker run --rm -v `pwd`:/code:z --workdir /code --user root devcontainer-fdo-rs cargo build --workspace --verbose
+      - name: Test testing in devcontainer
+        run: docker run --rm -v `pwd`:/code:z --workdir /code --user root devcontainer-fdo-rs cargo test --lib --bins --workspace --verbose
