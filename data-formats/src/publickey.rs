@@ -343,7 +343,7 @@ impl X5Chain {
     }
 
     pub fn leaf_certificate(&self) -> Option<&X509> {
-        self.chain.get(0)
+        self.chain.first()
     }
 
     pub fn from_slice(data: &[u8]) -> Result<Self> {

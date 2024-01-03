@@ -259,7 +259,7 @@ impl Nonce {
     }
 
     pub fn from_value(val: &[u8]) -> Result<Self, Error> {
-        Ok(Nonce(val.try_into().map_err(|_| Error::IncorrectNonce)?))
+        Ok(Nonce(val.into()))
     }
 
     pub fn value(&self) -> &[u8] {
@@ -326,7 +326,7 @@ impl Guid {
         if data[0] != EAT_RAND {
             Err(Error::InconsistentValue("Invalid UEID"))
         } else {
-            Ok(Guid(data[1..].try_into().unwrap()))
+            Ok(Guid(data[1..].into()))
         }
     }
 }
