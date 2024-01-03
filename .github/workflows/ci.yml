@@ -139,6 +139,15 @@ jobs:
         run: |
           git diff --exit-code
 
+  postgres_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Run test
+        run: test/fdo-postgres.sh
+
   commitlint:
     runs-on: ubuntu-latest
     steps:
