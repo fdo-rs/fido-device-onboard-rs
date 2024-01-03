@@ -190,4 +190,12 @@ jobs:
       - name: Test building in devcontainer
         run: docker run --rm -v `pwd`:/code:z --workdir /code --user root devcontainer-fdo-rs cargo build --workspace --verbose
       - name: Test testing in devcontainer
-        run: docker run --rm -v `pwd`:/code:z --workdir /code --user root devcontainer-fdo-rs cargo test --lib --bins --workspace --verbose
+        run: |
+          docker run -d -v `pwd`:/code:z --workdir /code --user root -e SQLITE_MANUFACTURER_DATABASE_URL='../ci-manufacturer-db.sqlite' -e SQLITE_OWNER_DATABASE_URL='../ci-owner-db.sqlite' -e SQLITE_RENDEZVOUS_DATABASE_URL='../ci-rendezvous-db.sqlite' --name tests devcontainer-fdo-rs sleep infinity
+          docker exec --user root tests cargo build --lib --bins --workspace --verbose
+          docker exec --user root tests diesel migration run --migration-dir ./migrations/migrations_manufacturing_server_sqlite --database-url ./ci-manufacturer-db.sqlite 
+          docker exec --user root tests diesel migration run --migration-dir ./migrations/migrations_owner_onboarding_server_sqlite --database-url ./ci-owner-db.sqlite 
+          docker exec --user root tests diesel migration run --migration-dir ./migrations/migrations_rendezvous_server_sqlite --database-url ./ci-rendezvous-db.sqlite
+          docker exec --user root tests cargo test
+          docker stop tests
+          docker rm tests
