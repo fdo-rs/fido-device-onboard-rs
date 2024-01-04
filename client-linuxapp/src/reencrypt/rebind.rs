@@ -48,7 +48,7 @@ fn get_clevis_keyslot(dev: &mut CryptDevice, clevis_token: u32) -> Result<u32> {
         .ok_or_else(|| anyhow!("No keyslots found in clevis token"))?
         .as_array()
         .ok_or_else(|| anyhow!("Invalid JSON type returned from clevis token keyslots"))?
-        .get(0)
+        .first()
         .ok_or_else(|| anyhow!("No keyslots found in clevis token"))?
         .as_str()
         .ok_or_else(|| anyhow!("Invalid JSON type returned from clevis token keyslot"))?
