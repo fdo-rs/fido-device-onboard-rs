@@ -110,7 +110,14 @@ pub(crate) async fn app_start(
     let device_certificate_chain =
         create_device_cert_chain(&user_data.device_cert_chain, device_certificate);
     let device_certificate_chain_serialized = device_certificate_chain
-        .serialize_data()
+        .chain()
+        .iter()
+        .try_fold(vec![], |mut bytes, cert| {
+            cert.to_der().map(|der| {
+                bytes.extend(der);
+                bytes
+            })
+        })
         .map_err(Error::from_error::<messages::v11::di::AppStart, _>)?;
     let device_certificate_chain_hash =
         Hash::from_data(HashType::Sha384, &device_certificate_chain_serialized)
