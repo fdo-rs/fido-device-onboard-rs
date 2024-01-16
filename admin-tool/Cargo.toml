@@ -17,7 +17,7 @@ futures = "0.3"
 reqwest = "0.11"
 serde = "1"
 serde_yaml = "0.9"
-pretty_env_logger = "0.4"
+pretty_env_logger = "0.5"
 nix = "0.26"
 tokio = { version = "1", features = ["full"] }
 
