@@ -329,7 +329,14 @@ fn initialize_device(args: &InitializeDeviceArguments) -> Result<(), Error> {
     device_cert_chain.insert(0, device_cert);
     let device_cert_chain = X5Chain::new(device_cert_chain).context("Error creating X5Chain")?;
     let device_cert_chain_serialized = device_cert_chain
-        .serialize_data()
+        .chain()
+        .iter()
+        .try_fold(vec![], |mut bytes, cert| {
+            cert.to_der().map(|der| {
+                bytes.extend(der);
+                bytes
+            })
+        })
         .context("Error serializing device cert chain")?;
     let device_cert_chain_hash = Hash::from_data(HashType::Sha384, &device_cert_chain_serialized)
         .context("Error hashing device cert chain")?;
