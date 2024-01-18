@@ -855,7 +855,8 @@ async fn perform_to2(
 ) -> Result<bool> {
     log::info!("Performing TO2 protocol, URL: {:?}", url);
 
-    let mut client = fdo_http_wrapper::client::ServiceClient::new(ProtocolVersion::Version1_1, url)?;
+    let mut client =
+        fdo_http_wrapper::client::ServiceClient::new(ProtocolVersion::Version1_1, url)?;
 
     let nonce5 = match get_nonce(MessageType::TO1RVRedirect).await {
         Ok(nonce5) => nonce5,

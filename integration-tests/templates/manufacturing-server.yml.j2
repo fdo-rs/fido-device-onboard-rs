@@ -8,7 +8,8 @@ ownership_voucher_store_driver:
 public_key_store_driver:
   Directory:
     path: {{ config_dir }}/keys/
-bind: {{ bind }}
+bind_http: {{ bind }}
+bind_https: {{ bind_https }}
 rendezvous_info:
 - dns: localhost
   device_port: 8082
@@ -33,3 +34,5 @@ manufacturing:
   owner_cert_path: {{ keys_path }}/owner_cert.pem
   device_cert_ca_private_key: {{ keys_path }}/device_ca_key.der
   device_cert_ca_chain: {{ keys_path }}/device_ca_cert.pem
+  manufacturing_server_https_cert: {{ keys_path }}/manufacturing_server_https_cert.crt
+  manufacturing_server_https_key: {{ keys_path }}/manufacturing_server_https_key.key

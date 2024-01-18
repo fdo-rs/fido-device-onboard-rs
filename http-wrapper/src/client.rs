@@ -159,13 +159,13 @@ impl ServiceClient {
             client_builder = client_builder.danger_accept_invalid_certs(true);
         }
 
-        Ok(ServiceClient {  
+        Ok(ServiceClient {
             protocol_version,
             base_url: base_url.trim_end_matches('/').to_string(),
             client: client_builder
-            .tls_info(true)
-          //  .danger_accept_invalid_certs(true)
-            .build()?,
+                .tls_info(true)
+                //  .danger_accept_invalid_certs(true)
+                .build()?,
             authorization_token: None,
             encryption_keys: EncryptionKeys::unencrypted(),
             last_message_type: None,
@@ -223,15 +223,15 @@ impl ServiceClient {
         let to_send = to_send.serialize_data()?;
         let to_send = self.encryption_keys.encrypt(&to_send)?;
         log::trace!("Sending message: {:?}", hex::encode(&to_send));
-     
-         let url = format!(
-            "{}/fdo/{}/msg/{}", 
+
+        let url = format!(
+            "{}/fdo/{}/msg/{}",
             &self.base_url,
             self.protocol_version,
             OM::message_type() as u8
-        ); 
+        );
 
-        log::debug!("url: {}",url);
+        log::debug!("url: {}", url);
         let mut req = self
             .client
             .post(&url)

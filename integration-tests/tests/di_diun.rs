@@ -25,6 +25,9 @@ async fn test_device_credentials_already_active() -> Result<()> {
                     cfg.insert("rendezvous_port", "1337");
                     cfg.insert("diun_key_type", "FileSystem");
                     cfg.insert("device_identification_format", "SerialNumber");
+                    cfg.insert("manufacturing_server_https_cert_path", "/workspaces/fido-device-onboard-rs/integration-tests/tests/test-data/https-test");
+                    cfg.insert("manufacturing_server_https_key_path", "/workspaces/fido-device-onboard-rs/integration-tests/tests/test-data/https-test");
+                   // cfg.insert("bind_https", &format!("0.0.0.0:{}","8096"));
                     Ok(())
                 })?)
             },
@@ -109,6 +112,9 @@ async fn test_device_credentials_generated_with_mac_address() -> Result<()> {
                     cfg.insert("rendezvous_port", "1337");
                     cfg.insert("diun_key_type", "FileSystem");
                     cfg.insert("device_identification_format", "MACAddress");
+                    cfg.insert("manufacturing_server_https_cert_path", "/workspaces/fido-device-onboard-rs/integration-tests/tests/test-data/https-test");
+                    cfg.insert("manufacturing_server_https_key_path", "/workspaces/fido-device-onboard-rs/integration-tests/tests/test-data/https-test");
+                  //  cfg.insert("bind_https", &format!("0.0.0.0:{}","8086"));
                     Ok(())
                 })?)
             },
@@ -207,6 +213,9 @@ async fn test_device_credentials_with_tpm() -> Result<()> {
                     cfg.insert("rendezvous_port", "1337");
                     cfg.insert("diun_key_type", "Tpm");
                     cfg.insert("device_identification_format", "SerialNumber");
+                    cfg.insert("manufacturing_server_https_cert_path", "/workspaces/fido-device-onboard-rs/integration-tests/tests/test-data/https-test");
+                    cfg.insert("manufacturing_server_https_key_path", "/workspaces/fido-device-onboard-rs/integration-tests/tests/test-data/https-test");
+                   // cfg.insert("bind_https", &format!("0.0.0.0:{}","8086"));
                     Ok(())
                 })?)
             },
@@ -254,6 +263,10 @@ async fn test_device_credentials_generated_with_mac_address_no_user_given_iface(
                     cfg.insert("rendezvous_port", "1337");
                     cfg.insert("diun_key_type", "FileSystem");
                     cfg.insert("device_identification_format", "MACAddress");
+                    cfg.insert("manufacturing_server_https_cert_path", "/workspaces/fido-device-onboard-rs/integration-tests/tests/test-data/https-test");
+                    cfg.insert("manufacturing_server_https_key_path", "/workspaces/fido-device-onboard-rs/integration-tests/tests/test-data/https-test");
+                 //   cfg.insert("bind_https", &format!("0.0.0.0:{}","8086"));
+
                     Ok(())
                 })?)
             },
