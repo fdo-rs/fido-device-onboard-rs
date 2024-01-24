@@ -180,8 +180,7 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 [[package]]
 name = "aws-nitro-enclaves-cose"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e2fe3e862758ef5bb5d89868141ab28781d96347522b60eb6abeaf7f9acd4bc"
+source = "git+https://github.com/nullr0ute/aws-nitro-enclaves-cose/?rev=e3938e60d9051690569d1e4fcbe1c0c99d2fafa8#e3938e60d9051690569d1e4fcbe1c0c99d2fafa8"
 dependencies = [
  "openssl",
  "serde",
