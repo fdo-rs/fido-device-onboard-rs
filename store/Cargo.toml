@@ -23,7 +23,7 @@ xattr = { version = "1.0", default-features = false, optional = true }  # We *ne
 serde_cbor = { version = "0.11", optional = true }
 
 # database
-fdo-db = { path = "../db", version = "0.4.12"}
+fdo-db = { path = "../db", version = "0.4.13"}
 
 diesel = { version = "2.1.0", features = ["sqlite", "postgres", "r2d2"], optional = true }
 

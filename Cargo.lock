@@ -691,7 +691,7 @@ dependencies = [
  "diesel_table_macro_syntax",
  "proc-macro2",
  "quote",
- "syn 2.0.18",
+ "syn 2.0.48",
 ]
 
 [[package]]
@@ -700,7 +700,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc5557efc453706fed5e4fa85006fe9817c224c3f480a34c7e5959fd700921c5"
 dependencies = [
- "syn 2.0.18",
+ "syn 2.0.48",
 ]
 
 [[package]]
@@ -911,7 +911,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-db"
-version = "0.4.12"
+version = "0.4.13"
 dependencies = [
  "anyhow",
  "diesel",
