@@ -34,3 +34,5 @@ default-members = [
     "serviceinfo-api-server",
     "admin-tool",
 ]
+
+resolver = "2"
