@@ -3,7 +3,13 @@
 	"build": {
 		"dockerfile": "Dockerfile"
 	},
+	"containerUser": "vscode",
+	"updateRemoteUserUID": true,
+	"containerEnv": {
+		"HOME": "/home/vscode"
+	},
 	"runArgs": [
+		"--userns=keep-id:uid=1000,gid=1000",
 		"--cap-add=SYS_PTRACE",
 		"--security-opt",
 		"seccomp=unconfined"
@@ -18,7 +24,8 @@
 		"mutantdino.resourcemonitor",
 		"matklad.rust-analyzer",
 		"tamasfe.even-better-toml",
-		"serayuzgur.crates"
+		"serayuzgur.crates",
+		"rust-lang.rust-analyzer"
 	],
 	"hostRequirements": {
 		"memory": "4gb"
