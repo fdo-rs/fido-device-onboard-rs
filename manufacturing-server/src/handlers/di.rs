@@ -79,7 +79,8 @@ pub(crate) async fn app_start(
             Some(store) => store
                 .load_data(&mfg_info.to_string())
                 .await
-                .map_err(Error::from_error::<messages::v11::di::AppStart, _>)?,
+                .map_err(Error::from_error::<messages::v11::di::AppStart, _>)?
+                .map(|d| d.0),
         },
     };
     let public_key = match public_key {

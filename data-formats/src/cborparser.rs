@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use crate::{
     constants::HashType,
-    serializable::{DeserializableMany, MaybeSerializable},
+    serializable::{private::MaybeSerializable, DeserializableMany},
     types::Hash,
     Error, Serializable,
 };
