@@ -1,3 +1,4 @@
+use fdo_data_formats::ownershipvoucher::OwnershipVoucher;
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::fs::{self, File};
@@ -295,6 +296,10 @@ where
             neqs: Vec::new(),
             lts: Vec::new(),
         }))
+    }
+
+    async fn query_ovs_db(&self) -> Result<Vec<OwnershipVoucher>, StoreError> {
+        Err(StoreError::MethodNotAvailable)
     }
 
     async fn store_data(&self, key: K, value: V) -> Result<(), StoreError> {

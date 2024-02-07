@@ -1,6 +1,6 @@
 FROM quay.io/centos/centos:stream9
 RUN yum update -y
-RUN yum install -y --enablerepo=crb cargo gcc golang openssl-devel tpm2-tss-devel cryptsetup-devel clang-devel
+RUN yum install -y --enablerepo=crb cargo gcc golang openssl-devel tpm2-tss-devel cryptsetup-devel clang-devel sqlite sqlite-devel libpq libpq-devel
 WORKDIR /usr/src
 COPY . .
 RUN cargo build --release --features openssl-kdf/deny_custom

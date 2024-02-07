@@ -5,6 +5,7 @@ members = [
     "http-wrapper",
     "store",
     "util",
+    "db",
 
     "client-linuxapp",
     "owner-onboarding-server",
@@ -24,6 +25,7 @@ default-members = [
     "http-wrapper",
     "store",
     "util",
+    "db",
 
     "client-linuxapp",
     "owner-onboarding-server",

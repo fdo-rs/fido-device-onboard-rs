@@ -27,6 +27,17 @@
 		"serayuzgur.crates",
 		"rust-lang.rust-analyzer"
 	],
+	"remoteEnv": {
+		"PATH": "${containerEnv:PATH}:/home/vscode/.cargo/bin",
+		"SQLITE_MANUFACTURER_DATABASE_URL": "../ci-manufacturer-db.sqlite",
+		"SQLITE_OWNER_DATABASE_URL": "../ci-owner-db.sqlite",
+		"SQLITE_RENDEZVOUS_DATABASE_URL": "../ci-rendezvous-db.sqlite"
+	},
+	"containerEnv": {
+		"SQLITE_MANUFACTURER_DATABASE_URL": "../ci-manufacturer-db.sqlite",
+		"SQLITE_OWNER_DATABASE_URL": "../ci-owner-db.sqlite",
+		"SQLITE_RENDEZVOUS_DATABASE_URL": "../ci-rendezvous-db.sqlite"
+	},
 	"hostRequirements": {
 		"memory": "4gb"
 	},
@@ -35,5 +46,6 @@
 		"cargo",
 		"build"
 	],
+	"postCreateCommand": "cargo install --force diesel_cli --no-default-features --features sqlite && diesel migration run --migration-dir ./migrations/migrations_manufacturing_server_sqlite --database-url ./ci-manufacturer-db.sqlite && diesel migration run --migration-dir ./migrations/migrations_owner_onboarding_server_sqlite --database-url ./ci-owner-db.sqlite && diesel migration run --migration-dir ./migrations/migrations_rendezvous_server_sqlite --database-url ./ci-rendezvous-db.sqlite",
 	"waitFor": "onCreateCommand"
 }

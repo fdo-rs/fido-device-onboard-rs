@@ -5,12 +5,11 @@ use fdo_data_formats::{
     constants::ErrorCode,
     messages::Message,
     types::{Nonce, TO1DataPayload},
+    StoredItem,
 };
 
 use fdo_http_wrapper::server::Error;
 use fdo_http_wrapper::server::RequestInformation;
-
-use super::StoredItem;
 
 pub(super) async fn hello(
     _user_data: super::RendezvousUDT,

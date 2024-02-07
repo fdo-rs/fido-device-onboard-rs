@@ -19,5 +19,6 @@ tss-esapi = { version = "7.4", features = ["generate-bindings"] }
 fdo-util = { path = "../util", version = "0.4.13" }
 fdo-data-formats = { path = "../data-formats", version = "0.4.13" }
 fdo-http-wrapper = { path = "../http-wrapper", version = "0.4.13", features = ["client"] }
+fdo-db = { path = "../db", version = "0.4.13"}
 
 hex = "0.4"

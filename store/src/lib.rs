@@ -4,7 +4,7 @@ use core::pin::Pin;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use fdo_data_formats::Serializable;
+use fdo_data_formats::{ownershipvoucher::OwnershipVoucher, Serializable};
 
 #[derive(Debug, Error)]
 pub enum StoreError {
@@ -12,6 +12,10 @@ pub enum StoreError {
     Unspecified(String),
     #[error("Configuration error: {0}")]
     Configuration(String),
+    #[error("Method not available")]
+    MethodNotAvailable,
+    #[error("Internal database error: {0}")]
+    Database(String),
 }
 
 mod private {
@@ -184,6 +188,15 @@ pub trait Store<OT: StoreOpenMode, K, V, MKT: MetadataLocalKey>: Send + Sync {
         Self: 'async_trait,
         OT: Writable;
 
+    fn query_ovs_db<'life0, 'async_trait>(
+        &'life0 self,
+    ) -> Pin<
+        Box<dyn Future<Output = Result<Vec<OwnershipVoucher>, StoreError>> + 'async_trait + Send>,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait;
+
     fn store_data<'life0, 'async_trait>(
         &'life0 self,
         key: K,
@@ -217,10 +230,29 @@ pub trait Store<OT: StoreOpenMode, K, V, MKT: MetadataLocalKey>: Send + Sync {
 mod directory;
 
 #[derive(Debug, Serialize, Deserialize)]
+pub enum DBType {
+    Sqlite,
+    Postgres,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum ServerType {
+    Manufacturer,
+    Owner,
+    Rendezvous,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub enum StoreConfig {
     #[cfg(feature = "directory")]
     Directory { path: std::path::PathBuf },
+    #[cfg(feature = "db")]
+    Sqlite(ServerType),
+    #[cfg(feature = "db")]
+    Postgres(ServerType),
 }
+
+mod db;
 
 impl StoreConfig {
     pub fn initialize<OT, K, V, MKT>(&self) -> Result<Box<dyn Store<OT, K, V, MKT>>, StoreError>
@@ -234,6 +266,10 @@ impl StoreConfig {
         match self {
             #[cfg(feature = "directory")]
             StoreConfig::Directory { path } => directory::initialize(path),
+            #[cfg(feature = "db")]
+            StoreConfig::Sqlite(server) => db::initialize(DBType::Sqlite, server),
+            #[cfg(feature = "db")]
+            StoreConfig::Postgres(server) => db::initialize(DBType::Postgres, server),
         }
     }
 }
