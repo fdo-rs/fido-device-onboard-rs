@@ -3,7 +3,7 @@
 use std::{
     env,
     fs::{self, create_dir, File},
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{Child, Command, ExitStatus},
     time::{Duration, Instant},
@@ -21,6 +21,11 @@ use openssl::{
 };
 
 use fdo_util::servers::format_conf_env;
+
+use openssl::rsa::Rsa;
+use openssl::x509::extension::SubjectAlternativeName;
+use openssl::x509::X509Extension;
+use openssl::x509::X509ReqBuilder;
 
 const PORT_BASE: u16 = 5080;
 
@@ -241,6 +246,9 @@ impl TestContext {
         };
 
         new_context.create_keys().context("Error creating keys")?;
+        new_context
+            .generate_https_keys_and_certs()
+            .context("Error creating https key & cert")?;
 
         Ok(new_context)
     }
@@ -258,6 +266,98 @@ impl TestContext {
 
     pub fn runner_path(&self, number: &TestBinaryNumber) -> PathBuf {
         self.testpath.join(number.name())
+    }
+    pub fn generate_https_keys_and_certs(&self) -> Result<()> {
+        let https_keys_path = self.keys_path();
+        //  create_dir(&https_keys_path).context("Error creating HTTPS keys directory")?;
+
+        /*      // Generate RSA private key
+        let rsa = Rsa::generate(2048).context("Error generating RSA private key")?;
+        let private_key = PKey::from_rsa(rsa).context("Error converting RSA private key to PKey")?;
+
+        // Generate certificate request
+        let mut req_builder = X509ReqBuilder::new().context("Error creating X509ReqBuilder")?;
+        req_builder.set_pubkey(&private_key).context("Error setting public key in request")?;
+        req_builder
+            .add_extension(
+                X509Extension::subject_alt_name(
+                    &SubjectAlternativeName::new()
+                        .dns("localhost")
+                        .dns("example.com"),
+                )
+                .context("Error adding Subject Alternative Name extension")?,
+            )
+            .context("Error adding extension to request")?;
+        let req = req_builder.build();
+
+        // Sign the certificate request with the private key
+        let cert = req
+            .sign(&private_key, MessageDigest::sha256())
+            .context("Error signing certificate request")?;
+
+        // Now serialize the key and certificate
+        let private_key = private_key
+            .private_key_to_der()
+            .context("Error converting private key to DER")?;
+        let cert = cert.to_pem().context("Error converting certificate to PEM")?;
+
+        // Write them to disk
+        fs::write(https_keys_path.join("server_key.der"), private_key)
+            .context("Error writing private key")?;
+        fs::write(https_keys_path.join("server_cert.pem"), cert)
+            .context("Error writing certificate")?; */
+
+        // Generate RSA private key
+        let rsa = Rsa::generate(2048)?;
+        //let private_key = rsa.private_key_to_pem()?;
+        let private_key =
+            PKey::from_rsa(rsa).context("Error converting RSA private key to PKey")?;
+
+        // Write private key to server.key file
+        let mut key_file = File::create(format!(
+            "{}/manufacturing_server_https_key.key",
+            https_keys_path.display()
+        ))?;
+        //key_file.write_all(&private_key)?;
+        key_file.write_all(&private_key.private_key_to_pem_pkcs8()?)?;
+        // Generate X.509 certificate
+        let mut builder = X509Builder::new()?;
+
+        // Set subject for the certificate
+        let mut name_builder = X509NameBuilder::new()?;
+        name_builder.append_entry_by_nid(openssl::nid::Nid::COMMONNAME, "localhost")?;
+        let subject_name = name_builder.build();
+        builder.set_subject_name(&subject_name)?;
+
+        // Set issuer same as subject (self-signed certificate)
+        builder.set_issuer_name(&subject_name)?;
+
+        // Set public key in the certificate
+        builder.set_pubkey(&private_key)?;
+
+        // Set validity period of the certificate (365 days)
+        //  let not_after = chrono::Utc::now() + chrono::Duration::days(365);
+        //builder.set_not_after(&not_after)?;
+        //builder.set_not_before(&chrono::Utc::now())?;
+
+        //  let not_after = chrono::Utc::now() + chrono::Duration::days(365);
+        // builder.set_not_after(Asn1Time::from(&not_after)?)?;
+        builder.set_not_after(Asn1Time::days_from_now(365)?.as_ref())?;
+        builder.set_not_before(Asn1Time::days_from_now(0)?.as_ref())?;
+        //    builder.set_not_before(Asn1Time::from(&chrono::Utc::now())?)?;
+
+        // Sign the certificate with the private key
+        builder.sign(&private_key, openssl::hash::MessageDigest::sha256())?;
+        let certificate = builder.build();
+
+        // Write certificate to server.crt file
+        let mut cert_file = File::create(format!(
+            "{}/manufacturing_server_https_cert.crt",
+            https_keys_path.display()
+        ))?;
+        cert_file.write_all(&certificate.to_pem()?)?;
+
+        Ok(())
     }
 
     fn create_keys(&self) -> Result<()> {
@@ -336,7 +436,6 @@ impl TestContext {
             fs::write(keys_path.join(format!("{}_cert.pem", key_name)), cert)
                 .context("Error writing certificate")?;
         }
-
         Ok(())
     }
 
@@ -801,6 +900,7 @@ impl<'a> TestServerConfigurator<'a> {
                     "bind",
                     &format!("127.0.0.1:{}", self.server_number.server_port().unwrap()),
                 );
+                cfg.insert("bind_https", &format!("127.0.0.1:{}", 6000));
                 cfg.insert("test_dir", &self.test_context.testpath());
                 cfg.insert("owner_port", &self.server_number.server_port().unwrap());
                 cfg.insert(

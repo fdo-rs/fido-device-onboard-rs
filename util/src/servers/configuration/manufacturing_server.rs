@@ -21,7 +21,9 @@ pub struct ManufacturingServerSettings {
     pub public_key_store_driver: Option<StoreConfig>,
 
     // Bind information
-    pub bind: Bind,
+    pub bind_http: Bind,
+
+    pub bind_https: Bind,
 
     pub protocols: ProtocolSetting,
 
@@ -38,6 +40,8 @@ pub struct ManufacturingSettings {
 
     pub owner_cert_path: Option<AbsolutePathBuf>,
     pub manufacturer_private_key: Option<AbsolutePathBuf>,
+    pub manufacturing_server_https_cert: AbsolutePathBuf,
+    pub manufacturing_server_https_key: AbsolutePathBuf,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

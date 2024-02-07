@@ -192,6 +192,10 @@ where
                     cfg.insert("diun_key_type", diun_key_type);
                     cfg.insert("rendezvous_port", &rendezvous_server.server_port().unwrap());
                     cfg.insert("device_identification_format", "SerialNumber");
+                    cfg.insert("manufacturing_server_https_cert_path", "/workspaces/fido-device-onboard-rs/integration-tests/tests/test-data/https-test");
+                    cfg.insert("manufacturing_server_https_key_path", "/workspaces/fido-device-onboard-rs/integration-tests/tests/test-data/https-test");
+                 //   cfg.insert("bind_https", &format!("0.0.0.0:{}","8086"));
+
                     Ok(())
                 })?)
             },
@@ -514,6 +518,10 @@ where
                     cfg.insert("diun_key_type", diun_key_type);
                     cfg.insert("rendezvous_port", &rendezvous_server.server_port().unwrap());
                     cfg.insert("device_identification_format", "SerialNumber");
+                    cfg.insert("manufacturing_server_https_cert_path", "/workspaces/fido-device-onboard-rs/integration-tests/tests/test-data/https-test");
+                    cfg.insert("manufacturing_server_https_key_path", "/workspaces/fido-device-onboard-rs/integration-tests/tests/test-data/https-test");
+                  //  cfg.insert("bind_https", &format!("0.0.0.0:{}","8086"));
+
                     Ok(())
                 })?)
             },

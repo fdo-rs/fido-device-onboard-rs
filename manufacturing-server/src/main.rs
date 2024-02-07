@@ -5,6 +5,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::{bail, Context, Error, Result};
+use fdo_util::servers::configuration::AbsolutePathBuf;
 use openssl::{
     pkey::{PKey, Private},
     x509::X509,
@@ -25,6 +26,16 @@ use fdo_util::servers::{
     configuration::manufacturing_server::{DiunSettings, ManufacturingServerSettings},
     settings_for, yaml_to_cbor, OwnershipVoucherStoreMetadataKey,
 };
+
+use std::convert::Infallible;
+//use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod, SslAcceptorBuilder};
+//use tokio::net::TcpListener;
+//use std::net::SocketAddr;
+use hyper::server::conn::AddrIncoming;
+use tls_listener::TlsListener;
+
+pub mod tls_config;
+use tls_config::tls_acceptor;
 
 const PERFORMED_DIUN_SES_KEY: &str = "mfg_global_diun_performed";
 const DEVICE_KEY_FROM_DIUN_SES_KEY: &str = "mfg_global_device_key_from_diun";
@@ -51,7 +62,7 @@ impl fdo_store::MetadataLocalKey for PublicKeyStoreMetadataKey {
     }
 }
 
-struct ManufacturingServiceUD {
+pub struct ManufacturingServiceUD {
     // Stores
     session_store: Arc<fdo_http_wrapper::server::SessionStore>,
     ownership_voucher_store: Box<
@@ -71,8 +82,8 @@ struct ManufacturingServiceUD {
     device_cert_key: PKey<Private>,
     device_cert_chain: X5Chain,
     owner_cert: Option<PublicKey>,
-
-    // Rendezvous Info
+    manufacturing_server_https_cert: AbsolutePathBuf,
+    manufacturing_server_https_key: AbsolutePathBuf,
     rendezvous_info: RendezvousInfo,
 
     // Protocols
@@ -175,7 +186,9 @@ async fn main() -> Result<()> {
         .context("Error parsing configuration")?;
 
     // Bind information
-    let bind_addr = settings.bind.clone();
+    // seperate bind address for running http and https
+    let bind_https_addr = settings.bind_https.clone();
+    let bind_http_addr = settings.bind_http.clone();
 
     // Initialize stores
     let session_store = settings
@@ -225,6 +238,9 @@ async fn main() -> Result<()> {
             .context("Error parsing manufacturer private key")?,
         ),
     };
+    let manufacturing_server_https_cert = settings.manufacturing.manufacturing_server_https_cert;
+    let manufacturing_server_https_key = settings.manufacturing.manufacturing_server_https_key;
+
     let owner_cert = match settings.manufacturing.owner_cert_path {
         None => None,
         Some(path) => Some(
@@ -259,6 +275,8 @@ async fn main() -> Result<()> {
         manufacturer_cert,
         manufacturer_key,
         owner_cert,
+        manufacturing_server_https_cert,
+        manufacturing_server_https_key,
 
         rendezvous_info,
 
@@ -304,42 +322,80 @@ async fn main() -> Result<()> {
         handlers::diun::provide_key,
     );
 
+    // routes, no change in protocol handlers required since https request once handled at TLS layer should
+    // work the same way as http protocol handler
+
     let routes = warp::post()
         .and(
             hello
-                .or(handler_ping)
+                .clone()
+                .or(handler_ping.clone())
                 // DI
-                .or(handler_di_app_start)
-                .or(handler_di_set_hmac)
+                .or(handler_di_app_start.clone())
+                .or(handler_di_set_hmac.clone())
                 // DIUN
-                .or(handler_diun_connect)
-                .or(handler_diun_request_key_parameters)
-                .or(handler_diun_provide_key),
+                .or(handler_diun_connect.clone())
+                .or(handler_diun_request_key_parameters.clone())
+                .or(handler_diun_provide_key.clone()),
         )
-        .recover(fdo_http_wrapper::server::handle_rejection)
-        .with(warp::log("manufacturing-server"));
+        .recover(fdo_http_wrapper::server::handle_rejection.clone())
+        .with(warp::log("manufacturing-server to handle https and https"));
 
-    log::info!("Listening on {}", bind_addr);
-    let server = warp::serve(routes);
+    // Convert routes into a warp service, so that we can use hyper to serve this services with TLS config.
+    let service = warp::service(routes.clone());
 
-    let maintenance_runner =
-        tokio::spawn(async move { perform_maintenance(user_data.clone()).await });
+    let make_svc = hyper::service::make_service_fn(move |_| {
+        let svc = service.clone();
+        async move { Ok::<_, Infallible>(svc) }
+    });
 
-    let server = server
-        .bind_with_graceful_shutdown(bind_addr, async {
+    let incoming = TlsListener::new(
+        tls_acceptor(user_data.clone()),
+        AddrIncoming::bind(&bind_https_addr.into())?,
+    );
+    let https_server = hyper::Server::builder(incoming).serve(make_svc);
+    let https_server = https_server.with_graceful_shutdown(async {
+        signal(SignalKind::terminate()).unwrap().recv().await;
+        log::info!("Terminating HTTPS server");
+    });
+    let https_server_handle = tokio::spawn(https_server);
+
+    let http_server = warp::serve(routes.clone());
+    let http_server = http_server
+        .bind_with_graceful_shutdown(bind_http_addr, async {
             signal(SignalKind::terminate()).unwrap().recv().await;
-            log::info!("Terminating");
+            log::info!("Terminating HTTP server");
         })
         .1;
-    let server = tokio::spawn(server);
+    let http_server_handle = tokio::spawn(http_server);
 
-    tokio::select!(
-    _ = server => {
-        log::info!("Server terminated");
-    },
-    _ = maintenance_runner => {
-        log::info!("Maintenance runner terminated");
-    });
+    // maintainance runner
+    let maintenance_runner_handle =
+        tokio::spawn(async move { perform_maintenance(user_data.clone()).await });
+
+    log::info!("starting both servers with http & https support");
+    // Join all the three handlers and wait
+    let (http_result, https_result, maintenance_result) = tokio::join!(
+        http_server_handle,
+        https_server_handle,
+        maintenance_runner_handle
+    );
+
+    // Check the results and handle accordingly since we have joined
+    match http_result {
+        Ok(_) => log::info!("HTTP server terminated successfully"),
+        Err(err) => log::error!("HTTP server terminated with an error: {:?}", err),
+    }
+
+    match https_result {
+        Ok(_) => log::info!("HTTPS server terminated successfully"),
+        Err(err) => log::error!("HTTPS server terminated with an error: {:?}", err),
+    }
+
+    match maintenance_result {
+        Ok(_) => log::info!("Maintenance runner terminated successfully"),
+        Err(err) => log::error!("Maintenance runner terminated with an error: {:?}", err),
+    }
 
     Ok(())
 }

@@ -23,7 +23,9 @@ pub(super) struct Configuration {
     pub listen_ip_address: String,
 
     #[clap(long, default_value_t = 8080)]
-    pub listen_port_manufacturing_server: u16,
+    pub listen_port_http_manufacturing_server: u16,
+    #[clap(long, default_value_t = 8084)]
+    pub listen_port_https_manufacturing_server: u16,
     #[clap(long, default_value_t = 8081)]
     pub listen_port_owner_onboarding_server: u16,
     #[clap(long, default_value_t = 8082)]
@@ -77,7 +79,8 @@ impl Default for Configuration {
             cert_country: String::from("US"),
 
             listen_ip_address: String::from("0.0.0.0"),
-            listen_port_manufacturing_server: 8080,
+            listen_port_http_manufacturing_server: 8080,
+            listen_port_https_manufacturing_server: 8084,
             listen_port_owner_onboarding_server: 8081,
             listen_port_rendezvous_server: 8082,
             listen_port_serviceinfo_api_server: 8083,
@@ -253,7 +256,8 @@ fn generate_configs(aio_dir: &Path, config_args: &Configuration) -> Result<(), E
                 path: aio_dir.join("stores").join("manufacturing_sessions"),
             },
 
-            bind: get_bind(config_args.listen_port_manufacturing_server)?,
+            bind_http: get_bind(config_args.listen_port_http_manufacturing_server)?,
+            bind_https: get_bind(config_args.listen_port_https_manufacturing_server)?,
 
             ownership_voucher_store_driver: StoreConfig::Directory {
                 path: aio_dir.join("stores").join(if config_args.separate_manufacturing_and_owner_voucher_store {
@@ -293,7 +297,9 @@ fn generate_configs(aio_dir: &Path, config_args: &Configuration) -> Result<(), E
                 device_cert_ca_private_key: AbsolutePathBuf::new(aio_dir.join("keys").join("device_ca_key.der")).unwrap(),
                 device_cert_ca_chain: AbsolutePathBuf::new(aio_dir.join("keys").join("device_ca_cert.pem")).unwrap(),
                 owner_cert_path: Some(AbsolutePathBuf::new(aio_dir.join("keys").join("owner_cert.pem")).unwrap()),
-            }
+                manufacturing_server_https_cert: AbsolutePathBuf::new(aio_dir.join("keys").join("manufacturing_server_https_cert.crt")).unwrap(),
+                manufacturing_server_https_key: AbsolutePathBuf::new(aio_dir.join("keys").join("manufacturing_server_https_key.key")).unwrap(),
+            },
         };
     write_config(
         aio_dir,

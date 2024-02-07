@@ -12,6 +12,8 @@ use fdo_data_formats::{
 
 use crate::EncryptionKeys;
 
+use std::env;
+
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum Error {
@@ -149,16 +151,26 @@ pub struct ServiceClient {
 }
 
 impl ServiceClient {
-    pub fn new(protocol_version: ProtocolVersion, base_url: &str) -> Self {
-        ServiceClient {
+    pub fn new(protocol_version: ProtocolVersion, base_url: &str) -> RequestResult<Self> {
+        let mut client_builder = reqwest::Client::builder();
+
+        if env::var("DEV_ENVIRONMENT").is_ok() {
+            log::debug!("DEV_ENVIRONMENT is set");
+            client_builder = client_builder.danger_accept_invalid_certs(true);
+        }
+
+        Ok(ServiceClient {
             protocol_version,
             base_url: base_url.trim_end_matches('/').to_string(),
-            client: reqwest::Client::new(),
+            client: client_builder
+                .tls_info(true)
+                //  .danger_accept_invalid_certs(true)
+                .build()?,
             authorization_token: None,
             encryption_keys: EncryptionKeys::unencrypted(),
             last_message_type: None,
             non_interoperable_kdf_required: None,
-        }
+        })
     }
 
     pub fn non_interoperable_kdf_required(&self) -> Option<bool> {
@@ -219,6 +231,7 @@ impl ServiceClient {
             OM::message_type() as u8
         );
 
+        log::debug!("url: {}", url);
         let mut req = self
             .client
             .post(&url)
