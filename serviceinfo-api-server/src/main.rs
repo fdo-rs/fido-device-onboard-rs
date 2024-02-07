@@ -28,39 +28,42 @@ impl ServiceInfoConfiguration {
         // Perform checks on the configuration
 
         // Check permissions for files are valid
-        settings.files = if let Some(files) = settings.files {
-            let mut new_files = Vec::new();
 
-            for mut file in files {
-                let path = &file.path;
+        //// TODO: enchance_files()
+        check_file_configuration(settings.files);
+        // settings.files = if let Some(files) = settings.files {
+        //     let mut new_files = Vec::new();
 
-                file.parsed_permissions = if let Some(permissions) = &file.permissions {
-                    Some(u32::from_str_radix(permissions, 8).with_context(|| {
-                        format!(
-                            "Invalid permission string for file {path}: {permissions} (invalid octal)"
-                        )
-                    })?)
-                } else {
-                    None
-                };
+        //     for mut file in files {
+        //         let path = &file.path;
 
-                let contents = std::fs::read(&file.source_path)
-                    .with_context(|| format!("Failed to read file {}", file.source_path))?;
-                file.hash_hex = hex::encode(
-                    Hash::from_data(HashType::Sha384, &contents)
-                        .with_context(|| format!("Failed to hash file {}", file.source_path))?
-                        .value_bytes(),
-                );
-                file.contents_len = contents.len();
-                file.contents_hex = hex::encode(&contents);
+        //         file.parsed_permissions = if let Some(permissions) = &file.permissions {
+        //             Some(u32::from_str_radix(permissions, 8).with_context(|| {
+        //                 format!(
+        //                     "Invalid permission string for file {path}: {permissions} (invalid octal)"
+        //                 )
+        //             })?)
+        //         } else {
+        //             None
+        //         };
 
-                new_files.push(file);
-            }
+        //         let contents = std::fs::read(&file.source_path)
+        //             .with_context(|| format!("Failed to read file {}", file.source_path))?;
+        //         file.hash_hex = hex::encode(
+        //             Hash::from_data(HashType::Sha384, &contents)
+        //                 .with_context(|| format!("Failed to hash file {}", file.source_path))?
+        //                 .value_bytes(),
+        //         );
+        //         file.contents_len = contents.len();
+        //         file.contents_hex = hex::encode(&contents);
 
-            Some(new_files)
-        } else {
-            None
-        };
+        //         new_files.push(file);
+        //     }
+
+        //     Some(new_files)
+        // } else {
+        //     None
+        // };
 
         Ok(ServiceInfoConfiguration { settings })
     }
@@ -286,6 +289,46 @@ async fn serviceinfo_handler(
                 );
             }
         }
+
+        // precedence is given to 'per_device' settings over base serviceinfo_api_server.yml config
+        match settings_per_device(&query_info.device_guid.to_string().replace('\"', "")) {
+            Ok(config) => {
+                let per_device_settings = config;
+                if let Some(initial_user) = &per_device_settings.files {
+                    check_file_configuration(&per_device_settings.files);
+                    
+                    // Adding per device files config
+                    for file in files {
+                        reply.add_extra(FedoraIotServiceInfoModule::BinaryFile, "name", &file.path);
+                        reply.add_extra(
+                            FedoraIotServiceInfoModule::BinaryFile,
+                            "length",
+                            &file.contents_len,
+                        );
+                        if let Some(parsed_permissions) = &file.parsed_permissions {
+                            reply.add_extra(
+                                FedoraIotServiceInfoModule::BinaryFile,
+                                "mode",
+                                &parsed_permissions,
+                            );
+                        }
+                        reply.add_extra(
+                            FedoraIotServiceInfoModule::BinaryFile,
+                            "data001|hex",
+                            &file.contents_hex,
+                        );
+                        reply.add_extra(
+                            FedoraIotServiceInfoModule::BinaryFile,
+                            "sha-384|hex",
+                            &file.hash_hex,
+                        );
+                    }
+                }
+            }
+            Err(_) => {
+                log::info!("per-device settings file not available, so loading base config file");
+            }
+        };
     }
 
     if query_info
@@ -388,6 +431,44 @@ async fn serviceinfo_handler(
         }
     }
     Ok(warp::reply::json(&reply.reply))
+}
+
+fn check_file_configuration(mut files: Vec<ServiceInfoFile>) {
+    settings.files = if let Some(files) = settings.files {
+        let mut new_files = Vec::new();
+
+        for mut file in files {
+            let path = &file.path;
+
+            file.parsed_permissions = if let Some(permissions) = &file.permissions {
+                Some(u32::from_str_radix(permissions, 8).with_context(|| {
+                    format!(
+                        "Invalid permission string for file {path}: {permissions} (invalid octal)"
+                    )
+                })?)
+            } else {
+                None
+            };
+
+            let contents = std::fs::read(&file.source_path)
+                .with_context(|| format!("Failed to read file {}", file.source_path))?;
+            file.hash_hex = hex::encode(
+                Hash::from_data(HashType::Sha384, &contents)
+                    .with_context(|| format!("Failed to hash file {}", file.source_path))?
+                    .value_bytes(),
+            );
+            file.contents_len = contents.len();
+            file.contents_hex = hex::encode(&contents);
+
+            new_files.push(file);
+        }
+
+        Some(new_files)
+    } else {
+        None
+    };
+
+    Ok(ServiceInfoConfiguration { settings })
 }
 
 fn deserialize_from_str<'de, D>(deserializer: D) -> Result<fdo_data_formats::types::Guid, D::Error>
