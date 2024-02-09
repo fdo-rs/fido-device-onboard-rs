@@ -22,7 +22,7 @@ jobs:
     - name: Push admin-cli to quay.io
       uses: redhat-actions/push-to-registry@v2
       with:
-        registry: "quay.io/${{ env.quay_org }}"
+        registry: "quay.io/kpwrwyfmyzpxupsign"
         image: admin-cli
         tags: ${{ steps.build.outputs.tags }}
         username: ${{ secrets.QUAY_USERNAME }}
