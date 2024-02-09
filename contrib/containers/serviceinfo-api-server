@@ -4,5 +4,6 @@ COPY --from=fdo-build:${BUILDID} /usr/src/target/release/fdo-serviceinfo-api-ser
 RUN mkdir -p /etc/fdo/sessions
 RUN mkdir -p /etc/fdo/device_specific_serviceinfo
 RUN mkdir -p /etc/fdo/serviceinfo-api-server.conf.d
+RUN yum install -y sqlite sqlite-devel libpq libpq-devel
 ENV LOG_LEVEL=trace
 ENTRYPOINT ["fdo-serviceinfo-api-server"]

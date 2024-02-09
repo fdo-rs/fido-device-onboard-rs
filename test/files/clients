@@ -1,0 +1,5 @@
+FROM quay.io/centos/centos:stream9
+ARG BUILDID
+COPY --from=fdo-build:${BUILDID} /usr/src/target/release/fdo-manufacturing-client /usr/local/bin
+COPY --from=fdo-build:${BUILDID} /usr/src/target/release/fdo-owner-tool /usr/local/bin
+RUN yum install -y postgresql libpq libpq-devel

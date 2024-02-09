@@ -4,5 +4,6 @@ COPY --from=fdo-build:${BUILDID} /usr/src/target/release/fdo-owner-onboarding-se
 RUN mkdir -p /etc/fdo/sessions
 RUN mkdir -p /etc/fdo/keys
 RUN mkdir -p /etc/fdo/owner-onboarding-server.conf.d
+RUN yum install -y sqlite sqlite-devel libpq libpq-devel
 ENV LOG_LEVEL=trace
 ENTRYPOINT ["fdo-owner-onboarding-server"]

@@ -61,6 +61,13 @@ install -D -m 0755 -t %{buildroot}%{_bindir} target/release/fdo-owner-tool
 install -D -m 0755 -t %{buildroot}%{_bindir} target/release/fdo-admin-tool
 install -D -m 0644 -t %{buildroot}%{_unitdir} examples/systemd/*
 install -D -m 0644 -t %{buildroot}%{_docdir}/fdo examples/config/*
+# db sql files
+install -D -m 0644 -t %{buildroot}%{_docdir}/fdo/migrations/migrations_manufacturing_server_postgres  migrations/migrations_manufacturing_server_postgres/2023-10-03-152801_create_db/*
+install -D -m 0644 -t %{buildroot}%{_docdir}/fdo/migrations/migrations_manufacturing_server_sqlite  migrations/migrations_manufacturing_server_sqlite/2023-10-03-152801_create_db/*
+install -D -m 0644 -t %{buildroot}%{_docdir}/fdo/migrations/migrations_owner_onboarding_server_postgres  migrations/migrations_owner_onboarding_server_postgres/2023-10-03-152801_create_db/*
+install -D -m 0644 -t %{buildroot}%{_docdir}/fdo/migrations/migrations_owner_onboarding_server_sqlite  migrations/migrations_owner_onboarding_server_sqlite/2023-10-03-152801_create_db/*
+install -D -m 0644 -t %{buildroot}%{_docdir}/fdo/migrations/migrations_rendezvous_server_postgres  migrations/migrations_rendezvous_server_postgres/2023-10-03-152801_create_db/*
+install -D -m 0644 -t %{buildroot}%{_docdir}/fdo/migrations/migrations_rendezvous_server_sqlite  migrations/migrations_rendezvous_server_sqlite/2023-10-03-152801_create_db/*
 # duplicates as needed by AIO command so link them
 ln -s %{_bindir}/fdo-owner-tool  %{buildroot}%{_libexecdir}/fdo/fdo-owner-tool
 ln -s %{_bindir}/fdo-admin-tool %{buildroot}%{_libexecdir}/fdo/fdo-admin-tool
@@ -123,6 +130,8 @@ Requires: openssl-libs >= 3.0.1-12
 %{_docdir}/fdo/device_specific_serviceinfo.yml
 %{_docdir}/fdo/serviceinfo-api-server.yml
 %{_docdir}/fdo/owner-onboarding-server.yml
+%{_docdir}/fdo/migrations/migrations_owner_onboarding_server_postgres/*
+%{_docdir}/fdo/migrations/migrations_owner_onboarding_server_sqlite/*
 %{_unitdir}/fdo-serviceinfo-api-server.service
 %{_unitdir}/fdo-owner-onboarding-server.service
 
@@ -156,6 +165,8 @@ License: %combined_license
 %dir %{_localstatedir}/lib/fdo
 %dir %{_docdir}/fdo
 %{_docdir}/fdo/rendezvous-*.yml
+%{_docdir}/fdo/migrations/migrations_rendezvous_server_postgres/*
+%{_docdir}/fdo/migrations/migrations_rendezvous_server_sqlite/*
 %{_unitdir}/fdo-rendezvous-server.service
 
 %post -n fdo-rendezvous-server
@@ -188,6 +199,8 @@ Requires: openssl-libs >= 3.0.1-12
 %dir %{_localstatedir}/lib/fdo
 %dir %{_docdir}/fdo
 %{_docdir}/fdo/manufacturing-server.yml
+%{_docdir}/fdo/migrations/migrations_manufacturing_server_postgres/*
+%{_docdir}/fdo/migrations/migrations_manufacturing_server_sqlite/*
 %{_unitdir}/fdo-manufacturing-server.service
 
 %post -n fdo-manufacturing-server

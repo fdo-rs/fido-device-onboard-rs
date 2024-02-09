@@ -8,12 +8,15 @@
   - How to get information about an OV
   - How to extend an OV with the Owner's Certificate
   - How to convert a PEM (plain-text) format OV to a COSE (binary) format OV
+  - How to export OVs from the Manufacturer Server (Database specific)
+  - How to import OVs into the Owner Onboarding Server (Database specific)
 - Configuration Files
   - `manufacturing-server.yml`
     - `rendezvous_info` field and `rendezvous-info.yml`
   - `owner-onboarding-server.yml`
   - `rendezvous-server.yml`
   - `serviceinfo-api-server.yml`
+- Database management
 - How to run the servers:
   - Manufacturing Server
   - Owner Onboarding Server
@@ -212,6 +215,61 @@ Use `fdo-owner-tool dump-ownership-voucher`:
 fdo-owner-tool dump-ownership-voucher your_ownership_voucher --outform cose > your_ownership_voucher.cose
 ```
 
+### How to export OVs from the Manufacturer Server (Database specific)
+
+Use `fdo-owner-tool export-manufacturer-vouchers`:
+
+```
+$ fdo-owner-tool export-manufacturer-vouchers --help
+Exports a single or all the ownership vouchers present in the Manufacturer DB
+
+Usage: fdo-owner-tool export-manufacturer-vouchers <DB_TYPE> <DB_URL> <PATH> [GUID]
+
+Arguments:
+  <DB_TYPE>  Type of the Manufacturer DB holding the OVs [possible values: sqlite, postgres]
+  <DB_URL>   DB connection URL, or path to the DB file
+  <PATH>     Path to dir where the OVs will be exported
+  [GUID]     GUID of the voucher to be exported, if no GUID is given all the OVs will be exported
+```
+
+For example:
+
+```bash
+fdo-owner-tool export-manufacturer-vouchers postgres \
+postgresql://test:test@localhost/test_manufacturer \
+/path/to/manufacturer-exports/
+```
+
+### How to import OVs into the Owner Onboarding Server (Database specific)
+
+```
+$ fdo-owner-tool import-ownership-vouchers --help
+Imports into the Owner DB a single ownership voucher or all the ownership vouchers present at a given path
+
+Usage: fdo-owner-tool import-ownership-vouchers <DB_TYPE> <DB_URL> <SOURCE_PATH>
+
+Arguments:
+  <DB_TYPE>      Type of the Owner DB to import the OVs [possible values: sqlite, postgres]
+  <DB_URL>       DB connection URL or path to DB file
+  <SOURCE_PATH>  Path to the OV to be imported, or path to a directory where all the OVs to be imported are located
+
+Options:
+  -h, --help  Print help
+```
+
+When importing OVs the tool will attempt to import each OV once, ignoring all
+possible errors and then giving a summary of which OVs couldn't be imported.
+
+For example:
+
+```
+fdo-owner-tool import-ownership-vouchers postgres postgresql://test:test@localhost/test_owner /path/to/ovs/to/import/
+Unable to import all OVs. OV import operations yielded the following error/s:
+
+- Error Some(duplicate key value violates unique constraint "owner_vouchers_pkey") inserting OV d5bc48f8-b603-a1c0-e8b9-ae4d9bdf1570 from path "/path/to/ovs/to/import/d5bc48f8-b603-a1c0-e8b9-ae4d9bdf1570"
+- Error Empty data serializing OV contents at path "/path/to/ovs/to/import/this-is-not-an-OV"
+```
+
 ## Configuration Files
 
 This project uses
@@ -274,7 +332,33 @@ Where:
 
 - `session_store_driver`: path to a directory that will hold session
   information.
-- `ownership_voucher_store_driver`: path to a directory that will hold OVs.
+- `ownership_voucher_store_driver`: this selects the ownership voucher storage
+  method. Select between `Directory`, `Sqlite` or `Postgres`.
+    - `Directory`: expects a `path` to the directory that will hold the OVs.
+      For example:
+      ```
+      ownership_voucher_store_driver:
+        Directory:
+          path: /home/fedora/ownership_vouchers
+      ```
+    - `Sqlite`: will use a Sqlite database to store the ownership vouchers.
+      When using this option you must set `Manufacturer` as the DB type as
+      shown below:
+      ```
+      ownership_voucher_store_driver:
+        Sqlite:
+          Manufacturer
+      ```
+      Please refer to the [Database management section](#database-management) on how to initialize databases.
+    - `Postgres`: will use a Postgres database to store the ownership vouchers.
+      When using this option you must set `Manufacturer` as the DB type as
+      shown below:
+      ```
+      ownership_voucher_store_driver:
+        Postgres:
+          Manufacturer
+      ```
+      Please refer to the [Database management section](#database-management) on how to initialize databases.
 - `public_key_store_driver:` [OPTIONAL] path to a directory that will hold the
   Manufacturer's public keys.
 - `bind`: IP address and port that this server will take.
@@ -376,8 +460,33 @@ service_info_api_authentication: None
 
 Where:
 
-- `ownership_voucher_store_driver`: path to a directory that will hold the OVs
-  owned by this server.
+- `ownership_voucher_store_driver`: this selects the ownership voucher storage
+  method. Select between `Directory`, `Sqlite` or `Postgres`.
+    - `Directory`: expects a `path` to the directory that will hold the OVs.
+      For example:
+      ```
+      ownership_voucher_store_driver:
+        Directory:
+          path: /home/fedora/ownership_vouchers
+      ```
+    - `Sqlite`: will use a Sqlite database to store the ownership vouchers.
+      When using this option you must set `Owner` as the DB type as
+      shown below:
+      ```
+      ownership_voucher_store_driver:
+        Sqlite:
+          Owner
+      ```
+      Please refer to the [Database management section](#database-management) on how to initialize databases.
+    - `Postgres`: will use a Postgres database to store the ownership vouchers.
+      When using this option you must set `Owner` as the DB type as
+      shown below:
+      ```
+      ownership_voucher_store_driver:
+        Postgres:
+          Owner
+      ```
+      Please refer to the [Database management section](#database-management) on how to initialize databases.
 - `session_store_driver`: path to a directory that will hold session
   information.
 - `trusted_device_keys_path`: path to the Device Certificate Authority
@@ -421,8 +530,34 @@ bind: "0.0.0.0:8082"
 
 Where:
 
-- `storage_driver`: path to a directory that will hold OVs registered with the
-  Rendezvous Server.
+- `storage_driver`: this selects the server's storage method. Select between
+  `Directory`, `Sqlite` or `Postgres`. 
+    - `Directory`: expects a `path` to the directory that will serve as the
+      server's storage.
+      For example:
+      ```
+      storage_driver:
+        Directory:
+          path: /home/fedora/rendezvous_storage
+      ```
+    - `Sqlite`: will use a Sqlite database as the server's storage.
+      When using this option you must set `Rendezvous` as the DB type as
+      shown below:
+      ```
+      storage_driver:
+        Sqlite:
+          Rendezvous
+      ```
+      Please refer to the [Database management section](#database-management) on how to initialize databases.
+    - `Postgres`: will use a Sqlite database as the server's storage.
+      When using this option you must set `Rendezvous` as the DB type as
+      shown below:
+      ```
+      storage_driver:
+        Postgres:
+          Rendezvous
+      ```
+      Please refer to the [Database management section](#database-management) on how to initialize databases.
 - `session_store_driver`: path to a directory that will hold session
   information.
 - `trusted_manufacturer_keys_path`: path to the Manufacturer Certificate.
@@ -515,6 +650,58 @@ Where:
     rebooted after onboarding has completed, boolean (default false).
   - `additional_service_info`: [OPTIONAL]
 
+## Database management
+
+When using the `Sqlite` or `Postgres` storage driver configuration you are able
+to use Sqlite or Postgres databases to serve as the storage driver of the
+Manufacturing, Owner and/or Rendezvous servers.
+
+You are able to use different database systems for each server (e.g. Sqlite for
+the Manufacturing server and Postgres for the rest), or even mix
+database storage in some servers with filesystem storage in other servers
+(e.g. filesystem storage for the Manufacturing server and Postgres for the
+rest).
+
+### Dependencies
+
+Install the following packages:
+
+```bash
+dnf install -y sqlite sqlite-devel libpq libpq-devel
+```
+
+and the `diesel` tool for schema management:
+
+```bash
+cargo install --force diesel_cli --no-default-features --features "postgres sqlite"
+```
+
+### Creating the databases
+
+When using databases you need to initialize the database based on the FDO
+server and database type that you'll be using. 
+
+All the databases are initialized running
+
+```bash
+diesel migration run --migration-dir $MIGRATION_DIRECTORY \
+--database-url $DATABASE_URL
+```
+
+where `$MIGRATION_DIRECTORY` is one of the `migration_*` directories that
+matches your server type and database type combo
+(`migrations_manufacturing_server_postgres`,
+`migrations_manufacturing_server_sqlite`,
+`migrations_owner_onboarding_server_postgres`,
+`migrations_owner_onboarding_server_sqlite`,
+`migrations_rendezvous_server_postgres`,
+`migrations_rendezvous_server_sqlite`); the `$DATABASE_URL` is the Postgres
+connection URL or  a path to the location where the Sqlite database will be
+located based on if you'll be using Postgres or Sqlite, respectively.
+
+> **NOTE:** if you are using Fedora IoT along with the Sqlite DB, you must
+> create the DB in a writable location, for instance `/var/lib/fdo`.
+
 ## How to run the servers
 
 Please mind how the configuration file must be specifically named (e.g. `-` VS
@@ -540,6 +727,11 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
 3. Execute `fdo-manufacturing-server` or run it as a service, see sample
    file in
    [examples/systemd](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/systemd/fdo-manufacturing-server.service).
+
+    If you are using a Sqlite or Postgres database for storage, before running
+    the server you must set the `SQLITE_MANUFACTURER_DATABASE_URL` or
+    `POSTGRES_MANUFACTURER_DATABASE_URL` environment variable with the proper
+    connection URL when using Sqlite or Postgres, respectively.
 
 ### Owner Onboarding Server
 
@@ -570,6 +762,11 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
 4. Execute `fdo-owner-onboarding-server` or run it as a service, see sample
    file in [examples/systemd](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/systemd/fdo-owner-onboarding-server.service).
 
+   If you are using a Sqlite or Postgres database for storage, before running
+   the server you must set the `SQLITE_OWNER_DATABASE_URL` or
+   `POSTGRES_OWNER_DATABASE_URL` environment variable with the proper
+   connection URL when using Sqlite or Postgres, respectively.
+
 ### Rendezvous Server
 
 1. Configure `rendezvous-server.yml`, see [Configuration
@@ -582,6 +779,11 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
 
 2. Execute `fdo-rendezvous-server` or run it as a service, see sample file in
    [examples/systemd](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/systemd/fdo-rendezvous-server.service).
+
+   If you are using a Sqlite or Postgres database for storage, before running
+   the server you must set the `SQLITE_RENDEZVOUS_DATABASE_URL` or
+   `POSTGRES_RENDEZVOUS_DATABASE_URL` environment variable with the proper
+   connection URL when using Sqlite or Postgres, respectively.
 
 ### Service Info API Server
 

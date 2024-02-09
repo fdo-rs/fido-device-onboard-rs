@@ -5,52 +5,12 @@ use openssl::x509::X509;
 use tokio::signal::unix::{signal, SignalKind};
 use warp::Filter;
 
-use fdo_data_formats::{
-    cborparser::{ParsedArray, ParsedArrayBuilder},
-    enhanced_types::X5Bag,
-    publickey::PublicKey,
-    types::{COSESign, Guid},
-    ProtocolVersion, Serializable,
-};
+use fdo_data_formats::{enhanced_types::X5Bag, types::Guid, ProtocolVersion, StoredItem};
 use fdo_store::Store;
 use fdo_util::servers::{configuration::rendezvous_server::RendezvousServerSettings, settings_for};
 
 mod handlers_to0;
 mod handlers_to1;
-
-#[derive(Clone, Debug)]
-struct StoredItem {
-    public_key: PublicKey,
-    to1d: COSESign,
-}
-
-impl Serializable for StoredItem {
-    fn deserialize_from_reader<R>(reader: R) -> Result<Self, fdo_data_formats::Error>
-    where
-        R: std::io::Read,
-    {
-        let contents: ParsedArray<fdo_data_formats::cborparser::ParsedArraySize2> =
-            ParsedArray::deserialize_from_reader(reader)?;
-
-        let public_key = contents.get(0)?;
-        let to1d = contents.get(1)?;
-
-        Ok(StoredItem { public_key, to1d })
-    }
-
-    fn serialize_to_writer<W>(&self, writer: W) -> Result<(), fdo_data_formats::Error>
-    where
-        W: std::io::Write,
-    {
-        let mut contents: ParsedArrayBuilder<fdo_data_formats::cborparser::ParsedArraySize2> =
-            ParsedArrayBuilder::new();
-        contents.set(0, &self.public_key)?;
-        contents.set(1, &self.to1d)?;
-        let contents = contents.build();
-
-        contents.serialize_to_writer(writer)
-    }
-}
 
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]

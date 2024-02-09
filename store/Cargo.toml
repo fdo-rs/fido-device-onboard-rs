@@ -7,6 +7,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = { version = "1", optional = true}
+
 fdo-data-formats = { path = "../data-formats", version = "0.4.13" }
 
 thiserror = "1"
@@ -20,5 +22,13 @@ time = "0.3"
 xattr = { version = "1.0", default-features = false, optional = true }  # We *need* xattrs to store TTL
 serde_cbor = { version = "0.11", optional = true }
 
+# database
+fdo-db = { path = "../db", version = "0.4.13"}
+
+diesel = { version = "2.1.0", features = ["sqlite", "postgres", "r2d2"], optional = true }
+
 [features]
 directory = ["xattr", "serde_cbor"]
+db = ["diesel", "anyhow"]
+
+default = ["directory", "db"]

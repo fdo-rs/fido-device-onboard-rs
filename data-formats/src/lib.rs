@@ -22,6 +22,7 @@ pub mod cborparser;
 mod serializable;
 pub use serializable::DeserializableMany;
 pub use serializable::Serializable;
+pub use serializable::StoredItem;
 
 pub fn interoperable_kdf_available() -> bool {
     #[cfg(feature = "use_noninteroperable_kdf")]
