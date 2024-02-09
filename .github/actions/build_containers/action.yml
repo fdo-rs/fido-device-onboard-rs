@@ -68,50 +68,6 @@ runs:
       tags: fdo-build:${{ steps.buildid.outputs.buildid }}
       containerfiles: contrib/containers/build
 
-  - name: Create admin-cli container
-    uses: redhat-actions/buildah-build@v2
-    with:
-      containerfiles: contrib/containers/admin-cli
-      tags: |
-        ${{ format(steps.container-metadata.outputs.tags, 'admin-cli') }}
-        admin-cli:${{ steps.buildid.outputs.buildid }}
-      labels: ${{ steps.container-metadata.outputs.labels }}
-      build-args: |
-        BUILDID=${{ steps.buildid.outputs.buildid }}
-
-  - name: Create manufacturing-server container
-    uses: redhat-actions/buildah-build@v2
-    with:
-      containerfiles: contrib/containers/manufacturing-server
-      tags: |
-        ${{ format(steps.container-metadata.outputs.tags, 'manufacturing-server') }}
-        manufacturing-server:${{ steps.buildid.outputs.buildid }}
-      labels: ${{ steps.container-metadata.outputs.labels }}
-      build-args: |
-        BUILDID=${{ steps.buildid.outputs.buildid }}
-
-  - name: Create aio container
-    uses: redhat-actions/buildah-build@v2
-    with:
-      containerfiles: contrib/containers/aio
-      tags: |
-        ${{ format(steps.container-metadata.outputs.tags, 'aio') }}
-        aio:${{ steps.buildid.outputs.buildid }}
-      labels: ${{ steps.container-metadata.outputs.labels }}
-      build-args: |
-        BUILDID=${{ steps.buildid.outputs.buildid }}
-
-  - name: Create rendezvous-server container
-    uses: redhat-actions/buildah-build@v2
-    with:
-      containerfiles: contrib/containers/rendezvous-server
-      tags: |
-        ${{ format(steps.container-metadata.outputs.tags, 'rendezvous-server') }}
-        rendezvous-server:${{ steps.buildid.outputs.buildid }}
-      labels: ${{ steps.container-metadata.outputs.labels }}
-      build-args: |
-        BUILDID=${{ steps.buildid.outputs.buildid }}
-
   - name: Create serviceinfo-api-server container
     uses: redhat-actions/buildah-build@v2
     with:
@@ -119,17 +75,6 @@ runs:
       tags: |
         ${{ format(steps.container-metadata.outputs.tags, 'serviceinfo-api-server') }}
         serviceinfo-api-server:${{ steps.buildid.outputs.buildid }}
-      labels: ${{ steps.container-metadata.outputs.labels }}
-      build-args: |
-        BUILDID=${{ steps.buildid.outputs.buildid }}
-
-  - name: Create owner-onboarding-server container
-    uses: redhat-actions/buildah-build@v2
-    with:
-      containerfiles: contrib/containers/owner-onboarding-server
-      tags: |
-        ${{ format(steps.container-metadata.outputs.tags, 'owner-onboarding-server') }}
-        owner-onboarding-server:${{ steps.buildid.outputs.buildid }}
       labels: ${{ steps.container-metadata.outputs.labels }}
       build-args: |
         BUILDID=${{ steps.buildid.outputs.buildid }}
