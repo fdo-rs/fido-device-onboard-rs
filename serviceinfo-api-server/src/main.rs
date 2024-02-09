@@ -29,89 +29,98 @@ struct ServiceInfoConfiguration {
 // }
 
 impl ServiceInfoConfiguration {
-    fn from_settings(settings: ServiceInfoSettings) -> Result<Self> {
+    fn from_settings(mut settings: ServiceInfoSettings) -> Result<Self> {
         // Perform checks on the configuration
 
         // Check permissions for files are valid
+        settings.files = if let Some(files) = settings.files {
+            let mut new_files = Vec::new();
 
-        //// TODO: do something with result?
-        let _ = check_file_configuration(settings.files.clone());
-        
-        // settings.files = if let Some(files) = settings.files {
-        //     let mut new_files = Vec::new();
+            for mut file in files {
+                let path = &file.path;
 
-        //     for mut file in files {
-        //         let path = &file.path;
+                file.parsed_permissions = if let Some(permissions) = &file.permissions {
+                    Some(u32::from_str_radix(permissions, 8).with_context(|| {
+                        format!(
+                            "Invalid permission string for file {path}: {permissions} (invalid octal)"
+                        )
+                    })?)
+                } else {
+                    None
+                };
 
-        //         file.parsed_permissions = if let Some(permissions) = &file.permissions {
-        //             Some(u32::from_str_radix(permissions, 8).with_context(|| {
-        //                 format!(
-        //                     "Invalid permission string for file {path}: {permissions} (invalid octal)"
-        //                 )
-        //             })?)
-        //         } else {
-        //             None
-        //         };
+                let contents = std::fs::read(&file.source_path)
+                    .with_context(|| format!("Failed to read file {}", file.source_path))?;
+                file.hash_hex = hex::encode(
+                    Hash::from_data(HashType::Sha384, &contents)
+                        .with_context(|| format!("Failed to hash file {}", file.source_path))?
+                        .value_bytes(),
+                );
+                file.contents_len = contents.len();
+                file.contents_hex = hex::encode(&contents);
 
-        //         let contents = std::fs::read(&file.source_path)
-        //             .with_context(|| format!("Failed to read file {}", file.source_path))?;
-        //         file.hash_hex = hex::encode(
-        //             Hash::from_data(HashType::Sha384, &contents)
-        //                 .with_context(|| format!("Failed to hash file {}", file.source_path))?
-        //                 .value_bytes(),
-        //         );
-        //         file.contents_len = contents.len();
-        //         file.contents_hex = hex::encode(&contents);
+                new_files.push(file);
+            }
 
-        //         new_files.push(file);
-        //     }
-
-        //     Some(new_files)
-        // } else {
-        //     None
-        // };
+            Some(new_files)
+        } else {
+            None
+        };
 
         Ok(ServiceInfoConfiguration { settings })
     }
 }
 
+// impl ServiceInfoConfiguration {
+//     fn from_settings(settings: ServiceInfoSettings) -> Result<Self> {
+//         // Perform checks on the configuration
+
+//         // Check permissions for files are valid
+
+//         //// TODO: do something with result?
+//         let _ = check_file_configuration(settings.files.clone());
+
+//         Ok(ServiceInfoConfiguration { settings })
+//     }
+// }
+
 // fn check_file_configuration(mut files_to_check: Option<Vec<ServiceInfoFile>>) -> Result<Vec<ServiceInfoFile>> {
-fn check_file_configuration(mut files_to_check: Option<Vec<ServiceInfoFile>>) -> Result<Option<Vec<ServiceInfoFile>>> {
-    files_to_check = if let Some(files) = files_to_check {
-        let mut new_files = Vec::new();
+// fn check_file_configuration(mut files_to_check: Option<Vec<ServiceInfoFile>>) -> Result<Option<Vec<ServiceInfoFile>>> {
+//     files_to_check = if let Some(files) = files_to_check {
+//         let mut new_files = Vec::new();
 
-        for mut file in files {
-            let path = &file.path;
+//         for mut file in files {
+//             let path = &file.path;
 
-            file.parsed_permissions = if let Some(permissions) = &file.permissions {
-                Some(u32::from_str_radix(permissions, 8).with_context(|| {
-                    format!(
-                        "Invalid permission string for file {path}: {permissions} (invalid octal)"
-                    )
-                })?)
-            } else {
-                None
-            };
+//             file.parsed_permissions = if let Some(permissions) = &file.permissions {
+//                 Some(u32::from_str_radix(permissions, 8).with_context(|| {
+//                     format!(
+//                         "Invalid permission string for file {path}: {permissions} (invalid octal)"
+//                     )
+//                 })?)
+//             } else {
+//                 None
+//             };
 
-            let contents = std::fs::read(&file.source_path)
-                .with_context(|| format!("Failed to read file {}", file.source_path))?;
-            file.hash_hex = hex::encode(
-                Hash::from_data(HashType::Sha384, &contents)
-                    .with_context(|| format!("Failed to hash file {}", file.source_path))?
-                    .value_bytes(),
-            );
-            file.contents_len = contents.len();
-            file.contents_hex = hex::encode(&contents);
+//             let contents = std::fs::read(&file.source_path)
+//                 .with_context(|| format!("Failed to read file {}", file.source_path))?;
+//             file.hash_hex = hex::encode(
+//                 Hash::from_data(HashType::Sha384, &contents)
+//                     .with_context(|| format!("Failed to hash file {}", file.source_path))?
+//                     .value_bytes(),
+//             );
+//             file.contents_len = contents.len();
+//             file.contents_hex = hex::encode(&contents);
 
-            new_files.push(file);
-        }
+//             new_files.push(file);
+//         }
 
-        Some(new_files)
-    } else {
-        None
-    };
-    Ok( files_to_check )
-}
+//         Some(new_files)
+//     } else {
+//         None
+//     };
+//     Ok( files_to_check )
+// }
 
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
@@ -337,11 +346,11 @@ async fn serviceinfo_handler(
         // precedence is given to 'per_device' settings over base serviceinfo_api_server.yml config
         match settings_per_device(&query_info.device_guid.to_string().replace('\"', "")) {
             Ok(config) => {
-                let per_device_settings = config.clone();
-                let per_device_settings1 = config;
+                let per_device_settings = config;
 
                 // TODO: do something with result?
-                let _ = check_file_configuration(per_device_settings1.files);
+                // let per_device_settings1 = config;
+                // let _ = check_file_configuration(per_device_settings1.files);
 
                 if let Some(files) = &per_device_settings.files {
                     // Adding per device files config
