@@ -46,14 +46,14 @@ runs:
       allimages=""
       alltags=""
       allimagetags=""
-      for container in admin-cli manufacturing-server rendezvous-server serviceinfo-api-server owner-onboarding-server aio client-linuxapp
+      for container in serviceinfo-api-server
       do
         allimages="$allimages $container"
       done
       for tag in "$rawtags"
       do
         alltags="$alltags ${tag//imagename:/}"
-        for container in admin-cli manufacturing-server rendezvous-server serviceinfo-api-server owner-onboarding-server aio client-linuxapp
+        for container in serviceinfo-api-server
         do
           allimagetags="$allimagetags ${tag//imagename/"$container"}"
         done
@@ -79,21 +79,10 @@ runs:
       build-args: |
         BUILDID=${{ steps.buildid.outputs.buildid }}
 
-  - name: Create client-linuxapp container
-    uses: redhat-actions/buildah-build@v2
-    with:
-      containerfiles: contrib/containers/client-linuxapp
-      tags: |
-        ${{ format(steps.container-metadata.outputs.tags, 'client-linuxapp') }}
-        client-linuxapp:${{ steps.buildid.outputs.buildid }}
-      labels: ${{ steps.container-metadata.outputs.labels }}
-      build-args: |
-        BUILDID=${{ steps.buildid.outputs.buildid }}
-
   - name: Test containers
     shell: bash
     run: |
-      for container in admin-cli manufacturing-server rendezvous-server serviceinfo-api-server owner-onboarding-server aio client-linuxapp
+      for container in serviceinfo-api-server
       do
         podman run --rm $container:${{ steps.buildid.outputs.buildid }} --version
       done
