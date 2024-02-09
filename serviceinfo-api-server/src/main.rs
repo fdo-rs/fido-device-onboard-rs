@@ -5,7 +5,7 @@ use fdo_data_formats::{
 };
 use fdo_store::Store;
 use fdo_util::servers::{
-    configuration::serviceinfo_api_server::{ServiceInfoApiServerSettings, ServiceInfoSettings},
+    configuration::serviceinfo_api_server::{ServiceInfoApiServerSettings, ServiceInfoSettings, ServiceInfoFile},
     settings_for, settings_per_device, ServiceInfoApiReply, ServiceInfoApiReplyInitialUser,
     ServiceInfoApiReplyReboot,
 };
@@ -23,14 +23,20 @@ struct ServiceInfoConfiguration {
     settings: ServiceInfoSettings,
 }
 
+// #[derive(Debug)]
+// struct ServiceInfoFiles {
+//     files: Vec<ServiceInfoFile>,
+// }
+
 impl ServiceInfoConfiguration {
-    fn from_settings(mut settings: ServiceInfoSettings) -> Result<Self> {
+    fn from_settings(settings: ServiceInfoSettings) -> Result<Self> {
         // Perform checks on the configuration
 
         // Check permissions for files are valid
 
-        //// TODO: enchance_files()
-        check_file_configuration(settings.files);
+        //// TODO: do something with result?
+        let _ = check_file_configuration(settings.files.clone());
+        
         // settings.files = if let Some(files) = settings.files {
         //     let mut new_files = Vec::new();
 
@@ -67,6 +73,44 @@ impl ServiceInfoConfiguration {
 
         Ok(ServiceInfoConfiguration { settings })
     }
+}
+
+// fn check_file_configuration(mut files_to_check: Option<Vec<ServiceInfoFile>>) -> Result<Vec<ServiceInfoFile>> {
+fn check_file_configuration(mut files_to_check: Option<Vec<ServiceInfoFile>>) -> Result<Option<Vec<ServiceInfoFile>>> {
+    files_to_check = if let Some(files) = files_to_check {
+        let mut new_files = Vec::new();
+
+        for mut file in files {
+            let path = &file.path;
+
+            file.parsed_permissions = if let Some(permissions) = &file.permissions {
+                Some(u32::from_str_radix(permissions, 8).with_context(|| {
+                    format!(
+                        "Invalid permission string for file {path}: {permissions} (invalid octal)"
+                    )
+                })?)
+            } else {
+                None
+            };
+
+            let contents = std::fs::read(&file.source_path)
+                .with_context(|| format!("Failed to read file {}", file.source_path))?;
+            file.hash_hex = hex::encode(
+                Hash::from_data(HashType::Sha384, &contents)
+                    .with_context(|| format!("Failed to hash file {}", file.source_path))?
+                    .value_bytes(),
+            );
+            file.contents_len = contents.len();
+            file.contents_hex = hex::encode(&contents);
+
+            new_files.push(file);
+        }
+
+        Some(new_files)
+    } else {
+        None
+    };
+    Ok( files_to_check )
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -293,10 +337,13 @@ async fn serviceinfo_handler(
         // precedence is given to 'per_device' settings over base serviceinfo_api_server.yml config
         match settings_per_device(&query_info.device_guid.to_string().replace('\"', "")) {
             Ok(config) => {
-                let per_device_settings = config;
-                if let Some(initial_user) = &per_device_settings.files {
-                    check_file_configuration(&per_device_settings.files);
-                    
+                let per_device_settings = config.clone();
+                let per_device_settings1 = config;
+
+                // TODO: do something with result?
+                let _ = check_file_configuration(per_device_settings1.files);
+
+                if let Some(files) = &per_device_settings.files {
                     // Adding per device files config
                     for file in files {
                         reply.add_extra(FedoraIotServiceInfoModule::BinaryFile, "name", &file.path);
@@ -431,44 +478,6 @@ async fn serviceinfo_handler(
         }
     }
     Ok(warp::reply::json(&reply.reply))
-}
-
-fn check_file_configuration(mut files: Vec<ServiceInfoFile>) {
-    settings.files = if let Some(files) = settings.files {
-        let mut new_files = Vec::new();
-
-        for mut file in files {
-            let path = &file.path;
-
-            file.parsed_permissions = if let Some(permissions) = &file.permissions {
-                Some(u32::from_str_radix(permissions, 8).with_context(|| {
-                    format!(
-                        "Invalid permission string for file {path}: {permissions} (invalid octal)"
-                    )
-                })?)
-            } else {
-                None
-            };
-
-            let contents = std::fs::read(&file.source_path)
-                .with_context(|| format!("Failed to read file {}", file.source_path))?;
-            file.hash_hex = hex::encode(
-                Hash::from_data(HashType::Sha384, &contents)
-                    .with_context(|| format!("Failed to hash file {}", file.source_path))?
-                    .value_bytes(),
-            );
-            file.contents_len = contents.len();
-            file.contents_hex = hex::encode(&contents);
-
-            new_files.push(file);
-        }
-
-        Some(new_files)
-    } else {
-        None
-    };
-
-    Ok(ServiceInfoConfiguration { settings })
 }
 
 fn deserialize_from_str<'de, D>(deserializer: D) -> Result<fdo_data_formats::types::Guid, D::Error>
