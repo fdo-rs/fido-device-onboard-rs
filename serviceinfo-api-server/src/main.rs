@@ -38,6 +38,7 @@ impl ServiceInfoConfiguration {
 
             for mut file in files {
                 let path = &file.path;
+                //
 
                 file.parsed_permissions = if let Some(permissions) = &file.permissions {
                     Some(u32::from_str_radix(permissions, 8).with_context(|| {
@@ -344,47 +345,47 @@ async fn serviceinfo_handler(
         }
 
         // precedence is given to 'per_device' settings over base serviceinfo_api_server.yml config
-        match settings_per_device(&query_info.device_guid.to_string().replace('\"', "")) {
-            Ok(config) => {
-                let per_device_settings = config;
+        // match settings_per_device(&query_info.device_guid.to_string().replace('\"', "")) {
+        //     Ok(config) => {
+        //         let per_device_settings = config;
 
-                // TODO: do something with result?
-                // let per_device_settings1 = config;
-                // let _ = check_file_configuration(per_device_settings1.files);
+        //         // TODO: do something with result?
+        //         // let per_device_settings1 = config;
+        //         // let _ = check_file_configuration(per_device_settings1.files);
 
-                if let Some(files) = &per_device_settings.files {
-                    // Adding per device files config
-                    for file in files {
-                        reply.add_extra(FedoraIotServiceInfoModule::BinaryFile, "name", &file.path);
-                        reply.add_extra(
-                            FedoraIotServiceInfoModule::BinaryFile,
-                            "length",
-                            &file.contents_len,
-                        );
-                        if let Some(parsed_permissions) = &file.parsed_permissions {
-                            reply.add_extra(
-                                FedoraIotServiceInfoModule::BinaryFile,
-                                "mode",
-                                &parsed_permissions,
-                            );
-                        }
-                        reply.add_extra(
-                            FedoraIotServiceInfoModule::BinaryFile,
-                            "data001|hex",
-                            &file.contents_hex,
-                        );
-                        reply.add_extra(
-                            FedoraIotServiceInfoModule::BinaryFile,
-                            "sha-384|hex",
-                            &file.hash_hex,
-                        );
-                    }
-                }
-            }
-            Err(_) => {
-                log::info!("per-device settings file not available, so loading base config file");
-            }
-        };
+        //         if let Some(files) = &per_device_settings.files {
+        //             // Adding per device files config
+        //             for file in files {
+        //                 reply.add_extra(FedoraIotServiceInfoModule::BinaryFile, "name", &file.path);
+        //                 reply.add_extra(
+        //                     FedoraIotServiceInfoModule::BinaryFile,
+        //                     "length",
+        //                     &file.contents_len,
+        //                 );
+        //                 if let Some(parsed_permissions) = &file.parsed_permissions {
+        //                     reply.add_extra(
+        //                         FedoraIotServiceInfoModule::BinaryFile,
+        //                         "mode",
+        //                         &parsed_permissions,
+        //                     );
+        //                 }
+        //                 reply.add_extra(
+        //                     FedoraIotServiceInfoModule::BinaryFile,
+        //                     "data001|hex",
+        //                     &file.contents_hex,
+        //                 );
+        //                 reply.add_extra(
+        //                     FedoraIotServiceInfoModule::BinaryFile,
+        //                     "sha-384|hex",
+        //                     &file.hash_hex,
+        //                 );
+        //             }
+        //         }
+        //     }
+        //     Err(_) => {
+        //         log::info!("per-device settings file not available, so loading base config file");
+        //     }
+        // };
     }
 
     if query_info
