@@ -2,7 +2,10 @@ initial_user:
   username: username_per_device
   sshkeys:
   - "testkeyperdevice"
-files: null
+files:
+- path: /var/lib/fdo/service-info-api/files/hosts
+  permissions: 644
+  source_path: /server/local/etc/hosts
 commands: null
 diskencryption_clevis: null
 additional_serviceinfo: null

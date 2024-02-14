@@ -23,6 +23,11 @@ struct ServiceInfoConfiguration {
     settings: ServiceInfoSettings,
 }
 
+// #[derive(Debug)]
+// struct ServiceInfoFiles {
+//     files: Vec<ServiceInfoFile>,
+// }
+
 impl ServiceInfoConfiguration {
     fn from_settings(mut settings: ServiceInfoSettings) -> Result<Self> {
         // Perform checks on the configuration
@@ -65,6 +70,57 @@ impl ServiceInfoConfiguration {
         Ok(ServiceInfoConfiguration { settings })
     }
 }
+
+// impl ServiceInfoConfiguration {
+//     fn from_settings(settings: ServiceInfoSettings) -> Result<Self> {
+//         // Perform checks on the configuration
+
+//         // Check permissions for files are valid
+
+//         //// TODO: do something with result?
+//         let _ = check_file_configuration(settings.files.clone());
+
+//         Ok(ServiceInfoConfiguration { settings })
+//     }
+// }
+
+// fn check_file_configuration(mut files_to_check: Option<Vec<ServiceInfoFile>>) -> Result<Vec<ServiceInfoFile>> {
+// fn check_file_configuration(mut files_to_check: Option<Vec<ServiceInfoFile>>) -> Result<Option<Vec<ServiceInfoFile>>> {
+//     files_to_check = if let Some(files) = files_to_check {
+//         let mut new_files = Vec::new();
+
+//         for mut file in files {
+//             let path = &file.path;
+
+//             file.parsed_permissions = if let Some(permissions) = &file.permissions {
+//                 Some(u32::from_str_radix(permissions, 8).with_context(|| {
+//                     format!(
+//                         "Invalid permission string for file {path}: {permissions} (invalid octal)"
+//                     )
+//                 })?)
+//             } else {
+//                 None
+//             };
+
+//             let contents = std::fs::read(&file.source_path)
+//                 .with_context(|| format!("Failed to read file {}", file.source_path))?;
+//             file.hash_hex = hex::encode(
+//                 Hash::from_data(HashType::Sha384, &contents)
+//                     .with_context(|| format!("Failed to hash file {}", file.source_path))?
+//                     .value_bytes(),
+//             );
+//             file.contents_len = contents.len();
+//             file.contents_hex = hex::encode(&contents);
+
+//             new_files.push(file);
+//         }
+
+//         Some(new_files)
+//     } else {
+//         None
+//     };
+//     Ok( files_to_check )
+// }
 
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
@@ -260,32 +316,35 @@ async fn serviceinfo_handler(
         .contains(&FedoraIotServiceInfoModule::BinaryFile.into())
     {
         if let Some(files) = &user_data.service_info_configuration.settings.files {
-            for file in files {
-                reply.add_extra(FedoraIotServiceInfoModule::BinaryFile, "name", &file.path);
-                reply.add_extra(
-                    FedoraIotServiceInfoModule::BinaryFile,
-                    "length",
-                    &file.contents_len,
-                );
-                if let Some(parsed_permissions) = &file.parsed_permissions {
-                    reply.add_extra(
-                        FedoraIotServiceInfoModule::BinaryFile,
-                        "mode",
-                        &parsed_permissions,
-                    );
-                }
-                reply.add_extra(
-                    FedoraIotServiceInfoModule::BinaryFile,
-                    "data001|hex",
-                    &file.contents_hex,
-                );
-                reply.add_extra(
-                    FedoraIotServiceInfoModule::BinaryFile,
-                    "sha-384|hex",
-                    &file.hash_hex,
-                );
-            }
+            add_binary_files_to_reply(files, &mut reply);
+
+            log::debug!("Applied base file configuration binary files");
         }
+
+        // precedence is given to 'per_device' settings over base serviceinfo_api_server.yml config
+        match settings_per_device(&query_info.device_guid.to_string().replace('\"', "")) {
+            Ok(config) => {
+                log::info!("Per-device file configuration found");
+
+                let per_device_settings = config;
+
+                match ServiceInfoConfiguration::from_settings(per_device_settings){
+                    Ok(per_device_service_info_configuration) => {
+                        if let Some(files) = &per_device_service_info_configuration.settings.files {
+                            add_binary_files_to_reply(files, &mut reply);
+
+                            log::debug!("Applied per-device file configuration binary files");
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("{}", e);
+                    }
+                };
+            }
+            Err(_) => {
+                log::info!("No per-device settings file configuration found");
+            }
+        };
     }
 
     if query_info
@@ -388,6 +447,34 @@ async fn serviceinfo_handler(
         }
     }
     Ok(warp::reply::json(&reply.reply))
+}
+
+fn add_binary_files_to_reply(files: &Vec<fdo_util::servers::configuration::serviceinfo_api_server::ServiceInfoFile>, reply: &mut ServiceInfoApiReplyBuilder) {
+    for file in files {
+        reply.add_extra(FedoraIotServiceInfoModule::BinaryFile, "name", &file.path);
+        reply.add_extra(
+            FedoraIotServiceInfoModule::BinaryFile,
+            "length",
+            &file.contents_len,
+        );
+        if let Some(parsed_permissions) = &file.parsed_permissions {
+            reply.add_extra(
+                FedoraIotServiceInfoModule::BinaryFile,
+                "mode",
+                &parsed_permissions,
+            );
+        }
+        reply.add_extra(
+            FedoraIotServiceInfoModule::BinaryFile,
+            "data001|hex",
+            &file.contents_hex,
+        );
+        reply.add_extra(
+            FedoraIotServiceInfoModule::BinaryFile,
+            "sha-384|hex",
+            &file.hash_hex,
+        );
+    }
 }
 
 fn deserialize_from_str<'de, D>(deserializer: D) -> Result<fdo_data_formats::types::Guid, D::Error>
