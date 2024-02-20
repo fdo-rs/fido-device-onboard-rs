@@ -710,7 +710,7 @@ impl KeyReference {
         allowed_storage_types: Option<&[KeyStorageType]>,
     ) -> Result<Self> {
         let allowed_storage_types = match allowed_storage_types {
-            Some(storage_types) if storage_types.is_empty() => {
+            Some([]) => {
                 bail!("No key storage types allowed")
             }
             Some(storage_types) => storage_types,
