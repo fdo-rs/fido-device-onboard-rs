@@ -12,6 +12,7 @@ URL:            https://github.com/fdo-rs/fido-device-onboard-rs
 Source0:        %{url}/archive/v%{version}/%{name}-rs-%{version}.tar.gz
 # See make-vendored-tarfile.sh in upstream repo
 Source1:        %{name}-rs-%{version}-vendor-patched.tar.xz
+Patch1:         0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch
 
 # Because nobody cares
 ExcludeArch: %{ix86}
@@ -33,11 +34,17 @@ BuildRequires:  tpm2-tss-devel
 %{summary}.
 
 %prep
-%autosetup -p1 -n %{name}-rs-%{version}
+%setup -q -n %{name}-rs-%{version}
 
 %if 0%{?rhel}
-%cargo_prep -V 1
+tar xf %{SOURCE1}
+%if 0%{?rhel} >= 10
+%cargo_prep -v vendor
 %else
+%cargo_prep -V 1
+%endif
+%else
+%patch -P1 -p1
 %cargo_prep
 %generate_buildrequires
 %cargo_generate_buildrequires -a
@@ -49,6 +56,9 @@ BuildRequires:  tpm2-tss-devel
 
 %{?cargo_license_summary}
 %{?cargo_license} > LICENSE.dependencies
+%if 0%{?rhel} >= 10
+%cargo_vendor_manifest
+%endif
 
 %install
 install -D -m 0755 -t %{buildroot}%{_libexecdir}/fdo target/release/fdo-client-linuxapp
@@ -103,6 +113,9 @@ Requires: dracut
 
 %files -n fdo-init
 %license LICENSE LICENSE.dependencies
+%if 0%{?rhel} >= 10
+%license cargo-vendor.txt
+%endif
 %{dracutlibdir}/modules.d/52fdo/
 %{_libexecdir}/fdo/fdo-manufacturing-client
 
@@ -115,6 +128,9 @@ Requires: openssl-libs >= 3.0.1-12
 
 %files -n fdo-owner-onboarding-server
 %license LICENSE LICENSE.dependencies
+%if 0%{?rhel} >= 10
+%license cargo-vendor.txt
+%endif
 %dir %{_sysconfdir}/fdo
 %dir %{_sysconfdir}/fdo/keys
 %dir %{_sysconfdir}/fdo/owner-onboarding-server.conf.d
@@ -155,6 +171,9 @@ License: %combined_license
 
 %files -n fdo-rendezvous-server
 %license LICENSE LICENSE.dependencies
+%if 0%{?rhel} >= 10
+%license cargo-vendor.txt
+%endif
 %dir %{_sysconfdir}/fdo
 %dir %{_sysconfdir}/fdo/keys
 %dir %{_sysconfdir}/fdo/rendezvous-server.conf.d
@@ -187,6 +206,9 @@ Requires: openssl-libs >= 3.0.1-12
 
 %files -n fdo-manufacturing-server
 %license LICENSE LICENSE.dependencies
+%if 0%{?rhel} >= 10
+%license cargo-vendor.txt
+%endif
 %dir %{_sysconfdir}/fdo
 %dir %{_sysconfdir}/fdo/keys
 %dir %{_sysconfdir}/fdo/manufacturing-server.conf.d
@@ -224,6 +246,9 @@ Requires: cryptsetup
 %{summary}
 
 %files -n fdo-client
+%if 0%{?rhel} >= 10
+%license cargo-vendor.txt
+%endif
 %license LICENSE LICENSE.dependencies
 %{_libexecdir}/fdo/fdo-client-linuxapp
 %{_unitdir}/fdo-client-linuxapp.service
@@ -244,6 +269,9 @@ License: %combined_license
 %{summary}
 
 %files -n fdo-owner-cli
+%if 0%{?rhel} >= 10
+%license cargo-vendor.txt
+%endif
 %license LICENSE LICENSE.dependencies
 %{_bindir}/fdo-owner-tool
 %{_libexecdir}/fdo/fdo-owner-tool
@@ -261,6 +289,9 @@ Requires: fdo-init = %{version}-%{release}
 %{summary}
 
 %files -n fdo-admin-cli
+%if 0%{?rhel} >= 10
+%license cargo-vendor.txt
+%endif
 %license LICENSE LICENSE.dependencies
 %dir %{_sysconfdir}/fdo
 %dir %{_sysconfdir}/fdo/keys
