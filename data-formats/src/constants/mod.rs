@@ -405,7 +405,7 @@ impl TryFrom<u8> for MessageType {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr)]
+#[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr, PartialEq)]
 #[repr(u16)]
 #[non_exhaustive]
 pub enum ErrorCode {
