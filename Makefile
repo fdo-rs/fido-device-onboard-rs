@@ -68,6 +68,7 @@ srpm: $(RPM_SPECFILE) $(RPM_TARBALL) $(VENDOR_TARBALL)
 
 .PHONY: rpm
 rpm: $(RPM_SPECFILE) $(RPM_TARBALL) $(VENDOR_TARBALL)
+	sudo dnf builddep -y fido-device-onboard
 	rpmbuild -bb \
 		--define "_topdir $(CURDIR)/rpmbuild" \
 		$(RPM_SPECFILE)
