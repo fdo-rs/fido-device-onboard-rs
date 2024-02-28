@@ -1,3 +1,5 @@
+include /etc/os-release
+
 SRCDIR ?= .
 COMMIT = $(shell (cd "$(SRCDIR)" && git rev-parse HEAD))
 
@@ -43,6 +45,9 @@ VENDOR_TARBALL=rpmbuild/SOURCES/fido-device-onboard-rs-$(COMMIT)-vendor-patched.
 $(RPM_SPECFILE):
 	mkdir -p $(CURDIR)/rpmbuild/SPECS
 	sed -e "s/^Version:.*/Version: $(COMMIT)/;" fido-device-onboard.spec > $(RPM_SPECFILE)
+	if [ "$(ID)" = "fedora" ] && [ $(VARIANT_ID) != "eln" ]; then \
+		sed -i "/Source1/d ; /^# See make-vendored-tarfile.sh in upstream repo/d ;" $(RPM_SPECFILE); \
+	fi
 
 $(RPM_TARBALL):
 	mkdir -p $(CURDIR)/rpmbuild/SOURCES
@@ -50,8 +55,10 @@ $(RPM_TARBALL):
 	git archive --prefix=fido-device-onboard-rs-$(COMMIT)/ --format=tar.gz HEAD > $(RPM_TARBALL)
 
 $(VENDOR_TARBALL):
-	./make-vendored-tarfile.sh $(COMMIT)
-	cp fido-device-onboard-rs-$(COMMIT)-vendor-patched.tar.xz rpmbuild/SOURCES
+	[ "$(ID)" = "fedora" ] && [ $(VARIANT_ID) != "eln" ] || ( \
+	mkdir -p $(CURDIR)/rpmbuild/SOURCES ; \
+	./make-vendored-tarfile.sh $(COMMIT) ; \
+	mv fido-device-onboard-rs-$(COMMIT)-vendor-patched.tar.xz rpmbuild/SOURCES ;)
 
 .PHONY: srpm
 srpm: $(RPM_SPECFILE) $(RPM_TARBALL) $(VENDOR_TARBALL)
