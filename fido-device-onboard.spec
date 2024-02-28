@@ -35,17 +35,19 @@ BuildRequires:  tpm2-tss-devel
 %{summary}.
 
 %prep
-%setup -q -n %{name}-rs-%{version}
 
 %if 0%{?rhel}
-tar xf %{SOURCE1}
+%autosetup -p1 -a1 -n %{name}-rs-%{version}
+rm -f Cargo.lock
 %if 0%{?rhel} >= 10
 %cargo_prep -v vendor
 %else
 %cargo_prep -V 1
 %endif
-%else
-%patch -P1 -p1
+%endif
+
+%if 0%{?fedora}
+%autosetup -p1 -n %{name}-rs-%{version}
 %cargo_prep
 %generate_buildrequires
 %cargo_generate_buildrequires -a

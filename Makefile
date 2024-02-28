@@ -42,7 +42,7 @@ VENDOR_TARBALL=rpmbuild/SOURCES/fido-device-onboard-rs-$(COMMIT)-vendor-patched.
 
 $(RPM_SPECFILE):
 	mkdir -p $(CURDIR)/rpmbuild/SPECS
-	sed "s/%{url}\/archive\/v%{version}\/%{name}-rs-%{version}.tar.gz/%{name}-rs-$(COMMIT).tar.gz/; s/%{name}-rs-%{version}-vendor-patched.tar.xz/%{name}-rs-$(COMMIT)-vendor-patched.tar.xz/; s/%autosetup -p1 -n %{name}-rs-%{version}/%autosetup -p1 -n %{name}-rs-$(COMMIT)/" fido-device-onboard.spec > $(RPM_SPECFILE)
+	sed -e "s/^Version:.*/Version: $(COMMIT)/;" fido-device-onboard.spec > $(RPM_SPECFILE)
 
 $(RPM_TARBALL):
 	mkdir -p $(CURDIR)/rpmbuild/SOURCES
