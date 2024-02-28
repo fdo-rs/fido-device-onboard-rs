@@ -46,8 +46,8 @@ $(RPM_SPECFILE):
 
 $(RPM_TARBALL):
 	mkdir -p $(CURDIR)/rpmbuild/SOURCES
+	cp ./patches/0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch rpmbuild/SOURCES/;
 	git archive --prefix=fido-device-onboard-rs-$(COMMIT)/ --format=tar.gz HEAD > $(RPM_TARBALL)
-	cp ./make-vendored-tarfile.sh rpmbuild/SOURCES/make-vendored-tarfile.sh
 
 $(VENDOR_TARBALL):
 	./make-vendored-tarfile.sh $(COMMIT)
