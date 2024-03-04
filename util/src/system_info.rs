@@ -10,4 +10,6 @@ pub fn get_current_user_name() -> String {
             .stdout,
     )
     .expect("Unable to read current user name")
+    .trim()
+    .to_string()
 }
