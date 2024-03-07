@@ -197,6 +197,17 @@ pub trait Store<OT: StoreOpenMode, K, V, MKT: MetadataLocalKey>: Send + Sync {
         'life0: 'async_trait,
         Self: 'async_trait;
 
+    fn query_ovs_db_to2_performed_to0_less_than<'life0, 'async_trait>(
+        &'life0 self,
+        to2: bool,
+        to0_max: i64,
+    ) -> Pin<
+        Box<dyn Future<Output = Result<Vec<OwnershipVoucher>, StoreError>> + 'async_trait + Send>,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait;
+
     fn store_data<'life0, 'async_trait>(
         &'life0 self,
         key: K,
