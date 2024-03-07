@@ -154,6 +154,14 @@ where
         Err(StoreError::MethodNotAvailable)
     }
 
+    async fn query_ovs_db_to2_performed_to0_less_than(
+        &self,
+        _to2: bool,
+        _to0_max: i64,
+    ) -> Result<Vec<OwnershipVoucher>, StoreError> {
+        Err(StoreError::MethodNotAvailable)
+    }
+
     async fn store_data(&self, _key: K, value: V) -> Result<(), StoreError> {
         let pool = fdo_db::sqlite::SqliteManufacturerDB::get_conn_pool();
         let conn = &mut pool.get().expect("Couldn't establish a connection");
@@ -338,6 +346,34 @@ where
         Ok(ret)
     }
 
+    async fn query_ovs_db_to2_performed_to0_less_than(
+        &self,
+        to2: bool,
+        to0_max: i64,
+    ) -> Result<Vec<OwnershipVoucher>, StoreError> {
+        let mut ret = vec![];
+        let pool = fdo_db::sqlite::SqliteOwnerDB::get_conn_pool();
+        let conn = &mut pool
+            .get()
+            .map_err(|e| StoreError::Database(format!("Error connecting to DB {e:?}")))?;
+        let db_ovs = fdo_db::sqlite::SqliteOwnerDB::select_ov_to2_performed_and_ov_to0_less_than(
+            false, to0_max, conn,
+        )
+        .map_err(|e| {
+            StoreError::Database(format!(
+                "Error selecting OVs filering by to2 {to2} and to0 {to0_max}: {e:?}"
+            ))
+        })?;
+        for db_ov in db_ovs {
+            ret.push(
+                OwnershipVoucher::from_pem_or_raw(&db_ov.contents).map_err(|e| {
+                    StoreError::Unspecified(format!("Error parsing OV contents from DB: {e:?}"))
+                })?,
+            );
+        }
+        Ok(ret)
+    }
+
     async fn store_data(&self, _key: K, value: V) -> Result<(), StoreError> {
         let pool = fdo_db::sqlite::SqliteOwnerDB::get_conn_pool();
         let conn = &mut pool.get().expect("Couldn't establish a connection");
@@ -468,6 +504,14 @@ where
     }
 
     async fn query_ovs_db(&self) -> Result<Vec<OwnershipVoucher>, StoreError> {
+        Err(StoreError::MethodNotAvailable)
+    }
+
+    async fn query_ovs_db_to2_performed_to0_less_than(
+        &self,
+        _to2: bool,
+        _to0_max: i64,
+    ) -> Result<Vec<OwnershipVoucher>, StoreError> {
         Err(StoreError::MethodNotAvailable)
     }
 
@@ -603,6 +647,14 @@ where
     }
 
     async fn query_ovs_db(&self) -> Result<Vec<OwnershipVoucher>, StoreError> {
+        Err(StoreError::MethodNotAvailable)
+    }
+
+    async fn query_ovs_db_to2_performed_to0_less_than(
+        &self,
+        _to2: bool,
+        _to0_max: i64,
+    ) -> Result<Vec<OwnershipVoucher>, StoreError> {
         Err(StoreError::MethodNotAvailable)
     }
 
@@ -793,6 +845,35 @@ where
         Ok(ret)
     }
 
+    async fn query_ovs_db_to2_performed_to0_less_than(
+        &self,
+        to2: bool,
+        to0_max: i64,
+    ) -> Result<Vec<OwnershipVoucher>, StoreError> {
+        let mut ret = vec![];
+        let pool = fdo_db::postgres::PostgresOwnerDB::get_conn_pool();
+        let conn = &mut pool
+            .get()
+            .map_err(|e| StoreError::Database(format!("Error connecting to DB {e:?}")))?;
+        let db_ovs =
+            fdo_db::postgres::PostgresOwnerDB::select_ov_to2_performed_and_ov_to0_less_than(
+                false, to0_max, conn,
+            )
+            .map_err(|e| {
+                StoreError::Database(format!(
+                    "Error selecting OVs filering by to2 {to2} and to0 {to0_max}: {e:?}"
+                ))
+            })?;
+        for db_ov in db_ovs {
+            ret.push(
+                OwnershipVoucher::from_pem_or_raw(&db_ov.contents).map_err(|e| {
+                    StoreError::Unspecified(format!("Error parsing OV contents from DB: {e:?}"))
+                })?,
+            );
+        }
+        Ok(ret)
+    }
+
     async fn store_data(&self, _key: K, value: V) -> Result<(), StoreError> {
         let pool = fdo_db::postgres::PostgresOwnerDB::get_conn_pool();
         let conn = &mut pool.get().expect("Couldn't establish a connection");
@@ -923,6 +1004,14 @@ where
     }
 
     async fn query_ovs_db(&self) -> Result<Vec<OwnershipVoucher>, StoreError> {
+        Err(StoreError::MethodNotAvailable)
+    }
+
+    async fn query_ovs_db_to2_performed_to0_less_than(
+        &self,
+        _to2: bool,
+        _to0_max: i64,
+    ) -> Result<Vec<OwnershipVoucher>, StoreError> {
         Err(StoreError::MethodNotAvailable)
     }
 
