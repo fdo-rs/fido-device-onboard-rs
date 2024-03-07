@@ -302,6 +302,14 @@ where
         Err(StoreError::MethodNotAvailable)
     }
 
+    async fn query_ovs_db_to2_performed_to0_less_than(
+        &self,
+        _to2: bool,
+        _to0_max: i64,
+    ) -> Result<Vec<OwnershipVoucher>, StoreError> {
+        Err(StoreError::MethodNotAvailable)
+    }
+
     async fn store_data(&self, key: K, value: V) -> Result<(), StoreError> {
         let finalpath = self.get_path(&key);
         let mut path = finalpath.clone();
