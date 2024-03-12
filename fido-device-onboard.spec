@@ -28,6 +28,7 @@ BuildRequires:  device-mapper-devel
 BuildRequires:  libpq-devel
 BuildRequires:  golang
 BuildRequires:  openssl-devel >= 3.0.1-12
+BuildRequires:  sqlite-devel
 BuildRequires:  systemd-rpm-macros
 BuildRequires:  tpm2-tss-devel
 
