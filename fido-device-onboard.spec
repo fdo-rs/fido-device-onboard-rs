@@ -83,8 +83,9 @@ install -D -m 0644 -t %{buildroot}%{_docdir}/fdo/migrations/migrations_owner_onb
 install -D -m 0644 -t %{buildroot}%{_docdir}/fdo/migrations/migrations_rendezvous_server_postgres  migrations/migrations_rendezvous_server_postgres/2023-10-03-152801_create_db/*
 install -D -m 0644 -t %{buildroot}%{_docdir}/fdo/migrations/migrations_rendezvous_server_sqlite  migrations/migrations_rendezvous_server_sqlite/2023-10-03-152801_create_db/*
 # duplicates as needed by AIO command so link them
-ln -s %{_bindir}/fdo-owner-tool  %{buildroot}%{_libexecdir}/fdo/fdo-owner-tool
-ln -s %{_bindir}/fdo-admin-tool %{buildroot}%{_libexecdir}/fdo/fdo-admin-tool
+mkdir -p %{buildroot}%{_bindir}
+ln -sr %{buildroot}%{_bindir}/fdo-owner-tool  %{buildroot}%{_libexecdir}/fdo/fdo-owner-tool
+ln -sr %{buildroot}%{_bindir}/fdo-admin-tool %{buildroot}%{_libexecdir}/fdo/fdo-admin-tool
 # Create directories needed by the various services so we own them
 mkdir -p %{buildroot}%{_sysconfdir}/fdo
 mkdir -p %{buildroot}%{_sysconfdir}/fdo/keys
@@ -216,7 +217,6 @@ Requires: openssl-libs >= 3.0.1-12
 %dir %{_sysconfdir}/fdo
 %dir %{_sysconfdir}/fdo/keys
 %dir %{_sysconfdir}/fdo/manufacturing-server.conf.d
-%dir %{_sysconfdir}/fdo/keys
 %dir %{_sysconfdir}/fdo/stores
 %dir %{_sysconfdir}/fdo/stores/manufacturer_keys
 %dir %{_sysconfdir}/fdo/stores/manufacturing_sessions
