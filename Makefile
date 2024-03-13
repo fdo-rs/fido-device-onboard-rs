@@ -1,3 +1,5 @@
+include /etc/os-release
+
 SRCDIR ?= .
 COMMIT = $(shell (cd "$(SRCDIR)" && git rev-parse HEAD))
 
@@ -42,16 +44,21 @@ VENDOR_TARBALL=rpmbuild/SOURCES/fido-device-onboard-rs-$(COMMIT)-vendor-patched.
 
 $(RPM_SPECFILE):
 	mkdir -p $(CURDIR)/rpmbuild/SPECS
-	sed "s/%{url}\/archive\/v%{version}\/%{name}-rs-%{version}.tar.gz/%{name}-rs-$(COMMIT).tar.gz/; s/%{name}-rs-%{version}-vendor-patched.tar.xz/%{name}-rs-$(COMMIT)-vendor-patched.tar.xz/; s/%autosetup -p1 -n %{name}-rs-%{version}/%autosetup -p1 -n %{name}-rs-$(COMMIT)/" fido-device-onboard.spec > $(RPM_SPECFILE)
+	sed -e "s/^Version:.*/Version: $(COMMIT)/;" fido-device-onboard.spec > $(RPM_SPECFILE)
+	if [ "$(ID)" = "fedora" ] && [ $(VARIANT_ID) != "eln" ]; then \
+		sed -i "/Source1/d ; /^# See make-vendored-tarfile.sh in upstream repo/d ;" $(RPM_SPECFILE); \
+	fi
 
 $(RPM_TARBALL):
 	mkdir -p $(CURDIR)/rpmbuild/SOURCES
+	cp ./patches/0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch rpmbuild/SOURCES/;
 	git archive --prefix=fido-device-onboard-rs-$(COMMIT)/ --format=tar.gz HEAD > $(RPM_TARBALL)
-	cp ./make-vendored-tarfile.sh rpmbuild/SOURCES/make-vendored-tarfile.sh
 
 $(VENDOR_TARBALL):
-	./make-vendored-tarfile.sh $(COMMIT)
-	cp fido-device-onboard-rs-$(COMMIT)-vendor-patched.tar.xz rpmbuild/SOURCES
+	[ "$(ID)" = "fedora" ] && [ $(VARIANT_ID) != "eln" ] || ( \
+	mkdir -p $(CURDIR)/rpmbuild/SOURCES ; \
+	./make-vendored-tarfile.sh $(COMMIT) ; \
+	mv fido-device-onboard-rs-$(COMMIT)-vendor-patched.tar.xz rpmbuild/SOURCES ;)
 
 .PHONY: srpm
 srpm: $(RPM_SPECFILE) $(RPM_TARBALL) $(VENDOR_TARBALL)
@@ -61,6 +68,7 @@ srpm: $(RPM_SPECFILE) $(RPM_TARBALL) $(VENDOR_TARBALL)
 
 .PHONY: rpm
 rpm: $(RPM_SPECFILE) $(RPM_TARBALL) $(VENDOR_TARBALL)
+	sudo dnf builddep -y fido-device-onboard
 	rpmbuild -bb \
 		--define "_topdir $(CURDIR)/rpmbuild" \
 		$(RPM_SPECFILE)
