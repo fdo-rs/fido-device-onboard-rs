@@ -17,14 +17,6 @@ srpm_build_deps:
     - cargo
     - openssl-devel
 
-actions:
-    create-archive:
-        - bash -c "cp ./patches/0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch ."
-        - bash -c "git archive --prefix=fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}/ --format=tar HEAD > fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}.tar"
-        - bash -c "./make-vendored-tarfile.sh ${PACKIT_PROJECT_VERSION}"
-        - bash -c "tar -xvf fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}.tar"
-        - bash -c "ls -1 ./fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}.tar"
-
 jobs:
     - &fdo_copr_build
       job: copr_build
