@@ -1,0 +1,54 @@
+[dependencies.anstyle]
+version = "1.0.0"
+[dev-dependencies.lexopt]
+version = "0.3.0"
+
+[package]
+categories = ["command-line-interface"]
+description = "Styling legacy Windows terminals"
+edition = "2021"
+homepage = "https://github.com/rust-cli/anstyle"
+include = ["build.rs", "src/**/*", "Cargo.toml", "Cargo.lock", "LICENSE*", "README.md", "benches/**/*", "examples/**/*"]
+keywords = ["ansi", "terminal", "color", "windows"]
+license = "MIT OR Apache-2.0"
+name = "anstyle-wincon"
+readme = "README.md"
+repository = "https://github.com/rust-cli/anstyle.git"
+rust-version = "1.70.0"
+version = "3.0.2"
+[package.metadata.docs.rs]
+features = []
+rustdoc-args = ["--cfg", "docsrs"]
+targets = ["x86_64-pc-windows-msvc"]
+[[package.metadata.release.pre-release-replacements]]
+file = "CHANGELOG.md"
+min = 1
+replace = "{{version}}"
+search = "Unreleased"
+
+[[package.metadata.release.pre-release-replacements]]
+exactly = 1
+file = "CHANGELOG.md"
+replace = "...{{tag_name}}"
+search = "\\.\\.\\.HEAD"
+
+[[package.metadata.release.pre-release-replacements]]
+file = "CHANGELOG.md"
+min = 1
+replace = "{{date}}"
+search = "ReleaseDate"
+
+[[package.metadata.release.pre-release-replacements]]
+exactly = 1
+file = "CHANGELOG.md"
+replace = "<!-- next-header -->\n## [Unreleased] - ReleaseDate\n"
+search = "<!-- next-header -->"
+
+[[package.metadata.release.pre-release-replacements]]
+exactly = 1
+file = "CHANGELOG.md"
+replace = "<!-- next-url -->\n[Unreleased]: https://github.com/rust-cli/anstyle/compare/{{tag_name}}...HEAD"
+search = "<!-- next-url -->"
+[target."cfg(windows)".dependencies.windows-sys]
+features = ["Win32_System_Console", "Win32_Foundation"]
+version = "0.52.0"
