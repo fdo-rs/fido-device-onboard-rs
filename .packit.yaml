@@ -38,6 +38,17 @@ jobs:
               additional_repos:
                   - https://kojipkgs.fedoraproject.org/repos/eln-build/latest/$basearch/
 
+    - job: tests
+      trigger: pull_request
+      identifier: onboarding
+      fmf_path: test/fmf
+      tmt_plan: plans/onboarding
+      targets:
+          epel-9: {}
+          fedora-latest-stable: {}
+          fedora-latest: {}
+          fedora-rawhide: {}
+
     - <<: *fdo_copr_build
       trigger: commit
       branch: main

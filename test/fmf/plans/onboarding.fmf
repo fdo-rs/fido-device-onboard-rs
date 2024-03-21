@@ -1,0 +1,14 @@
+summary: Fido Device Onboarding Tests
+discover:
+    how: fmf
+execute:
+    how: tmt
+prepare:
+    - how: install
+      copr: ${PACKIT_COPR_PROJECT}
+    - how: shell
+      script: dnf install -y ${PACKIT_COPR_RPMS} postgresql-server sqlite
+provision:
+    how: virtual
+    memory: 4096
+    disk: 30
