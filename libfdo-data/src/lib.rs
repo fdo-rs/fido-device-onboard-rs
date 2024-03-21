@@ -1,4 +1,5 @@
 use libc::c_char;
+use std::ptr::addr_of;
 use std::{ffi::CString, ptr::null_mut};
 
 #[cfg(test)]
@@ -41,8 +42,15 @@ pub unsafe extern "C" fn fdo_free_string(s: *mut c_char) {
 /// be freed with `fdo_free_string`
 #[no_mangle]
 pub extern "C" fn fdo_get_last_error() -> *mut c_char {
-    match unsafe { &LAST_ERROR } {
-        None => null_mut(),
-        Some(e) => CString::new(e.as_bytes()).unwrap().into_raw(),
+    let result = unsafe { addr_of!(LAST_ERROR) };
+    if result.is_null() {
+        null_mut()
+    } else {
+        match unsafe { result.as_ref() } {
+            None => null_mut(),
+            Some(e) => CString::new(e.clone().unwrap().as_bytes())
+                .unwrap()
+                .into_raw(),
+        }
     }
 }
