@@ -838,6 +838,7 @@ mod test {
     use super::BinaryFileInProgress;
 
     use crate::serviceinfo::*;
+    use fdo_util::system_info::get_current_user_name;
 
     #[test]
     fn test_binaryfileinprogress_destination_path() {
@@ -870,7 +871,10 @@ mod test {
     }
 
     #[test]
+    #[ignore = "to run this test you must be root and run `cargo test -- --ignored`"]
     fn test_user_creation_no_pw() {
+        let current_user_name = get_current_user_name();
+        assert_eq!(current_user_name, "root");
         let test_user = "test";
         assert!(create_user(test_user).is_ok());
         let empty_user = "";
@@ -884,7 +888,10 @@ mod test {
     }
 
     #[test]
+    #[ignore = "to run this test you must be root and run `cargo test -- --ignored`"]
     fn test_user_creation_with_pw() {
+        let current_user_name = get_current_user_name();
+        assert_eq!(current_user_name, "root");
         let test_user = "testb";
         let test_password = "password";
         assert!(create_user_with_password(test_user, test_password).is_ok());

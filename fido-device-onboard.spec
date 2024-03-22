@@ -1,9 +1,9 @@
 %global dracutlibdir %{_prefix}/lib/dracut
 %bcond_without check
-%global combined_license Apache-2.0 AND (Apache-2.0 OR BSL-1.0) AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR MIT) AND ((Apache-2.0 OR MIT) AND BSD-3-Clause) AND (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT) AND BSD-2-Clause AND BSD-3-Clause AND (CC0-1.0 OR Apache-2.0) AND (CC0-1.0 OR MIT-0 OR Apache 2.0) AND ISC AND MIT AND ((MIT OR Apache-2.0) AND Unicode-DFS-2016) AND (Apache-2.0 OR MIT OR Zlib) AND MPL-2.0 AND (Unlicense OR MIT)
+%global combined_license Apache-2.0 AND (Apache-2.0 OR BSL-1.0) AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR MIT) AND ((Apache-2.0 OR MIT) AND BSD-3-Clause) AND (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT) AND BSD-2-Clause AND BSD-3-Clause AND (CC0-1.0 OR Apache-2.0) AND (CC0-1.0 OR MIT-0 OR Apache-2.0) AND ISC AND MIT AND ((MIT OR Apache-2.0) AND Unicode-DFS-2016) AND (Apache-2.0 OR MIT OR Zlib) AND MPL-2.0 AND (Unlicense OR MIT)
 
 Name:           fido-device-onboard
-Version:        0.4.13
+Version:        0.5.0
 Release:        1%{?dist}
 Summary:        A rust implementation of the FIDO Device Onboard Specification
 License:        BSD-3-Clause
@@ -12,6 +12,7 @@ URL:            https://github.com/fdo-rs/fido-device-onboard-rs
 Source0:        %{url}/archive/v%{version}/%{name}-rs-%{version}.tar.gz
 # See make-vendored-tarfile.sh in upstream repo
 Source1:        %{name}-rs-%{version}-vendor-patched.tar.xz
+Patch1:         0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch
 
 # Because nobody cares
 ExcludeArch: %{ix86}
@@ -24,8 +25,10 @@ BuildRequires:  rust-packaging
 BuildRequires:  clang-devel
 BuildRequires:  cryptsetup-devel
 BuildRequires:  device-mapper-devel
+BuildRequires:  libpq-devel
 BuildRequires:  golang
 BuildRequires:  openssl-devel >= 3.0.1-12
+BuildRequires:  sqlite-devel
 BuildRequires:  systemd-rpm-macros
 BuildRequires:  tpm2-tss-devel
 
@@ -33,11 +36,19 @@ BuildRequires:  tpm2-tss-devel
 %{summary}.
 
 %prep
-%autosetup -p1 -n %{name}-rs-%{version}
 
 %if 0%{?rhel}
-%cargo_prep -V 1
+%autosetup -p1 -a1 -n %{name}-rs-%{version}
+rm -f Cargo.lock
+%if 0%{?rhel} >= 10
+%cargo_prep -v vendor
 %else
+%cargo_prep -V 1
+%endif
+%endif
+
+%if 0%{?fedora}
+%autosetup -p1 -n %{name}-rs-%{version}
 %cargo_prep
 %generate_buildrequires
 %cargo_generate_buildrequires -a
@@ -49,6 +60,9 @@ BuildRequires:  tpm2-tss-devel
 
 %{?cargo_license_summary}
 %{?cargo_license} > LICENSE.dependencies
+%if 0%{?rhel} >= 10
+%cargo_vendor_manifest
+%endif
 
 %install
 install -D -m 0755 -t %{buildroot}%{_libexecdir}/fdo target/release/fdo-client-linuxapp
@@ -69,8 +83,9 @@ install -D -m 0644 -t %{buildroot}%{_docdir}/fdo/migrations/migrations_owner_onb
 install -D -m 0644 -t %{buildroot}%{_docdir}/fdo/migrations/migrations_rendezvous_server_postgres  migrations/migrations_rendezvous_server_postgres/2023-10-03-152801_create_db/*
 install -D -m 0644 -t %{buildroot}%{_docdir}/fdo/migrations/migrations_rendezvous_server_sqlite  migrations/migrations_rendezvous_server_sqlite/2023-10-03-152801_create_db/*
 # duplicates as needed by AIO command so link them
-ln -s %{_bindir}/fdo-owner-tool  %{buildroot}%{_libexecdir}/fdo/fdo-owner-tool
-ln -s %{_bindir}/fdo-admin-tool %{buildroot}%{_libexecdir}/fdo/fdo-admin-tool
+mkdir -p %{buildroot}%{_bindir}
+ln -sr %{buildroot}%{_bindir}/fdo-owner-tool  %{buildroot}%{_libexecdir}/fdo/fdo-owner-tool
+ln -sr %{buildroot}%{_bindir}/fdo-admin-tool %{buildroot}%{_libexecdir}/fdo/fdo-admin-tool
 # Create directories needed by the various services so we own them
 mkdir -p %{buildroot}%{_sysconfdir}/fdo
 mkdir -p %{buildroot}%{_sysconfdir}/fdo/keys
@@ -103,6 +118,9 @@ Requires: dracut
 
 %files -n fdo-init
 %license LICENSE LICENSE.dependencies
+%if 0%{?rhel} >= 10
+%license cargo-vendor.txt
+%endif
 %{dracutlibdir}/modules.d/52fdo/
 %{_libexecdir}/fdo/fdo-manufacturing-client
 
@@ -115,6 +133,9 @@ Requires: openssl-libs >= 3.0.1-12
 
 %files -n fdo-owner-onboarding-server
 %license LICENSE LICENSE.dependencies
+%if 0%{?rhel} >= 10
+%license cargo-vendor.txt
+%endif
 %dir %{_sysconfdir}/fdo
 %dir %{_sysconfdir}/fdo/keys
 %dir %{_sysconfdir}/fdo/owner-onboarding-server.conf.d
@@ -155,6 +176,9 @@ License: %combined_license
 
 %files -n fdo-rendezvous-server
 %license LICENSE LICENSE.dependencies
+%if 0%{?rhel} >= 10
+%license cargo-vendor.txt
+%endif
 %dir %{_sysconfdir}/fdo
 %dir %{_sysconfdir}/fdo/keys
 %dir %{_sysconfdir}/fdo/rendezvous-server.conf.d
@@ -187,10 +211,12 @@ Requires: openssl-libs >= 3.0.1-12
 
 %files -n fdo-manufacturing-server
 %license LICENSE LICENSE.dependencies
+%if 0%{?rhel} >= 10
+%license cargo-vendor.txt
+%endif
 %dir %{_sysconfdir}/fdo
 %dir %{_sysconfdir}/fdo/keys
 %dir %{_sysconfdir}/fdo/manufacturing-server.conf.d
-%dir %{_sysconfdir}/fdo/keys
 %dir %{_sysconfdir}/fdo/stores
 %dir %{_sysconfdir}/fdo/stores/manufacturer_keys
 %dir %{_sysconfdir}/fdo/stores/manufacturing_sessions
@@ -224,6 +250,9 @@ Requires: cryptsetup
 %{summary}
 
 %files -n fdo-client
+%if 0%{?rhel} >= 10
+%license cargo-vendor.txt
+%endif
 %license LICENSE LICENSE.dependencies
 %{_libexecdir}/fdo/fdo-client-linuxapp
 %{_unitdir}/fdo-client-linuxapp.service
@@ -244,6 +273,9 @@ License: %combined_license
 %{summary}
 
 %files -n fdo-owner-cli
+%if 0%{?rhel} >= 10
+%license cargo-vendor.txt
+%endif
 %license LICENSE LICENSE.dependencies
 %{_bindir}/fdo-owner-tool
 %{_libexecdir}/fdo/fdo-owner-tool
@@ -261,6 +293,9 @@ Requires: fdo-init = %{version}-%{release}
 %{summary}
 
 %files -n fdo-admin-cli
+%if 0%{?rhel} >= 10
+%license cargo-vendor.txt
+%endif
 %license LICENSE LICENSE.dependencies
 %dir %{_sysconfdir}/fdo
 %dir %{_sysconfdir}/fdo/keys
@@ -278,6 +313,9 @@ Requires: fdo-init = %{version}-%{release}
 %systemd_postun_with_restart fdo-aio.service
 
 %changelog
+* Tue Feb 20 2024 Peter Robinson <pbrobinson@fedoraproject.org> - 0.5.0-1
+- Update to 0.5.0
+
 * Thu Jan 25 2024 Peter Robinson <pbrobinson@fedoraproject.org> - 0.4.13-1
 - Update to 0.4.13
 

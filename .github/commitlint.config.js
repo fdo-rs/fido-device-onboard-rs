@@ -1,14 +1,14 @@
 /* eslint-disable import/no-extraneous-dependencies */
-const { maxLineLength } = require('@commitlint/ensure')
+const validateBodyMaxLengthIgnoringDeps = async (parsedCommit) => {
+  const { maxLineLength } = await import('@commitlint/ensure');
 
-const bodyMaxLineLength = 100
-
-const validateBodyMaxLengthIgnoringDeps = (parsedCommit) => {
   const { type, scope, body } = parsedCommit
   const isDepsCommit =
       type === 'chore'
       && body != null
       && body.includes('Updates the requirements on');
+
+  const bodyMaxLineLength = 100;
 
   return [
     isDepsCommit || !body || maxLineLength(body, bodyMaxLineLength),

@@ -1,0 +1,25 @@
+Backport of https://github.com/awslabs/aws-nitro-enclaves-cose/pull/66
+
+diff --git a/vendor/aws-nitro-enclaves-cose/.cargo-checksum.json b/vendor/aws-nitro-enclaves-cose/.cargo-checksum.json
+index dd788a8..1035b7b 100644
+--- a/vendor/aws-nitro-enclaves-cose/.cargo-checksum.json
++++ b/vendor/aws-nitro-enclaves-cose/.cargo-checksum.json
+@@ -1 +1 @@
+-{"files":{"CHANGELOG.md":"182c816f6cdcf13b370be9e712a0e7cf5b7c6b6612dc81c3b3d477abfca58e86","CODE_OF_CONDUCT.md":"34b6c98d5c23127ae6769e95e483e5bf6d3704ae1f0d3ae4e69d15f4ede118b6","CONTRIBUTING.md":"b050a75d5f6d2236ed40ad91dc53c4a4b30da184f9298f6f18507beae5fd7cb7","Cargo.toml":"d3ba98a34c9dcbff42da7e04d123b1687840738851e0630035e1f6e620a6fd98","LICENSE":"09e8a9bcec8067104652c168685ab0931e7868f9c8284b66f5ae6edae5f1130b","NOTICE":"d4290ed64c2edd0fce1d84e3f9dfb2881240fe534def76b8cd29ed6af683e287","README.md":"b16c142f4056384bb274fa7c9d0c2d73faf573cc2123a0bf4825970f88a67fc4","src/crypto/mod.rs":"a509e065cd0c3ed4c05484af9a7c45397ebf2a8b3f0d22578410f22484ffc33c","src/crypto/openssl_pkey.rs":"e9344a26ba101925a8e1c82960ff3d20a3df603be43132671bb15846ee96e829","src/crypto/tpm.rs":"2f8ec59523020319a4f63ca1e4bf3a4ae20c3acf8ca8ffd38e53ccd99611af3f","src/encrypt.rs":"ba89d5f221f0e4379d6f67dd946a00b183639b00bcf6918a4d3c441c4328894d","src/error.rs":"48fd4b84f9b4a7f5fc7ac52c2ce792d258c257908609270bf7751938082e19b7","src/header_map.rs":"88b3d7575ea4fd8eaaf4497a9d3c27ff43ec4da0213994aecf1ec9b5b89553c0","src/lib.rs":"8dbe7fe8206cfc76f46324c25418b37d0daf1ce23fc8b3219e1d89043c8e00de","src/sign.rs":"5a45658fa820ac9b5285c0987b66a58eb4f5b4373ab1aa07a73240848de098b2"},"package":"4e2fe3e862758ef5bb5d89868141ab28781d96347522b60eb6abeaf7f9acd4bc"}
+\ No newline at end of file
++{"files":{},"package":"4e2fe3e862758ef5bb5d89868141ab28781d96347522b60eb6abeaf7f9acd4bc"}
+diff --git a/vendor/aws-nitro-enclaves-cose/src/sign.rs b/vendor/aws-nitro-enclaves-cose/src/sign.rs
+index 6426ac0..93f59ec 100644
+--- a/vendor/aws-nitro-enclaves-cose/src/sign.rs
++++ b/vendor/aws-nitro-enclaves-cose/src/sign.rs
+@@ -135,8 +135,10 @@ pub struct SigStructure(
+     #[serde(skip_serializing_if = "Option::is_none")]
+     Option<ByteBuf>,
+     /// external_aad : bstr,
++    #[serde(default)]
+     ByteBuf,
+     /// payload : bstr
++    #[serde(default)]
+     ByteBuf,
+ );
+ 

@@ -1,0 +1,20 @@
+summary: Run full device onboarding
+test: ./run-onboarding.sh
+
+/directory:
+    summary: Run full device onboard using Directory as OV backend
+    duration: 5m
+    environment:
+        OV_STORE_DRIVER: Directory
+
+/postgres:
+    summary: Run full device onboard using PostgreSQL as OV backend
+    duration: 5m
+    environment:
+        OV_STORE_DRIVER: Postgres
+
+/sqlite:
+    summary: Run full device onboard using SQLite as OV backend
+    duration: 5m
+    environment:
+        OV_STORE_DRIVER: Sqlite

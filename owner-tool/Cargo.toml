@@ -1,6 +1,6 @@
 [package]
 name = "fdo-owner-tool"
-version = "0.4.13"
+version = "0.5.0"
 authors = ["Patrick Uiterwijk <patrick@puiterwijk.org>"]
 edition = "2018"
 
@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
-clap = { version = "4.2", features = ["derive"] }
+clap = { version = "4.4", features = ["derive"] }
 log = "0.4"
 openssl = "0.10.60"
 serde = { version = "1", features = ["derive"] }
@@ -16,9 +16,10 @@ serde_yaml = "0.9"
 tokio = { version = "1", features = ["full"] }
 tss-esapi = { version = "7.4", features = ["generate-bindings"] }
 
-fdo-util = { path = "../util", version = "0.4.13" }
-fdo-data-formats = { path = "../data-formats", version = "0.4.13" }
-fdo-http-wrapper = { path = "../http-wrapper", version = "0.4.13", features = ["client"] }
-fdo-db = { path = "../db", version = "0.4.13"}
+fdo-util = { path = "../util", version = "0.5.0" }
+fdo-data-formats = { path = "../data-formats", version = "0.5.0" }
+fdo-http-wrapper = { path = "../http-wrapper", version = "0.5.0", features = ["client"] }
+fdo-db = { path = "../db", version = "0.5.0"}
 
 hex = "0.4"
+clap_builder = "4.4"

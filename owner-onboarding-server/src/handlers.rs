@@ -664,6 +664,7 @@ pub(super) async fn done(
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct RtrFailure(anyhow::Error);
 impl warp::reject::Reject for RtrFailure {}
 
