@@ -12,7 +12,7 @@ config = "0.13.4"
 openssl = "0.10.60"
 log = "0.4"
 time = "0.3"
-clap = { version = "4.2", features = ["derive"] }
+clap = { version = "4.4", features = ["derive"] }
 futures = "0.3"
 reqwest = "0.11"
 serde = "1"
@@ -25,6 +25,7 @@ fdo-data-formats = { path = "../data-formats", version = "0.5.0" }
 fdo-http-wrapper = { path = "../http-wrapper", version = "0.5.0", features = ["server", "client"] }
 fdo-store = { path = "../store", version = "0.5.0", features = ["directory"] }
 fdo-util = { path = "../util", version = "0.5.0" }
+clap_builder = "4.4"
 
 [dev-dependencies]
 rand = "0.8"

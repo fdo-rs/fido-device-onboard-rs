@@ -9,6 +9,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use fdo_util::system_info::get_current_user_name;
+
 use anyhow::{bail, Context as _, Result};
 use openssl::{
     asn1::{Asn1Integer, Asn1Time},
@@ -808,9 +810,7 @@ impl<'a> TestServerConfigurator<'a> {
                     &self.test_context.runner_path(&self.server_number),
                 );
 
-                let output = Command::new("whoami").output().unwrap();
-
-                let cur_user = String::from_utf8(output.stdout).unwrap();
+                let cur_user = get_current_user_name();
 
                 if !per_device {
                     L.l("per_device_serviceinfo is not set, using default values");

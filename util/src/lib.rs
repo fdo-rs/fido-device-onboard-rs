@@ -2,6 +2,7 @@ pub mod device_credential_locations;
 pub mod device_identification;
 pub mod passwd_shadow;
 pub mod servers;
+pub mod system_info;
 
 pub fn maybe_print_version(
     name: &'static str,

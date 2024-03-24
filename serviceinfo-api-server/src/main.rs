@@ -15,6 +15,7 @@ use tokio::signal::unix::{signal, SignalKind};
 use warp::Filter;
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct ServiceInfoFailure(anyhow::Error);
 impl warp::reject::Reject for ServiceInfoFailure {}
 
