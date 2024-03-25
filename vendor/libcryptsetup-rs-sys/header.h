@@ -1,0 +1,74 @@
+#include <libcryptsetup.h>
+
+const uint32_t crypt_activate_readonly = CRYPT_ACTIVATE_READONLY;
+const uint32_t crypt_activate_no_uuid = CRYPT_ACTIVATE_NO_UUID;
+const uint32_t crypt_activate_shared = CRYPT_ACTIVATE_SHARED;
+const uint32_t crypt_activate_allow_discards = CRYPT_ACTIVATE_ALLOW_DISCARDS;
+const uint32_t crypt_activate_private = CRYPT_ACTIVATE_PRIVATE;
+const uint32_t crypt_activate_corrupted = CRYPT_ACTIVATE_CORRUPTED;
+const uint32_t crypt_activate_same_cpu_crypt = CRYPT_ACTIVATE_SAME_CPU_CRYPT;
+const uint32_t crypt_activate_submit_from_crypt_cpus= CRYPT_ACTIVATE_SUBMIT_FROM_CRYPT_CPUS;
+const uint32_t crypt_activate_ignore_corruption = CRYPT_ACTIVATE_IGNORE_CORRUPTION;
+const uint32_t crypt_activate_restart_on_corruption = CRYPT_ACTIVATE_RESTART_ON_CORRUPTION;
+const uint32_t crypt_activate_ignore_zero_blocks = CRYPT_ACTIVATE_IGNORE_ZERO_BLOCKS;
+const uint32_t crypt_activate_keyring_key= CRYPT_ACTIVATE_KEYRING_KEY;
+const uint32_t crypt_activate_no_journal = CRYPT_ACTIVATE_NO_JOURNAL;
+const uint32_t crypt_activate_recovery = CRYPT_ACTIVATE_RECOVERY;
+const uint32_t crypt_activate_ignore_persistent = CRYPT_ACTIVATE_IGNORE_PERSISTENT;
+const uint32_t crypt_activate_check_at_most_once = CRYPT_ACTIVATE_CHECK_AT_MOST_ONCE;
+const uint32_t crypt_activate_allow_unbound_key = CRYPT_ACTIVATE_ALLOW_UNBOUND_KEY;
+const uint32_t crypt_activate_recalculate = CRYPT_ACTIVATE_RECALCULATE;
+const uint32_t crypt_activate_refresh = CRYPT_ACTIVATE_REFRESH;
+const uint32_t crypt_activate_serialize_memory_hard_pbkdf = CRYPT_ACTIVATE_SERIALIZE_MEMORY_HARD_PBKDF;
+const uint32_t crypt_activate_no_journal_bitmap = CRYPT_ACTIVATE_NO_JOURNAL_BITMAP;
+#ifdef CRYPT_ACTIVATE_SUSPENDED
+const uint32_t crypt_activate_suspended = CRYPT_ACTIVATE_SUSPENDED;
+#endif
+#ifdef CRYPT_ACTIVATE_IV_LARGE_SECTORS
+const uint32_t crypt_activate_iv_large_sectors = CRYPT_ACTIVATE_IV_LARGE_SECTORS;
+#endif
+#ifdef CRYPT_ACTIVATE_PANIC_ON_CORRUPTION
+const uint32_t crypt_activate_panic_on_corruption = CRYPT_ACTIVATE_PANIC_ON_CORRUPTION;
+#endif
+#ifdef CRYPT_ACTIVATE_NO_READ_WORKQUEUE
+const uint32_t crypt_activate_no_read_workqueue = CRYPT_ACTIVATE_NO_READ_WORKQUEUE;
+#endif
+#ifdef CRYPT_ACTIVATE_NO_WRITE_WORKQUEUE
+const uint32_t crypt_activate_no_write_workqueue = CRYPT_ACTIVATE_NO_WRITE_WORKQUEUE;
+#endif
+#ifdef CRYPT_ACTIVATE_RECALCULATE_RESET
+const uint32_t crypt_activate_recalculate_reset = CRYPT_ACTIVATE_RECALCULATE_RESET;
+#endif
+
+const uint32_t crypt_deactivate_deferred = CRYPT_DEACTIVATE_DEFERRED;
+const uint32_t crypt_deactivate_force = CRYPT_DEACTIVATE_FORCE;
+
+const uint32_t crypt_verity_no_header = CRYPT_VERITY_NO_HEADER;
+const uint32_t crypt_verity_check_hash = CRYPT_VERITY_CHECK_HASH;
+const uint32_t crypt_verity_create_hash = CRYPT_VERITY_CREATE_HASH;
+
+const uint32_t crypt_tcrypt_legacy_modes = CRYPT_TCRYPT_LEGACY_MODES;
+const uint32_t crypt_tcrypt_hidden_header = CRYPT_TCRYPT_HIDDEN_HEADER;
+const uint32_t crypt_tcrypt_backup_header = CRYPT_TCRYPT_BACKUP_HEADER;
+const uint32_t crypt_tcrypt_system_header = CRYPT_TCRYPT_SYSTEM_HEADER;
+const uint32_t crypt_tcrypt_vera_modes = CRYPT_TCRYPT_VERA_MODES;
+
+const uint32_t crypt_keyfile_stop_eol = CRYPT_KEYFILE_STOP_EOL;
+
+const uint32_t crypt_volume_key_no_segment = CRYPT_VOLUME_KEY_NO_SEGMENT;
+const uint32_t crypt_volume_key_set = CRYPT_VOLUME_KEY_SET;
+const uint32_t crypt_volume_key_digest_reuse = CRYPT_VOLUME_KEY_DIGEST_REUSE;
+
+const uint32_t crypt_requirement_offline_reencrypt = CRYPT_REQUIREMENT_OFFLINE_REENCRYPT;
+const uint32_t crypt_requirement_online_reencrypt = CRYPT_REQUIREMENT_ONLINE_REENCRYPT;
+const uint32_t crypt_requirement_unknown = CRYPT_REQUIREMENT_UNKNOWN;
+
+const uint32_t crypt_reencrypt_recovery = CRYPT_REENCRYPT_RECOVERY;
+const uint32_t crypt_reencrypt_resume_only = CRYPT_REENCRYPT_RESUME_ONLY;
+const uint32_t crypt_reencrypt_initialize_only = CRYPT_REENCRYPT_INITIALIZE_ONLY;
+const uint32_t crypt_reencrypt_move_first_segment = CRYPT_REENCRYPT_MOVE_FIRST_SEGMENT;
+
+const uint32_t crypt_pbkdf_iter_time_set = CRYPT_PBKDF_ITER_TIME_SET;
+const uint32_t crypt_pbkdf_no_benchmark = CRYPT_PBKDF_NO_BENCHMARK;
+
+const uint32_t crypt_wipe_no_direct_io = CRYPT_WIPE_NO_DIRECT_IO;
