@@ -32,4 +32,7 @@ pub struct OwnerOnboardingServerSettings {
     pub owner_addresses: Vec<RemoteConnection>,
 
     pub report_to_rendezvous_endpoint_enabled: bool,
+
+    pub ov_registration_period: Option<u32>,
+    pub ov_re_registration_window: Option<u32>,
 }
