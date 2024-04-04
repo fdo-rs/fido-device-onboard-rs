@@ -219,6 +219,11 @@ fn generate_configs(aio_dir: &Path, config_args: &Configuration) -> Result<(), E
                     .expect("Failed to build absolute path"),
             ),
 
+            trusted_device_keys_path: Some(
+                AbsolutePathBuf::new(aio_dir.join("keys").join("device_ca_cert.pem"))
+                    .expect("Failed to build absolute path"),
+            ),
+
             max_wait_seconds: None,
 
             bind: get_bind(config_args.listen_port_rendezvous_server)?,

@@ -532,6 +532,7 @@ session_store_driver:
   Directory:
     path: /path/to/stores/rendezvous_sessions
 trusted_manufacturer_keys_path: /path/to/keys/manufacturer_cert.pem
+trusted_device_keys_path: /path/to/keys/device_ca_cert.pem
 max_wait_seconds: ~
 bind: "0.0.0.0:8082"
 ```
@@ -568,7 +569,9 @@ Where:
       Please refer to the [Database management section](#database-management) on how to initialize databases.
 - `session_store_driver`: path to a directory that will hold session
   information.
-- `trusted_manufacturer_keys_path`: path to the Manufacturer Certificate.
+- `trusted_manufacturer_keys_path` [OPTIONAL]: path to the Manufacturer Certificate.
+- `trusted_device_keys_path` [OPTIONAL]: path to the CA certificates used for
+device certificate chain verification.
 - `max_wait_seconds`: [OPTIONAL] maximum wait time in seconds for the TO0 and
   TO1 protocols (default 2592000).
 - `bind`: IP address and port that the Rendezvous Server will take.
