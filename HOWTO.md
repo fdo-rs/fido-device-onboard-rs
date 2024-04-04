@@ -491,8 +491,8 @@ Where:
       Please refer to the [Database management section](#database-management) on how to initialize databases.
 - `session_store_driver`: path to a directory that will hold session
   information.
-- `trusted_device_keys_path`: path to the Device Certificate Authority
-  certificate.
+- `trusted_device_keys_path` [OPTIONAL]: path to the CA certificates
+used for device certificate chain verification.
 - `owner_private_key_path`: path to the Owner's private key.
 - `owner_public_key_path`: path to the Owner's public key certificate.
 - `bind`: IP address and port that this server will take.

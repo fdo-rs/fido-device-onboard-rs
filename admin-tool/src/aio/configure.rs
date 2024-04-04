@@ -330,10 +330,10 @@ fn generate_configs(aio_dir: &Path, config_args: &Configuration) -> Result<(), E
             ownership_voucher_store_driver: StoreConfig::Directory {
                 path: aio_dir.join("stores").join("owner_vouchers"),
             },
-            trusted_device_keys_path: AbsolutePathBuf::new(
-                aio_dir.join("keys").join("device_ca_cert.pem"),
-            )
-            .unwrap(),
+            trusted_device_keys_path: Some(
+                AbsolutePathBuf::new(aio_dir.join("keys").join("device_ca_cert.pem"))
+                    .expect("Failed to build absolute path"),
+            ),
             owner_private_key_path: AbsolutePathBuf::new(
                 aio_dir.join("keys").join("owner_key.der"),
             )
