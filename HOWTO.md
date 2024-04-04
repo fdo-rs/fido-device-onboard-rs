@@ -453,6 +453,8 @@ owner_addresses:
     - dns_name: fdo.example.com
     - ip_address: 192.168.122.1
 report_to_rendezvous_endpoint_enabled: false
+ov_registration_period: 600
+ov_re_registration_window: 61
 bind: 0.0.0.0:8081
 service_info_api_url: "http://localhost:8089/device_info"
 service_info_api_authentication: None
@@ -512,6 +514,12 @@ Where:
   - `port`: connection port.
 - `report_to_rendezvous_endpoint_enabled`: whether reporting to the Rendezvous
   Server is enabled or not, boolean.
+- `ov_registration_period`: optional value that sets how many seconds OVs are
+  going to be registered into the Rendezvous server.
+- `ov_re_registration_window`: optional value that sets the minimum amount of
+  seconds left in the `ov_registration_period` for the Owner server to trigger
+  a re-registration within the Rendezvous server. This option can only be used
+  with database backends.
 
 ### `rendezvous-server.yml`
 
