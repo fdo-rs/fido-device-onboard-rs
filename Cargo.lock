@@ -1642,6 +1642,7 @@ name = "integration-tests"
 version = "0.5.0"
 dependencies = [
  "anyhow",
+ "ciborium",
  "fdo-data-formats",
  "fdo-util",
  "hex",
@@ -1654,7 +1655,6 @@ dependencies = [
  "regex",
  "reqwest",
  "serde",
- "serde_cbor",
  "serde_json",
  "tempfile",
  "tera",
