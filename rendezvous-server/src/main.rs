@@ -25,6 +25,8 @@ impl fdo_store::MetadataLocalKey for RendezvousStoreMetadataKey {
 struct RendezvousUD {
     max_wait_seconds: u32,
     trusted_manufacturer_keys: Option<X5Bag>,
+    trusted_device_keys: Option<X5Bag>,
+
     store: Box<dyn Store<fdo_store::ReadWriteOpen, Guid, StoredItem, RendezvousStoreMetadataKey>>,
 
     session_store: Arc<fdo_http_wrapper::server::SessionStore>,
@@ -102,11 +104,28 @@ async fn main() -> Result<()> {
         .transpose()
         .context("Error loading trusted manufacturer keys")?;
 
+    // Load trusted CA certs for device certificate chain verification
+    let trusted_device_keys = settings
+        .trusted_device_keys_path
+        .as_ref()
+        .map(|path| -> Result<X5Bag, anyhow::Error> {
+            let trusted_device_keys = {
+                let contents = std::fs::read(path)
+                    .with_context(|| format!("Error reading trusted device keys at {}", &path))?;
+                X509::stack_from_pem(&contents).context("Error parsing trusted device keys")?
+            };
+            X5Bag::with_certs(trusted_device_keys)
+                .context("Error building trusted device keys X5Bag")
+        })
+        .transpose()
+        .context("Error loading trusted device keys")?;
+
     // Initialize handler stores
     let user_data = Arc::new(RendezvousUD {
         max_wait_seconds,
         store,
         trusted_manufacturer_keys,
+        trusted_device_keys,
 
         session_store: session_store.clone(),
     });

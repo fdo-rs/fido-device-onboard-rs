@@ -158,6 +158,7 @@ session_store_driver:
   Directory:
     path: ${STORES_DIR}/rendezvous_sessions
 trusted_manufacturer_keys_path: ${KEYS_DIR}/manufacturer_cert.pem
+trusted_device_keys_path: ${KEYS_DIR}/device_ca_cert.pem
 max_wait_seconds: ~
 bind: "0.0.0.0:8082"
 EOF

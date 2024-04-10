@@ -157,8 +157,14 @@ pub(super) async fn ownersign(
         }
         Some(v) => v,
     };
-    //let device_pubkey = match device_cert_chain.verify_from_x5bag(&user_data.trusted_device_keys) {
-    let device_pubkey = match device_cert_chain.insecure_verify_without_root_verification() {
+
+    let verify_device_pubkey = if let Some(trusted_device_keys) = &user_data.trusted_device_keys {
+        device_cert_chain.verify_from_x5bag(trusted_device_keys)
+    } else {
+        device_cert_chain.insecure_verify_without_root_verification()
+    };
+
+    let device_pubkey = match verify_device_pubkey {
         Err(cert_chain_err) => {
             log::debug!("Error verifying device certificate: {:?}", cert_chain_err);
             return Err(Error::new(
