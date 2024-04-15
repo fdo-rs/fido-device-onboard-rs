@@ -1,0 +1,21 @@
+[dependencies.bitflags]
+version = "1"
+
+[dependencies.core-foundation]
+version = "0.9"
+
+[dependencies.system-configuration-sys]
+version = "0.5"
+
+[package]
+authors = ["Mullvad VPN"]
+categories = ["api-bindings", "os::macos-apis"]
+description = "Bindings to SystemConfiguration framework for macOS"
+edition = "2021"
+keywords = ["macos", "system", "configuration", "bindings"]
+license = "MIT OR Apache-2.0"
+name = "system-configuration"
+readme = "README.md"
+repository = "https://github.com/mullvad/system-configuration-rs"
+resolver = "1"
+version = "0.5.1"
