@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
-use std::fs;
+use std::fs::{self, File};
+use std::io::Read;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -11,6 +12,7 @@ use openssl::{
 };
 use serde_yaml::Value;
 use tokio::signal::unix::{signal, SignalKind};
+use warp::reply::Response;
 use warp::Filter;
 
 use fdo_data_formats::{
@@ -268,7 +270,29 @@ async fn main() -> Result<()> {
 
     // Initialize handlers
     let hello = warp::get().map(|| "Hello from the manufacturing server");
-    let handler_ping = fdo_http_wrapper::server::ping_handler();
+    let handler_export = warp::get().and(warp::path("export").map(|| {
+        let tar_gz = File::create("/tmp/archive.tar.gz").unwrap();
+        //let enc = flate2::write::GzEncoder::new(tar_gz, flate2::Compression::default());
+        let mut tar = tar::Builder::new(tar_gz);
+        tar.append_dir_all(".", "/home/amurdaca/testovs").unwrap();
+        tar.finish().unwrap();
+        let mut file = File::open("/tmp/archive.tar.gz").unwrap();
+        let mut data: Vec<u8> = Vec::new();
+        match file.read_to_end(&mut data) {
+            Err(why) => {
+                println!("Error: {:?}", why);
+                return Response::new(String::new().into());
+            }
+            Ok(_) => {
+                let mut res = Response::new(data.into());
+                res.headers_mut().insert(
+                    "Content-Type",
+                    warp::http::header::HeaderValue::from_static("application/x-tar"),
+                );
+                return res;
+            }
+        }
+    }));
 
     // DI
     let handler_di_app_start = fdo_http_wrapper::server::fdo_request_filter(
@@ -307,7 +331,7 @@ async fn main() -> Result<()> {
     let routes = warp::post()
         .and(
             hello
-                .or(handler_ping)
+                .or(fdo_http_wrapper::server::ping_handler())
                 // DI
                 .or(handler_di_app_start)
                 .or(handler_di_set_hmac)
@@ -316,6 +340,7 @@ async fn main() -> Result<()> {
                 .or(handler_diun_request_key_parameters)
                 .or(handler_diun_provide_key),
         )
+        .or(handler_export)
         .recover(fdo_http_wrapper::server::handle_rejection)
         .with(warp::log("manufacturing-server"));
 

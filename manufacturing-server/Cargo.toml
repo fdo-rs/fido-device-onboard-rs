@@ -17,6 +17,8 @@ warp = "0.3.6"
 log = "0.4"
 hex = "0.4"
 serde_yaml = "0.9"
+tar = "0.4.41"
+flate2 = "1.0.31"
 
 fdo-data-formats = { path = "../data-formats", version = "0.5.0" }
 fdo-http-wrapper = { path = "../http-wrapper", version = "0.5.0", features = ["server"] }
