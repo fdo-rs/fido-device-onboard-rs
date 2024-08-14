@@ -115,6 +115,13 @@ impl DBStoreOwner<SqliteConnection> for SqliteOwnerDB {
         Ok(result)
     }
 
+    fn get_all_ovs(conn: &mut SqliteConnection) -> Result<Vec<OwnerOV>> {
+        let result = super::schema::owner_vouchers::dsl::owner_vouchers
+            .select(OwnerOV::as_select())
+            .load(conn)?;
+        Ok(result)
+    }
+
     fn delete_ov(guid: &str, conn: &mut SqliteConnection) -> Result<()> {
         diesel::delete(owner_vouchers::dsl::owner_vouchers)
             .filter(super::schema::owner_vouchers::guid.eq(guid))
@@ -221,6 +228,13 @@ impl DBStoreRendezvous<SqliteConnection> for SqliteRendezvousDB {
         let result = super::schema::rendezvous_vouchers::dsl::rendezvous_vouchers
             .filter(super::schema::rendezvous_vouchers::guid.eq(guid))
             .first(conn)?;
+        Ok(result)
+    }
+
+    fn get_all_ovs(conn: &mut SqliteConnection) -> Result<Vec<RendezvousOV>> {
+        let result = super::schema::rendezvous_vouchers::dsl::rendezvous_vouchers
+            .select(RendezvousOV::as_select())
+            .load(conn)?;
         Ok(result)
     }
 
