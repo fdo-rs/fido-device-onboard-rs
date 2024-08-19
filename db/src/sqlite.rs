@@ -11,8 +11,6 @@ use crate::schema::manufacturer_vouchers;
 use crate::schema::owner_vouchers;
 use crate::schema::rendezvous_vouchers;
 
-use std::env;
-
 use anyhow::Result;
 
 use super::models::{NewOwnerOV, NewRendezvousOV, OwnerOV, RendezvousOV};
@@ -24,15 +22,7 @@ use fdo_data_formats::StoredItem;
 pub struct SqliteManufacturerDB {}
 
 impl DBStoreManufacturer<SqliteConnection> for SqliteManufacturerDB {
-    fn get_connection() -> SqliteConnection {
-        let database_url = env::var("SQLITE_MANUFACTURER_DATABASE_URL")
-            .expect("SQLITE_MANUFACTURER_DATABASE_URL must be set");
-        SqliteConnection::establish(&database_url).expect("Error connecting to database")
-    }
-
-    fn get_conn_pool() -> Pool<ConnectionManager<SqliteConnection>> {
-        let database_url = env::var("SQLITE_MANUFACTURER_DATABASE_URL")
-            .expect("SQLITE_MANUFACTURER_DATABASE_URL must be set");
+    fn get_conn_pool(database_url: String) -> Pool<ConnectionManager<SqliteConnection>> {
         let manager = ConnectionManager::<SqliteConnection>::new(database_url);
         Pool::builder()
             .test_on_check_out(true)
@@ -92,15 +82,7 @@ impl DBStoreManufacturer<SqliteConnection> for SqliteManufacturerDB {
 pub struct SqliteOwnerDB {}
 
 impl DBStoreOwner<SqliteConnection> for SqliteOwnerDB {
-    fn get_connection() -> SqliteConnection {
-        let database_url =
-            env::var("SQLITE_OWNER_DATABASE_URL").expect("SQLITE_OWNER_DATABASE_URL must be set");
-        SqliteConnection::establish(&database_url).expect("Error connecting to database")
-    }
-
-    fn get_conn_pool() -> Pool<ConnectionManager<SqliteConnection>> {
-        let database_url =
-            env::var("SQLITE_OWNER_DATABASE_URL").expect("SQLITE_OWNER_DATABASE_URL must be set");
+    fn get_conn_pool(database_url: String) -> Pool<ConnectionManager<SqliteConnection>> {
         let manager = ConnectionManager::<SqliteConnection>::new(database_url);
         Pool::builder()
             .test_on_check_out(true)
@@ -210,15 +192,7 @@ impl DBStoreOwner<SqliteConnection> for SqliteOwnerDB {
 pub struct SqliteRendezvousDB {}
 
 impl DBStoreRendezvous<SqliteConnection> for SqliteRendezvousDB {
-    fn get_connection() -> SqliteConnection {
-        let database_url = env::var("SQLITE_RENDEZVOUS_DATABASE_URL")
-            .expect("SQLITE_RENDEZVOUS_DATABASE_URL must be set");
-        SqliteConnection::establish(&database_url).expect("Error connecting to database")
-    }
-
-    fn get_conn_pool() -> Pool<ConnectionManager<SqliteConnection>> {
-        let database_url = env::var("SQLITE_RENDEZVOUS_DATABASE_URL")
-            .expect("SQLITE_RENDEZVOUS_DATABASE_URL must be set");
+    fn get_conn_pool(database_url: String) -> Pool<ConnectionManager<SqliteConnection>> {
         let manager = ConnectionManager::<SqliteConnection>::new(database_url);
         Pool::builder()
             .test_on_check_out(true)
@@ -296,7 +270,9 @@ mod tests {
 
         // read test ovs from the integration tests dir
         let mut ov_map = HashMap::new();
-        let pool = SqliteManufacturerDB::get_conn_pool();
+        let database_url = env::var("SQLITE_MANUFACTURER_DATABASE_URL")
+            .expect("SQLITE_MANUFACTURER_DATABASE_URL must be set");
+        let pool = SqliteManufacturerDB::get_conn_pool(database_url);
 
         // last_guid used later to delete an ov with that key
         let mut last_guid = String::new();
@@ -367,7 +343,9 @@ mod tests {
 
         // read test ovs from the integration tests dir
         let mut ov_map = HashMap::new();
-        let pool = SqliteOwnerDB::get_conn_pool();
+        let database_url =
+            env::var("SQLITE_OWNER_DATABASE_URL").expect("SQLITE_OWNER_DATABASE_URL must be set");
+        let pool = SqliteOwnerDB::get_conn_pool(database_url);
 
         // last_guid used later to delete an ov with that key
         let mut last_guid = String::new();
@@ -440,7 +418,9 @@ mod tests {
 
         // read test ovs from the integration tests dir
         let mut ov_map = HashMap::new();
-        let pool = SqliteRendezvousDB::get_conn_pool();
+        let database_url = env::var("SQLITE_RENDEZVOUS_DATABASE_URL")
+            .expect("SQLITE_RENDEZVOUS_DATABASE_URL must be set");
+        let pool = SqliteRendezvousDB::get_conn_pool(database_url);
 
         // last_guid used later to delete an ov with that key
         let mut last_guid = String::new();

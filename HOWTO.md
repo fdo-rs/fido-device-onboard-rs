@@ -343,20 +343,22 @@ Where:
       ```
     - `Sqlite`: will use a Sqlite database to store the ownership vouchers.
       When using this option you must set `Manufacturer` as the DB type as
-      shown below:
+      shown below as well as a connection url (including username/password/port if needed):
       ```
       ownership_voucher_store_driver:
         Sqlite:
-          Manufacturer
+          server: Manufacturer
+          url: sqlite:///path/to/db/sqlite
       ```
       Please refer to the [Database management section](#database-management) on how to initialize databases.
     - `Postgres`: will use a Postgres database to store the ownership vouchers.
       When using this option you must set `Manufacturer` as the DB type as
-      shown below:
+      shown below as well as a connection url (including username/password/port if needed):
       ```
       ownership_voucher_store_driver:
         Postgres:
-          Manufacturer
+          server: Manufacturer
+          url: postgresql://username:password@host:5432/database_name?option1=value1&option2=value2
       ```
       Please refer to the [Database management section](#database-management) on how to initialize databases.
 - `public_key_store_driver:` [OPTIONAL] path to a directory that will hold the
@@ -473,20 +475,22 @@ Where:
       ```
     - `Sqlite`: will use a Sqlite database to store the ownership vouchers.
       When using this option you must set `Owner` as the DB type as
-      shown below:
+      shown below as well as a connection url (including username/password/port if needed):
       ```
       ownership_voucher_store_driver:
         Sqlite:
-          Owner
+          server: Owner
+          url: sqlite:///path/to/db/sqlite
       ```
       Please refer to the [Database management section](#database-management) on how to initialize databases.
     - `Postgres`: will use a Postgres database to store the ownership vouchers.
       When using this option you must set `Owner` as the DB type as
-      shown below:
+      shown below as well as a connection url (including username/password/port if needed):
       ```
       ownership_voucher_store_driver:
         Postgres:
-          Owner
+          server: Owner
+          url: postgresql://username:password@host:5432/database_name?option1=value1&option2=value2
       ```
       Please refer to the [Database management section](#database-management) on how to initialize databases.
 - `session_store_driver`: path to a directory that will hold session
@@ -551,20 +555,22 @@ Where:
       ```
     - `Sqlite`: will use a Sqlite database as the server's storage.
       When using this option you must set `Rendezvous` as the DB type as
-      shown below:
+      shown below as well as a connection url (including username/password/port if needed):
       ```
       storage_driver:
         Sqlite:
-          Rendezvous
+          server: Rendezvous
+          url: sqlite:///path/to/db/sqlite
       ```
       Please refer to the [Database management section](#database-management) on how to initialize databases.
     - `Postgres`: will use a Sqlite database as the server's storage.
       When using this option you must set `Rendezvous` as the DB type as
-      shown below:
+      shown below as well as a connection url (including username/password/port if needed):
       ```
       storage_driver:
         Postgres:
-          Rendezvous
+          server: Rendezvous
+          url: postgresql://username:password@host:5432/database_name?option1=value1&option2=value2
       ```
       Please refer to the [Database management section](#database-management) on how to initialize databases.
 - `session_store_driver`: path to a directory that will hold session
@@ -739,11 +745,6 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
    file in
    [examples/systemd](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/systemd/fdo-manufacturing-server.service).
 
-    If you are using a Sqlite or Postgres database for storage, before running
-    the server you must set the `SQLITE_MANUFACTURER_DATABASE_URL` or
-    `POSTGRES_MANUFACTURER_DATABASE_URL` environment variable with the proper
-    connection URL when using Sqlite or Postgres, respectively.
-
 ### Owner Onboarding Server
 
 1. Generate the required keys/certificates for the Owner, see [How to generate
@@ -773,11 +774,6 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
 4. Execute `fdo-owner-onboarding-server` or run it as a service, see sample
    file in [examples/systemd](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/systemd/fdo-owner-onboarding-server.service).
 
-   If you are using a Sqlite or Postgres database for storage, before running
-   the server you must set the `SQLITE_OWNER_DATABASE_URL` or
-   `POSTGRES_OWNER_DATABASE_URL` environment variable with the proper
-   connection URL when using Sqlite or Postgres, respectively.
-
 ### Rendezvous Server
 
 1. Configure `rendezvous-server.yml`, see [Configuration
@@ -790,11 +786,6 @@ Please mind how the configuration file must be specifically named (e.g. `-` VS
 
 2. Execute `fdo-rendezvous-server` or run it as a service, see sample file in
    [examples/systemd](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/systemd/fdo-rendezvous-server.service).
-
-   If you are using a Sqlite or Postgres database for storage, before running
-   the server you must set the `SQLITE_RENDEZVOUS_DATABASE_URL` or
-   `POSTGRES_RENDEZVOUS_DATABASE_URL` environment variable with the proper
-   connection URL when using Sqlite or Postgres, respectively.
 
 ### Service Info API Server
 

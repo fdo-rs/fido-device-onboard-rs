@@ -241,12 +241,6 @@ pub trait Store<OT: StoreOpenMode, K, V, MKT: MetadataLocalKey>: Send + Sync {
 mod directory;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum DBType {
-    Sqlite,
-    Postgres,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 pub enum ServerType {
     Manufacturer,
     Owner,
@@ -258,12 +252,15 @@ pub enum StoreConfig {
     #[cfg(feature = "directory")]
     Directory { path: std::path::PathBuf },
     #[cfg(feature = "db")]
-    Sqlite(ServerType),
+    Sqlite { server: ServerType, url: String },
     #[cfg(feature = "db")]
-    Postgres(ServerType),
+    Postgres { server: ServerType, url: String },
 }
 
-mod db;
+#[cfg(feature = "db")]
+mod pg;
+#[cfg(feature = "db")]
+mod sqlite;
 
 impl StoreConfig {
     pub fn initialize<OT, K, V, MKT>(&self) -> Result<Box<dyn Store<OT, K, V, MKT>>, StoreError>
@@ -278,9 +275,9 @@ impl StoreConfig {
             #[cfg(feature = "directory")]
             StoreConfig::Directory { path } => directory::initialize(path),
             #[cfg(feature = "db")]
-            StoreConfig::Sqlite(server) => db::initialize(DBType::Sqlite, server),
+            StoreConfig::Sqlite { server, url } => sqlite::initialize(server, url.clone()),
             #[cfg(feature = "db")]
-            StoreConfig::Postgres(server) => db::initialize(DBType::Postgres, server),
+            StoreConfig::Postgres { server, url } => pg::initialize(server, url.clone()),
         }
     }
 }
