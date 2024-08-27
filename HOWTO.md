@@ -458,7 +458,7 @@ report_to_rendezvous_endpoint_enabled: false
 ov_registration_period: 600
 ov_re_registration_window: 61
 bind: 0.0.0.0:8081
-service_info_api_url: "http://localhost:8089/device_info"
+service_info_api_url: "http://localhost:8083/device_info"
 service_info_api_authentication: None
 ```
 
