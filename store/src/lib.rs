@@ -4,7 +4,7 @@ use core::pin::Pin;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use fdo_data_formats::{ownershipvoucher::OwnershipVoucher, Serializable};
+use fdo_data_formats::Serializable;
 
 #[derive(Debug, Error)]
 pub enum StoreError {
@@ -190,9 +190,7 @@ pub trait Store<OT: StoreOpenMode, K, V, MKT: MetadataLocalKey>: Send + Sync {
 
     fn query_ovs_db<'life0, 'async_trait>(
         &'life0 self,
-    ) -> Pin<
-        Box<dyn Future<Output = Result<Vec<OwnershipVoucher>, StoreError>> + 'async_trait + Send>,
-    >
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<V>, StoreError>> + 'async_trait + Send>>
     where
         'life0: 'async_trait,
         Self: 'async_trait;
@@ -201,9 +199,7 @@ pub trait Store<OT: StoreOpenMode, K, V, MKT: MetadataLocalKey>: Send + Sync {
         &'life0 self,
         to2: bool,
         to0_max: i64,
-    ) -> Pin<
-        Box<dyn Future<Output = Result<Vec<OwnershipVoucher>, StoreError>> + 'async_trait + Send>,
-    >
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<V>, StoreError>> + 'async_trait + Send>>
     where
         'life0: 'async_trait,
         Self: 'async_trait;

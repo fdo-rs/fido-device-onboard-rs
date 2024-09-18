@@ -147,7 +147,7 @@ where
         Err(StoreError::MethodNotAvailable)
     }
 
-    async fn query_ovs_db(&self) -> Result<Vec<OwnershipVoucher>, StoreError> {
+    async fn query_ovs_db(&self) -> Result<Vec<V>, StoreError> {
         Err(StoreError::MethodNotAvailable)
     }
 
@@ -155,7 +155,7 @@ where
         &self,
         _to2: bool,
         _to0_max: i64,
-    ) -> Result<Vec<OwnershipVoucher>, StoreError> {
+    ) -> Result<Vec<V>, StoreError> {
         Err(StoreError::MethodNotAvailable)
     }
 
@@ -331,7 +331,7 @@ where
         Err(StoreError::MethodNotAvailable)
     }
 
-    async fn query_ovs_db(&self) -> Result<Vec<OwnershipVoucher>, StoreError> {
+    async fn query_ovs_db(&self) -> Result<Vec<V>, StoreError> {
         let mut ret = vec![];
         let conn = &mut self
             .connection_pool
@@ -348,11 +348,9 @@ where
             ))
         })?;
         for db_ov in db_ovs {
-            ret.push(
-                OwnershipVoucher::from_pem_or_raw(&db_ov.contents).map_err(|e| {
-                    StoreError::Unspecified(format!("Error parsing OV contents from DB: {e:?}"))
-                })?,
-            );
+            ret.push(V::deserialize_data(&db_ov.contents).map_err(|e| {
+                StoreError::Unspecified(format!("Error deserializing value: {e:?}"))
+            })?);
         }
         Ok(ret)
     }
@@ -361,7 +359,7 @@ where
         &self,
         to2: bool,
         to0_max: i64,
-    ) -> Result<Vec<OwnershipVoucher>, StoreError> {
+    ) -> Result<Vec<V>, StoreError> {
         let mut ret = vec![];
         let conn = &mut self
             .connection_pool
@@ -376,11 +374,9 @@ where
             ))
         })?;
         for db_ov in db_ovs {
-            ret.push(
-                OwnershipVoucher::from_pem_or_raw(&db_ov.contents).map_err(|e| {
-                    StoreError::Unspecified(format!("Error parsing OV contents from DB: {e:?}"))
-                })?,
-            );
+            ret.push(V::deserialize_data(&db_ov.contents).map_err(|e| {
+                StoreError::Unspecified(format!("Error deserializing value: {e:?}"))
+            })?);
         }
         Ok(ret)
     }
@@ -526,7 +522,7 @@ where
         Err(StoreError::MethodNotAvailable)
     }
 
-    async fn query_ovs_db(&self) -> Result<Vec<OwnershipVoucher>, StoreError> {
+    async fn query_ovs_db(&self) -> Result<Vec<V>, StoreError> {
         Err(StoreError::MethodNotAvailable)
     }
 
@@ -534,7 +530,7 @@ where
         &self,
         _to2: bool,
         _to0_max: i64,
-    ) -> Result<Vec<OwnershipVoucher>, StoreError> {
+    ) -> Result<Vec<V>, StoreError> {
         Err(StoreError::MethodNotAvailable)
     }
 
