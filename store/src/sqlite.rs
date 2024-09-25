@@ -86,6 +86,24 @@ where
     V: Serializable + Send + Sync + Clone + 'static,
     MKT: crate::MetadataLocalKey + 'static,
 {
+    async fn load_all_data(&self) -> Result<Vec<V>, StoreError> {
+        let conn = &mut self
+            .connection_pool
+            .get()
+            .expect("Couldn't establish a connection");
+        let entries =
+            fdo_db::sqlite::SqliteManufacturerDB::get_all_ovs(conn).expect("Error selecting OVs");
+        let mut items = Vec::<V>::new();
+        for entry in entries {
+            items.push(
+                V::deserialize_from_reader(&mut &entry.contents[..]).map_err(|e| {
+                    StoreError::Unspecified(format!("Error deserializing value: {e:?}"))
+                })?,
+            );
+        }
+        Ok(items)
+    }
+
     async fn load_data(&self, key: &K) -> Result<Option<V>, StoreError> {
         let conn = &mut self
             .connection_pool
@@ -243,6 +261,24 @@ where
     V: Serializable + Send + Sync + Clone + 'static,
     MKT: crate::MetadataLocalKey + 'static,
 {
+    async fn load_all_data(&self) -> Result<Vec<V>, StoreError> {
+        let conn = &mut self
+            .connection_pool
+            .get()
+            .expect("Couldn't establish a connection");
+        let entries =
+            fdo_db::sqlite::SqliteOwnerDB::get_all_ovs(conn).expect("Error selecting OVs");
+        let mut items = Vec::<V>::new();
+        for entry in entries {
+            items.push(
+                V::deserialize_from_reader(&mut &entry.contents[..]).map_err(|e| {
+                    StoreError::Unspecified(format!("Error deserializing value: {e:?}"))
+                })?,
+            );
+        }
+        Ok(items)
+    }
+
     async fn load_data(&self, key: &K) -> Result<Option<V>, StoreError> {
         let conn = &mut self
             .connection_pool
@@ -461,6 +497,24 @@ where
     V: Serializable + Send + Sync + Clone + 'static,
     MKT: crate::MetadataLocalKey + 'static,
 {
+    async fn load_all_data(&self) -> Result<Vec<V>, StoreError> {
+        let conn = &mut self
+            .connection_pool
+            .get()
+            .expect("Couldn't establish a connection");
+        let entries =
+            fdo_db::sqlite::SqliteRendezvousDB::get_all_ovs(conn).expect("Error selecting OVs");
+        let mut items = Vec::<V>::new();
+        for entry in entries {
+            items.push(
+                V::deserialize_from_reader(&mut &entry.contents[..]).map_err(|e| {
+                    StoreError::Unspecified(format!("Error deserializing value: {e:?}"))
+                })?,
+            );
+        }
+        Ok(items)
+    }
+
     async fn load_data(&self, key: &K) -> Result<Option<V>, StoreError> {
         let conn = &mut self
             .connection_pool

@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::fs::{self, File};
+use std::io;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -206,6 +207,27 @@ where
     V: Serializable + Send + Sync + Clone + 'static,
     MKT: crate::MetadataLocalKey + 'static,
 {
+    async fn load_all_data(&self) -> Result<Vec<V>, StoreError> {
+        let entries = fs::read_dir(&self.directory)
+            .map_err(|e| StoreError::Unspecified(format!("Error reading store directory: {e:?}")))?
+            .map(|res| res.map(|e| e.path()))
+            .collect::<Result<Vec<_>, io::Error>>()
+            .map_err(|e| {
+                StoreError::Unspecified(format!("Error collecting store directory entries: {e:?}"))
+            })?;
+        let mut items = Vec::<V>::new();
+        for entry in entries {
+            let file = match File::open(&entry) {
+                Err(e) => return Err(StoreError::Unspecified(format!("Error opening file: {e}"))),
+                Ok(f) => f,
+            };
+            items.push(V::deserialize_from_reader(&file).map_err(|e| {
+                StoreError::Unspecified(format!("Error deserializing value: {e:?}"))
+            })?);
+        }
+        Ok(items)
+    }
+
     async fn load_data(&self, key: &K) -> Result<Option<V>, StoreError> {
         let path = self.get_path(key);
         log::trace!("Attempting to load data from {}", path.display());

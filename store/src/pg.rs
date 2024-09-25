@@ -86,6 +86,24 @@ where
     V: Serializable + Send + Sync + Clone + 'static,
     MKT: crate::MetadataLocalKey + 'static,
 {
+    async fn load_all_data(&self) -> Result<Vec<V>, StoreError> {
+        let conn = &mut self
+            .connection_pool
+            .get()
+            .expect("Couldn't establish a connection");
+        let entries = fdo_db::postgres::PostgresManufacturerDB::get_all_ovs(conn)
+            .expect("Error selecting OVs");
+        let mut items = Vec::<V>::new();
+        for entry in entries {
+            items.push(
+                V::deserialize_from_reader(&mut &entry.contents[..]).map_err(|e| {
+                    StoreError::Unspecified(format!("Error deserializing value: {e:?}"))
+                })?,
+            );
+        }
+        Ok(items)
+    }
+
     async fn load_data(&self, key: &K) -> Result<Option<V>, StoreError> {
         let conn = &mut self
             .connection_pool
@@ -234,6 +252,9 @@ where
     }
 }
 
+// TODO: this whole implementation uses OwnershipVoucher but the store interface
+// has been made to work with different objects (generics indeed). Think about Sessions too
+// This has to be changed to work with everything, like the directory store.
 #[async_trait]
 impl<OT, K, V, MKT> Store<OT, K, V, MKT> for PostgresOwnerStore<K, V>
 where
@@ -242,6 +263,24 @@ where
     V: Serializable + Send + Sync + Clone + 'static,
     MKT: crate::MetadataLocalKey + 'static,
 {
+    async fn load_all_data(&self) -> Result<Vec<V>, StoreError> {
+        let conn = &mut self
+            .connection_pool
+            .get()
+            .expect("Couldn't establish a connection");
+        let entries =
+            fdo_db::postgres::PostgresOwnerDB::get_all_ovs(conn).expect("Error selecting OVs");
+        let mut items = Vec::<V>::new();
+        for entry in entries {
+            items.push(
+                V::deserialize_from_reader(&mut &entry.contents[..]).map_err(|e| {
+                    StoreError::Unspecified(format!("Error deserializing value: {e:?}"))
+                })?,
+            );
+        }
+        Ok(items)
+    }
+
     async fn load_data(&self, key: &K) -> Result<Option<V>, StoreError> {
         let conn = &mut self
             .connection_pool
@@ -464,6 +503,24 @@ where
     V: Serializable + Send + Sync + Clone + 'static,
     MKT: crate::MetadataLocalKey + 'static,
 {
+    async fn load_all_data(&self) -> Result<Vec<V>, StoreError> {
+        let conn = &mut self
+            .connection_pool
+            .get()
+            .expect("Couldn't establish a connection");
+        let entries =
+            fdo_db::postgres::PostgresRendezvousDB::get_all_ovs(conn).expect("Error selecting OVs");
+        let mut items = Vec::<V>::new();
+        for entry in entries {
+            items.push(
+                V::deserialize_from_reader(&mut &entry.contents[..]).map_err(|e| {
+                    StoreError::Unspecified(format!("Error deserializing value: {e:?}"))
+                })?,
+            );
+        }
+        Ok(items)
+    }
+
     async fn load_data(&self, key: &K) -> Result<Option<V>, StoreError> {
         let conn = &mut self
             .connection_pool
