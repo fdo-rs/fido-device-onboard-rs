@@ -445,10 +445,7 @@ fn initialize_device(args: &InitializeDeviceArguments) -> Result<(), Error> {
     fs::write(&args.ownershipvoucher_out, ov).context("Error writing ownership voucher")?;
     fs::write(&args.device_credential_out, devcred).context("Error writing device credential")?;
 
-    println!(
-        "Created ownership voucher for device {}",
-        device_guid.to_string()
-    );
+    println!("Created ownership voucher for device {}", device_guid);
 
     Ok(())
 }
@@ -488,7 +485,7 @@ fn dump_voucher(args: &DumpOwnershipVoucherArguments) -> Result<(), Error> {
 
     println!("Header:");
     println!("\tProtocol Version: {}", ov_header.protocol_version());
-    println!("\tDevice GUID: {}", ov_header.guid().to_string());
+    println!("\tDevice GUID: {}", ov_header.guid());
     println!("\tRendezvous Info:");
     for rv_entry in ov_header.rendezvous_info().values() {
         println!("\t\t- {rv_entry:?}");
@@ -551,7 +548,7 @@ fn dump_devcred(args: &DumpDeviceCredentialArguments) -> Result<(), Error> {
     println!("Active: {}", dc.active);
     println!("Protocol Version: {}", dc.protver);
     println!("Device Info: {}", dc.device_info);
-    println!("Device GUID: {}", dc.guid.to_string());
+    println!("Device GUID: {}", dc.guid);
     println!("Rendezvous Info:");
     for rv_entry in dc.rvinfo.values() {
         println!("\t- {rv_entry:?}");
@@ -647,14 +644,12 @@ fn export_manufacturer_vouchers(args: &ExportManufacturerVouchersArguments) -> R
             // export single
             let db_ov = match args.db_type {
                 DBType::Sqlite => {
-                    env::set_var("SQLITE_MANUFACTURER_DATABASE_URL", &args.db_url);
-                    let pool = SqliteManufacturerDB::get_conn_pool();
+                    let pool = SqliteManufacturerDB::get_conn_pool(args.db_url.clone());
                     let conn = &mut pool.get()?;
                     SqliteManufacturerDB::get_ov(guid, conn)?
                 }
                 DBType::Postgres => {
-                    env::set_var("POSTGRES_MANUFACTURER_DATABASE_URL", &args.db_url);
-                    let pool = PostgresManufacturerDB::get_conn_pool();
+                    let pool = PostgresManufacturerDB::get_conn_pool(args.db_url.clone());
                     let conn = &mut pool.get()?;
                     PostgresManufacturerDB::get_ov(guid, conn)?
                 }
@@ -666,14 +661,12 @@ fn export_manufacturer_vouchers(args: &ExportManufacturerVouchersArguments) -> R
             // export all
             let db_ovs = match args.db_type {
                 DBType::Sqlite => {
-                    env::set_var("SQLITE_MANUFACTURER_DATABASE_URL", &args.db_url);
-                    let pool = SqliteManufacturerDB::get_conn_pool();
+                    let pool = SqliteManufacturerDB::get_conn_pool(args.db_url.clone());
                     let conn = &mut pool.get()?;
                     SqliteManufacturerDB::get_all_ovs(conn)?
                 }
                 DBType::Postgres => {
-                    env::set_var("POSTGRES_MANUFACTURER_DATABASE_URL", &args.db_url);
-                    let pool = PostgresManufacturerDB::get_conn_pool();
+                    let pool = PostgresManufacturerDB::get_conn_pool(args.db_url.clone());
                     let conn = &mut pool.get()?;
                     PostgresManufacturerDB::get_all_ovs(conn)?
                 }
@@ -721,14 +714,13 @@ fn import_ownership_vouchers(args: &ImportOwnershipVouchersArguments) -> Result<
             };
             let ret = match args.db_type {
                 DBType::Postgres => {
-                    env::set_var("POSTGRES_OWNER_DATABASE_URL", &args.db_url);
-                    let pool = PostgresOwnerDB::get_conn_pool();
+                    let pool = PostgresOwnerDB::get_conn_pool(args.db_url.clone());
                     let conn = &mut match pool.get() {
                         Ok(val) => val,
                         Err(e) => {
                             error_buff.push(format!(
                                 "Error {e} getting a connection from the DB pool with OV {} from path {:?}",
-                                ov.header().guid().to_string(),
+                                ov.header().guid(),
                                 &ov_path
                             ));
                             continue;
@@ -737,14 +729,13 @@ fn import_ownership_vouchers(args: &ImportOwnershipVouchersArguments) -> Result<
                     PostgresOwnerDB::insert_ov(&ov, None, None, conn)
                 }
                 DBType::Sqlite => {
-                    env::set_var("SQLITE_OWNER_DATABASE_URL", &args.db_url);
-                    let pool = SqliteOwnerDB::get_conn_pool();
+                    let pool = SqliteOwnerDB::get_conn_pool(args.db_url.clone());
                     let conn = &mut match pool.get() {
                         Ok(val) => val,
                         Err(e) => {
                             error_buff.push(format!(
                                 "Error {e} getting a connection from the DB pool with OV {} from path {:?}",
-                                ov.header().guid().to_string(),
+                                ov.header().guid(),
                                 &ov_path
                             ));
                             continue;
@@ -757,7 +748,7 @@ fn import_ownership_vouchers(args: &ImportOwnershipVouchersArguments) -> Result<
                 error_buff.push(format!(
                     "Error {:?} inserting OV {} from path {:?}",
                     ret.err(),
-                    ov.header().guid().to_string(),
+                    ov.header().guid(),
                     &ov_path
                 ));
             }
@@ -778,14 +769,12 @@ fn import_ownership_vouchers(args: &ImportOwnershipVouchersArguments) -> Result<
         let ov = OwnershipVoucher::from_pem_or_raw(&content)?;
         match args.db_type {
             DBType::Postgres => {
-                env::set_var("POSTGRES_OWNER_DATABASE_URL", &args.db_url);
-                let pool = PostgresOwnerDB::get_conn_pool();
+                let pool = PostgresOwnerDB::get_conn_pool(args.db_url.clone());
                 let conn = &mut pool.get()?;
                 PostgresOwnerDB::insert_ov(&ov, None, None, conn)?;
             }
             DBType::Sqlite => {
-                env::set_var("SQLITE_OWNER_DATABASE_URL", &args.db_url);
-                let pool = SqliteOwnerDB::get_conn_pool();
+                let pool = SqliteOwnerDB::get_conn_pool(args.db_url.clone());
                 let conn = &mut pool.get()?;
                 SqliteOwnerDB::insert_ov(&ov, None, None, conn)?;
             }

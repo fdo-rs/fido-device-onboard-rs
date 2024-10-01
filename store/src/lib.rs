@@ -4,7 +4,7 @@ use core::pin::Pin;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use fdo_data_formats::{ownershipvoucher::OwnershipVoucher, Serializable};
+use fdo_data_formats::Serializable;
 
 #[derive(Debug, Error)]
 pub enum StoreError {
@@ -144,6 +144,14 @@ where
 type QueryResult<V, MKT> = Result<Box<dyn FilterType<V, MKT>>, StoreError>;
 
 pub trait Store<OT: StoreOpenMode, K, V, MKT: MetadataLocalKey>: Send + Sync {
+    fn load_all_data<'life0, 'async_trait>(
+        &'life0 self,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<V>, StoreError>> + 'async_trait + Send>>
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+        OT: Readable;
+
     fn load_data<'life0, 'life1, 'async_trait>(
         &'life0 self,
         key: &'life1 K,
@@ -190,9 +198,16 @@ pub trait Store<OT: StoreOpenMode, K, V, MKT: MetadataLocalKey>: Send + Sync {
 
     fn query_ovs_db<'life0, 'async_trait>(
         &'life0 self,
-    ) -> Pin<
-        Box<dyn Future<Output = Result<Vec<OwnershipVoucher>, StoreError>> + 'async_trait + Send>,
-    >
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<V>, StoreError>> + 'async_trait + Send>>
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait;
+
+    fn query_ovs_db_to2_performed_to0_less_than<'life0, 'async_trait>(
+        &'life0 self,
+        to2: bool,
+        to0_max: i64,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<V>, StoreError>> + 'async_trait + Send>>
     where
         'life0: 'async_trait,
         Self: 'async_trait;
@@ -230,12 +245,6 @@ pub trait Store<OT: StoreOpenMode, K, V, MKT: MetadataLocalKey>: Send + Sync {
 mod directory;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum DBType {
-    Sqlite,
-    Postgres,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 pub enum ServerType {
     Manufacturer,
     Owner,
@@ -247,12 +256,15 @@ pub enum StoreConfig {
     #[cfg(feature = "directory")]
     Directory { path: std::path::PathBuf },
     #[cfg(feature = "db")]
-    Sqlite(ServerType),
+    Sqlite { server: ServerType, url: String },
     #[cfg(feature = "db")]
-    Postgres(ServerType),
+    Postgres { server: ServerType, url: String },
 }
 
-mod db;
+#[cfg(feature = "db")]
+mod pg;
+#[cfg(feature = "db")]
+mod sqlite;
 
 impl StoreConfig {
     pub fn initialize<OT, K, V, MKT>(&self) -> Result<Box<dyn Store<OT, K, V, MKT>>, StoreError>
@@ -267,9 +279,9 @@ impl StoreConfig {
             #[cfg(feature = "directory")]
             StoreConfig::Directory { path } => directory::initialize(path),
             #[cfg(feature = "db")]
-            StoreConfig::Sqlite(server) => db::initialize(DBType::Sqlite, server),
+            StoreConfig::Sqlite { server, url } => sqlite::initialize(server, url.clone()),
             #[cfg(feature = "db")]
-            StoreConfig::Postgres(server) => db::initialize(DBType::Postgres, server),
+            StoreConfig::Postgres { server, url } => pg::initialize(server, url.clone()),
         }
     }
 }

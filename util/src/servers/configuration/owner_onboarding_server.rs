@@ -15,7 +15,7 @@ pub struct OwnerOnboardingServerSettings {
     pub session_store_driver: StoreConfig,
 
     // Trusted keys
-    pub trusted_device_keys_path: AbsolutePathBuf,
+    pub trusted_device_keys_path: Option<AbsolutePathBuf>,
 
     // Our private owner key
     pub owner_private_key_path: AbsolutePathBuf,
@@ -32,4 +32,12 @@ pub struct OwnerOnboardingServerSettings {
     pub owner_addresses: Vec<RemoteConnection>,
 
     pub report_to_rendezvous_endpoint_enabled: bool,
+
+    pub ov_registration_period: Option<u32>,
+    pub ov_re_registration_window: Option<u32>,
 }
+
+// 10 minutes
+pub const DEFAULT_REGISTRATION_PERIOD: u32 = 600;
+// ~1 minute
+pub const DEFAULT_RE_REGISTRATION_WINDOW: u32 = 61;

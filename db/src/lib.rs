@@ -20,10 +20,7 @@ where
     T: diesel::r2d2::R2D2Connection + 'static,
 {
     /// Gets a connection pool
-    fn get_conn_pool() -> Pool<ConnectionManager<T>>;
-
-    /// Gets a connection to the db
-    fn get_connection() -> T;
+    fn get_conn_pool(url: String) -> Pool<ConnectionManager<T>>;
 
     /// Inserts an OV
     fn insert_ov(ov: &OV, ttl: Option<i64>, conn: &mut T) -> Result<()>;
@@ -51,16 +48,16 @@ where
     T: diesel::r2d2::R2D2Connection + 'static,
 {
     /// Gets a connection pool
-    fn get_conn_pool() -> Pool<ConnectionManager<T>>;
-
-    /// Gets a connection to the db
-    fn get_connection() -> T;
+    fn get_conn_pool(url: String) -> Pool<ConnectionManager<T>>;
 
     /// Inserts an OV
     fn insert_ov(ov: &OV, to2: Option<bool>, to0: Option<i64>, conn: &mut T) -> Result<()>;
 
     /// Gets an OV
     fn get_ov(guid: &str, conn: &mut T) -> Result<OwnerOV>;
+
+    /// Returns all the OVs in the DB
+    fn get_all_ovs(conn: &mut T) -> Result<Vec<OwnerOV>>;
 
     /// Deletes an OV
     fn delete_ov(guid: &str, conn: &mut T) -> Result<()>;
@@ -99,16 +96,16 @@ where
     T: diesel::r2d2::R2D2Connection + 'static,
 {
     /// Gets a connection pool
-    fn get_conn_pool() -> Pool<ConnectionManager<T>>;
-
-    /// Gets a connection to the db
-    fn get_connection() -> T;
+    fn get_conn_pool(url: String) -> Pool<ConnectionManager<T>>;
 
     /// Inserts an OV
     fn insert_ov(ov: &StoredItem, guid: &str, ttl: Option<i64>, conn: &mut T) -> Result<()>;
 
     /// Gets an OV
     fn get_ov(guid: &str, conn: &mut T) -> Result<RendezvousOV>;
+
+    /// Returns all the OVs in the DB
+    fn get_all_ovs(conn: &mut T) -> Result<Vec<RendezvousOV>>;
 
     /// Deletes an OV
     fn delete_ov(guid: &str, conn: &mut T) -> Result<()>;

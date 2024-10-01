@@ -13,8 +13,11 @@ pub struct RendezvousServerSettings {
     #[serde(with = "serde_yaml::with::singleton_map")]
     pub session_store_driver: StoreConfig,
 
-    // Trusted keys
+    // Trusted manufacturer public keys
     pub trusted_manufacturer_keys_path: Option<AbsolutePathBuf>,
+
+    // Trusted CA certs for device cert chain verification
+    pub trusted_device_keys_path: Option<AbsolutePathBuf>,
 
     // Other info
     pub max_wait_seconds: Option<u32>,

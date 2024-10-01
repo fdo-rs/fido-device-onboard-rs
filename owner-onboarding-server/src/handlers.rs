@@ -55,7 +55,7 @@ pub(super) async fn hello_device(
             return Err(Error::new(
                 ErrorCode::MessageBodyError,
                 messages::v11::to2::HelloDevice::message_type(),
-                "Invcalid signature info",
+                "Invalid signature info",
             )
             .into())
         }
@@ -64,7 +64,7 @@ pub(super) async fn hello_device(
         return Err(Error::new(
             ErrorCode::MessageBodyError,
             messages::v11::to2::HelloDevice::message_type(),
-            "Invcalid signature info",
+            "Invalid signature info",
         )
         .into());
     }
