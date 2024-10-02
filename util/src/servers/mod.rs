@@ -90,7 +90,7 @@ pub fn settings_per_device(guid: &str) -> Result<ServiceInfoSettings> {
     log::debug!("Loaded device specific config from {path_per_device_store}");
     let per_device_settings = config.try_deserialize::<ServiceInfoSettings>()?;
     log::debug!(
-        "device specific serviceinfosettings: initial_user: {:#?} username: {:#?} sshkeys {:#?} files {:#?}",
+        "device specific serviceinfosettings: initial_user: {:#?} username: {:#?} sshkeys {:#?} files {:#?} commands {:#?}",
         per_device_settings.initial_user,
         per_device_settings
             .initial_user
@@ -100,7 +100,8 @@ pub fn settings_per_device(guid: &str) -> Result<ServiceInfoSettings> {
             .initial_user
             .as_ref()
             .map(|user| &user.sshkeys),
-        per_device_settings.files
+        per_device_settings.files,
+        per_device_settings.commands
     );
     Ok(per_device_settings)
 }
