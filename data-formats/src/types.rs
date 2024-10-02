@@ -1,5 +1,6 @@
 use std::{
     convert::{TryFrom, TryInto},
+    fmt::Display,
     net::IpAddr,
     ops::Deref,
     str::FromStr,
@@ -273,9 +274,9 @@ impl PartialEq for Nonce {
     }
 }
 
-impl ToString for Nonce {
-    fn to_string(&self) -> String {
-        hex::encode(&self.0)
+impl Display for Nonce {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        hex::encode(&self.0).fmt(f)
     }
 }
 
@@ -339,9 +340,9 @@ impl FromStr for Guid {
     }
 }
 
-impl ToString for Guid {
-    fn to_string(&self) -> String {
-        self.as_uuid().to_string()
+impl Display for Guid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.as_uuid().fmt(f)
     }
 }
 
@@ -1276,13 +1277,13 @@ impl FromStr for KexSuite {
     }
 }
 
-impl ToString for KexSuite {
-    fn to_string(&self) -> String {
+impl Display for KexSuite {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            KexSuite::Ecdh256 => "ECDH256".to_string(),
-            KexSuite::Ecdh384 => "ECDH384".to_string(),
-            KexSuite::DhkexId14 => "DHKEXid14".to_string(),
-            KexSuite::DhkexId15 => "DHKEXid15".to_string(),
+            KexSuite::Ecdh256 => write!(f, "ECDH256"),
+            KexSuite::Ecdh384 => write!(f, "ECDH384"),
+            KexSuite::DhkexId14 => write!(f, "DHKEXid14"),
+            KexSuite::DhkexId15 => write!(f, "DHKEXid15"),
         }
     }
 }
@@ -1455,11 +1456,11 @@ impl FromStr for CipherSuite {
     }
 }
 
-impl ToString for CipherSuite {
-    fn to_string(&self) -> String {
+impl Display for CipherSuite {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CipherSuite::A128Gcm => "A128GCM".to_string(),
-            CipherSuite::A256Gcm => "A256GCM".to_string(),
+            CipherSuite::A128Gcm => write!(f, "A128GCM"),
+            CipherSuite::A256Gcm => write!(f, "A256GCM"),
         }
     }
 }

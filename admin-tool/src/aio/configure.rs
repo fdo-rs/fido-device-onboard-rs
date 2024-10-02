@@ -7,6 +7,8 @@ use std::{collections::BTreeMap, net::IpAddr, path::Path};
 
 use fdo_store::StoreConfig;
 use fdo_util::servers::configuration::{
+    owner_onboarding_server::DEFAULT_REGISTRATION_PERIOD,
+    owner_onboarding_server::DEFAULT_RE_REGISTRATION_WINDOW,
     serviceinfo_api_server::ServiceInfoSettings, AbsolutePathBuf, Bind,
 };
 
@@ -46,6 +48,11 @@ pub(super) struct Configuration {
     #[clap(long)]
     pub manufacturing_use_secp256r1: bool,
 
+    #[clap(long)]
+    ov_registration_period: Option<u32>,
+    #[clap(long)]
+    ov_re_registration_window: Option<u32>,
+
     /// The hostname or IP address that clients should use to connect to the AIO components
     /// (if not specified, will be all IP addresses of the system).
     /// Note that this is not equal to the listen address, as the AIO components will always
@@ -57,6 +64,7 @@ pub(super) struct Configuration {
     // and generate the intermediate data
     #[clap(skip)]
     pub contact_addresses: Vec<ContactAddress>,
+
     #[clap(skip)]
     pub serviceinfo_api_auth_token: String,
     #[clap(skip)]
@@ -87,6 +95,9 @@ impl Default for Configuration {
             manufacturing_disable_key_storage_filesystem: false,
             manufacturing_disable_key_storage_tpm: true,
             manufacturing_use_secp256r1: false,
+
+            ov_registration_period: Some(DEFAULT_REGISTRATION_PERIOD),
+            ov_re_registration_window: Some(DEFAULT_RE_REGISTRATION_WINDOW),
 
             contact_hostname: None,
 
@@ -208,6 +219,11 @@ fn generate_configs(aio_dir: &Path, config_args: &Configuration) -> Result<(), E
                     .expect("Failed to build absolute path"),
             ),
 
+            trusted_device_keys_path: Some(
+                AbsolutePathBuf::new(aio_dir.join("keys").join("device_ca_cert.pem"))
+                    .expect("Failed to build absolute path"),
+            ),
+
             max_wait_seconds: None,
 
             bind: get_bind(config_args.listen_port_rendezvous_server)?,
@@ -314,10 +330,10 @@ fn generate_configs(aio_dir: &Path, config_args: &Configuration) -> Result<(), E
             ownership_voucher_store_driver: StoreConfig::Directory {
                 path: aio_dir.join("stores").join("owner_vouchers"),
             },
-            trusted_device_keys_path: AbsolutePathBuf::new(
-                aio_dir.join("keys").join("device_ca_cert.pem"),
-            )
-            .unwrap(),
+            trusted_device_keys_path: Some(
+                AbsolutePathBuf::new(aio_dir.join("keys").join("device_ca_cert.pem"))
+                    .expect("Failed to build absolute path"),
+            ),
             owner_private_key_path: AbsolutePathBuf::new(
                 aio_dir.join("keys").join("owner_key.der"),
             )
@@ -339,6 +355,9 @@ fn generate_configs(aio_dir: &Path, config_args: &Configuration) -> Result<(), E
                 .generate_owner_addresses()
                 .context("Error generating owner addresses")?,
             report_to_rendezvous_endpoint_enabled: true,
+
+            ov_registration_period: config_args.ov_registration_period,
+            ov_re_registration_window: config_args.ov_re_registration_window,
         };
     write_config(
         aio_dir,

@@ -15,6 +15,8 @@ POSTGRES_USERNAME=postgres
 POSTGRES_PASSWORD=foobar
 POSTGRES_DB=postgres
 
+DB_URL="postgresql://${POSTGRES_USERNAME}:${POSTGRES_PASSWORD}@${POSTGRES_IP}/${POSTGRES_DB}"
+
 # Prepare stage repo network
 greenprint "🔧 Prepare stage repo network"
 sudo podman network inspect edge >/dev/null 2>&1 || sudo podman network create --driver=bridge --subnet=192.168.200.0/24 --gateway=192.168.200.254 edge
@@ -51,13 +53,13 @@ greenprint "🔧 Set servers store driver to postgres"
 sudo pip3 install yq
 # Configure manufacturing server db
 yq -yi 'del(.ownership_voucher_store_driver.Directory)' test/fdo/manufacturing-server.yml
-yq -yi '.ownership_voucher_store_driver += {"Postgres": "Manufacturer"}' test/fdo/manufacturing-server.yml
+yq -yi ".ownership_voucher_store_driver += {Postgres: {server: \"Manufacturer\", url: \"${DB_URL}\"}}" test/fdo/manufacturing-server.yml
 # Configure owner onboarding server db
 yq -yi 'del(.ownership_voucher_store_driver.Directory)' test/fdo/owner-onboarding-server.yml
-yq -yi '.ownership_voucher_store_driver += {"Postgres": "Owner"}' test/fdo/owner-onboarding-server.yml
+yq -yi ".ownership_voucher_store_driver += {Postgres: {server: \"Owner\", url: \"${DB_URL}\"}}" test/fdo/owner-onboarding-server.yml
 # Configure rendezvous server db
 yq -yi 'del(.storage_driver.Directory)' test/fdo/rendezvous-server.yml
-yq -yi '.storage_driver += {"Postgres": "Rendezvous"}' test/fdo/rendezvous-server.yml
+yq -yi ".storage_driver += {Postgres: {server: \"Rendezvous\", url: \"${DB_URL}\"}}" test/fdo/rendezvous-server.yml
 
 # Prepare postgres db init sql script
 greenprint "🔧 Prepare postgres db init sql script"

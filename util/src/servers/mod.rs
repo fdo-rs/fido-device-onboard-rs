@@ -74,10 +74,10 @@ pub fn settings_per_device(guid: &str) -> Result<ServiceInfoSettings> {
             path.push(file_name);
             path.to_string_lossy().into_owned()
         }
-        StoreConfig::Sqlite(_) => {
+        StoreConfig::Sqlite { .. } => {
             bail!("Per-device settings with sqlite database not implemented");
         }
-        StoreConfig::Postgres(_) => {
+        StoreConfig::Postgres { .. } => {
             bail!("Per-device settings with Postgres database not implemented");
         }
     };
