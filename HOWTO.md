@@ -970,7 +970,7 @@ still required to be set by the user (`DI_SIGN_KEY_PATH`, `DI_HMAC_KEY_PATH`).
   Where:
   - `initial_user`: the initial user from the per-device serviceinfo configuration will be chosen over the base serviceinfo configuration, if exists.
   - `files`: add additional [files](#per-device-files) to be written next to the base files.
-  - `commands`: unhandled
+  - `commands`: add additional commands to be executed after the base commands.
   - `diskencryption_clevis`: unhandled
   - `additional_serviceinfo`: unhandled
   - `after_onboarding_reboot`: unhandled
