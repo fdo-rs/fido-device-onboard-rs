@@ -10,7 +10,7 @@ ConditionPathExists=/etc/manufacturing-client-config
 Requires=dev-disk-by\x2dlabel-boot.device
 
 OnFailure=emergency.target
-OnFailureJobMode=replace-irreversibly
+OnFailureJobMode=isolate
 
 [Service]
 Type=oneshot
