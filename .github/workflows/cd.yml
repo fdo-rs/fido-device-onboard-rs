@@ -1,13 +1,4 @@
 on:
-  push:
-    branches:
-    - main
-    - "*.*.x"
-    tags:
-    - v*
-  schedule:
-    - cron: '0 0 * * *'
-
 name: Continuous Delivery
 
 jobs:
