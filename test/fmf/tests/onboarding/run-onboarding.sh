@@ -172,7 +172,9 @@ export_import_vouchers() {
   MANUFACTURER_EXPORT_DIR="${STORES_DIR}/manufacturer_export_dir"
   rm -rf "${MANUFACTURER_EXPORT_DIR}"
   mkdir -p "${MANUFACTURER_EXPORT_DIR}"
-  fdo-owner-tool export-manufacturer-vouchers "$(tr [:upper:] [:lower:] <<< ${OV_STORE_DRIVER})" "${DATABASE_URL}" "${MANUFACTURER_EXPORT_DIR}"
+  fdo-owner-tool export-manufacturer-vouchers "http://${PRIMARY_IP}:8080" --path "${MANUFACTURER_EXPORT_DIR}"
+  sudo tar xvf "${MANUFACTURER_EXPORT_DIR}"/export.tar -C "${MANUFACTURER_EXPORT_DIR}"
+  sudo rm -rf "${MANUFACTURER_EXPORT_DIR}"/export.tar
   fdo-owner-tool import-ownership-vouchers "$(tr [:upper:] [:lower:] <<< ${OV_STORE_DRIVER})" "${DATABASE_URL}" "${MANUFACTURER_EXPORT_DIR}"
 }
 

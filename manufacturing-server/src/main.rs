@@ -273,9 +273,52 @@ async fn main() -> Result<()> {
     });
 
     // Initialize handlers
-    let hello = warp::get().map(|| "Hello from the manufacturing server");
+    let hello = warp::path::end().map(|| "Hello from the manufacturing server");
     let ud = user_data.clone();
-    let handler_export = warp::get()
+    let handler_ovs = warp::path!("ov" / String)
+        .map(move |guid| (guid, ud.clone()))
+        .and_then(
+            |(guid, ud): (String, Arc<ManufacturingServiceUD>)| async move {
+                let typed_guid = match Guid::from_str(&guid) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        return Err(Rejection::from(fdo_http_wrapper::server::Error::new(
+                            ErrorCode::InternalServerError,
+                            fdo_data_formats::constants::MessageType::Invalid,
+                            &e.to_string(),
+                        )))
+                    }
+                };
+                let ov = match ud.ownership_voucher_store.load_data(&typed_guid).await {
+                    Ok(ov) => ov.unwrap(),
+                    Err(e) => {
+                        return Err(Rejection::from(fdo_http_wrapper::server::Error::new(
+                            ErrorCode::InternalServerError,
+                            fdo_data_formats::constants::MessageType::Invalid,
+                            &format!("Error loading ownership voucher with guid {}: {}", guid, e),
+                        )))
+                    }
+                };
+                let ov_pem = match ov.to_pem() {
+                    Ok(v) => v,
+                    Err(e) => {
+                        return Err(Rejection::from(fdo_http_wrapper::server::Error::new(
+                            ErrorCode::InternalServerError,
+                            fdo_data_formats::constants::MessageType::Invalid,
+                            &format!("Error converting ownership voucher to pem: {}", e),
+                        )))
+                    }
+                };
+                let mut res = Response::new(ov_pem.into());
+                res.headers_mut().insert(
+                    "Content-Type",
+                    warp::http::header::HeaderValue::from_static("application/x-pem-file"),
+                );
+                Ok(res)
+            },
+        );
+    let ud = user_data.clone();
+    let handler_export = warp::post()
         .and(warp::path("export").map(move || (ud.clone())).and_then(
             |ud: Arc<ManufacturingServiceUD>| async move {
                 match ud.ownership_voucher_store.load_all_data().await {
@@ -371,6 +414,7 @@ async fn main() -> Result<()> {
                 .or(handler_diun_provide_key),
         )
         .or(handler_export)
+        .or(handler_ovs)
         .recover(fdo_http_wrapper::server::handle_rejection)
         .with(warp::log("manufacturing-server"));
 
