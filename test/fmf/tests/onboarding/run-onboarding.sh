@@ -60,7 +60,7 @@ setup_postgresql() {
 setup_sqlite() {
   mkdir -p ${DATABASE_DIR}
   DATABASE_FILE="${DATABASE_DIR}/fido-device-onboard.db"
-  > ${DATABASE_FILE}
+  true > ${DATABASE_FILE}
   for DATABASE in ${DATABASES}; do
     sqlite3 ${DATABASE_FILE} < "${MIGRATIONS_BASE_DIR}/migrations_${DATABASE}_server_sqlite/up.sql"
   done
@@ -164,7 +164,6 @@ admin_auth_token: Va40bSkLcxwnfml1pmIuaWaOZG96mSMB6fu0xuzcueg=
 device_specific_store_driver:
   Directory:
     path: ${STORES_DIR}/serviceinfo_api_devices
-
 EOF
 }
 
@@ -175,7 +174,7 @@ export_import_vouchers() {
   fdo-owner-tool export-manufacturer-vouchers "http://${PRIMARY_IP}:8080" --path "${MANUFACTURER_EXPORT_DIR}"
   sudo tar xvf "${MANUFACTURER_EXPORT_DIR}"/export.tar -C "${MANUFACTURER_EXPORT_DIR}"
   sudo rm -rf "${MANUFACTURER_EXPORT_DIR}"/export.tar
-  fdo-owner-tool import-ownership-vouchers "$(tr [:upper:] [:lower:] <<< ${OV_STORE_DRIVER})" "${DATABASE_URL}" "${MANUFACTURER_EXPORT_DIR}"
+  fdo-owner-tool import-ownership-vouchers "$(tr "[:upper:]" "[:lower:]" <<< "${OV_STORE_DRIVER}")" "${DATABASE_URL}" "${MANUFACTURER_EXPORT_DIR}"
 }
 
 perform_no_plain_di() {
