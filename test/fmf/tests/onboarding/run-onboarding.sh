@@ -28,7 +28,7 @@ DATABASE_PASSWORD="redhat"
 [ "$DATABASE_DRIVER" != "postgresql" ] || DATABASE_URL="${DATABASE_DRIVER}://${DATABASE_USER}:${DATABASE_PASSWORD}@127.0.0.1/fdo"
 [ "$DATABASE_DRIVER" != "sqlite" ] || DATABASE_URL="${DATABASE_DRIVER}://${DATABASE_DIR}/fido-device-onboard.db"
 
-generate_keys() {
+generate_fdo_certificates() {
   ORGANIZATION="Red Hat"
   COUNTRY="US"
   VALIDITY="3650"
@@ -190,7 +190,7 @@ onboard() {
 
 [ "${OV_STORE_DRIVER}" != "Sqlite" ] || setup_sqlite
 [ "${OV_STORE_DRIVER}" != "Postgres" ] || setup_postgresql
-generate_keys
+generate_fdo_certificates
 setup_manufacturing
 setup_owner
 setup_rendezvous
