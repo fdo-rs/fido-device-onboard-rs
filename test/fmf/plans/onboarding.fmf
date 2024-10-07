@@ -6,6 +6,20 @@ execute:
 prepare:
     - how: shell
       script: dnf install -y postgresql-server sqlite
+    - how: shell
+      script: |
+        echo "Adding missing SELinux permissions"
+        tee /tmp/fdo-missing.cil <<EOF
+        (allow fdo_t etc_t (file (write)))
+        (allow fdo_t fdo_conf_t (file (append create rename setattr unlink write)))
+        (allow fdo_t fdo_var_lib_t (dir (add_name remove_name write)))
+        (allow fdo_t fdo_var_lib_t (file (create setattr unlink write)))
+        (allow fdo_t krb5_keytab_t (dir (search)))
+        (allow fdo_t postgresql_port_t (tcp_socket (name_connect)))
+        (allow fdo_t sssd_t (unix_stream_socket (connectto)))
+        (allow fdo_t sssd_var_run_t (sock_file (write)))
+        EOF
+        semodule -i /tmp/fdo-missing.cil
 provision:
     how: virtual
     memory: 4096

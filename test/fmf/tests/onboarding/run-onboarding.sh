@@ -189,57 +189,8 @@ onboard() {
   /usr/libexec/fdo/fdo-client-linuxapp
 }
 
-fix_selinux_policies() {
-  SELINUX_MODULE="fdo-db"
-  SELINUX_TE_FILE="${SELINUX_MODULE}.te"
-  SELINUX_MOD_FILE="${SELINUX_MODULE}.mod"
-  SELINUX_POLICY_FILE="${SELINUX_MODULE}.pp"
-  semodule -l | grep -q "${SELINUX_MODULE}" || (tee "${SELINUX_TE_FILE}" <<EOF
-module fdo-db 1.0;
-
-require {
-	type postgresql_port_t;
-	type fdo_conf_t;
-	type fdo_t;
-	type etc_t;
-	type krb5_keytab_t;
-	type sssd_var_run_t;
-	type fdo_var_lib_t;
-	type sssd_t;
-	class tcp_socket name_connect;
-	class dir { add_name remove_name search write };
-	class sock_file write;
-	class unix_stream_socket connectto;
-	class file { append create rename setattr unlink write };
-}
-
-#============= fdo_t ==============
-
-allow fdo_t etc_t:file write;
-
-allow fdo_t fdo_conf_t:file { append create rename setattr unlink write };
-
-allow fdo_t fdo_var_lib_t:dir { add_name remove_name write };
-
-allow fdo_t fdo_var_lib_t:file { create setattr unlink write };
-
-allow fdo_t krb5_keytab_t:dir search;
-
-allow fdo_t postgresql_port_t:tcp_socket name_connect;
-
-allow fdo_t sssd_t:unix_stream_socket connectto;
-
-allow fdo_t sssd_var_run_t:sock_file write;
-EOF
-  checkmodule -M -m -o ${SELINUX_MOD_FILE} ${SELINUX_TE_FILE}
-  semodule_package -o ${SELINUX_POLICY_FILE} -m ${SELINUX_MOD_FILE}
-  semodule -i ${SELINUX_POLICY_FILE})
-
-}
-
 [ "${OV_STORE_DRIVER}" != "Sqlite" ] || setup_sqlite
 [ "${OV_STORE_DRIVER}" != "Postgres" ] || setup_postgresql
-fix_selinux_policies
 generate_keys
 setup_manufacturing
 setup_owner
