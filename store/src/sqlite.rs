@@ -86,6 +86,24 @@ where
     V: Serializable + Send + Sync + Clone + 'static,
     MKT: crate::MetadataLocalKey + 'static,
 {
+    async fn load_all_data(&self) -> Result<Vec<V>, StoreError> {
+        let conn = &mut self
+            .connection_pool
+            .get()
+            .expect("Couldn't establish a connection");
+        let entries =
+            fdo_db::sqlite::SqliteManufacturerDB::get_all_ovs(conn).expect("Error selecting OVs");
+        let mut items = Vec::<V>::new();
+        for entry in entries {
+            items.push(
+                V::deserialize_from_reader(&mut &entry.contents[..]).map_err(|e| {
+                    StoreError::Unspecified(format!("Error deserializing value: {e:?}"))
+                })?,
+            );
+        }
+        Ok(items)
+    }
+
     async fn load_data(&self, key: &K) -> Result<Option<V>, StoreError> {
         let conn = &mut self
             .connection_pool
@@ -147,7 +165,7 @@ where
         Err(StoreError::MethodNotAvailable)
     }
 
-    async fn query_ovs_db(&self) -> Result<Vec<OwnershipVoucher>, StoreError> {
+    async fn query_ovs_db(&self) -> Result<Vec<V>, StoreError> {
         Err(StoreError::MethodNotAvailable)
     }
 
@@ -155,7 +173,7 @@ where
         &self,
         _to2: bool,
         _to0_max: i64,
-    ) -> Result<Vec<OwnershipVoucher>, StoreError> {
+    ) -> Result<Vec<V>, StoreError> {
         Err(StoreError::MethodNotAvailable)
     }
 
@@ -243,6 +261,24 @@ where
     V: Serializable + Send + Sync + Clone + 'static,
     MKT: crate::MetadataLocalKey + 'static,
 {
+    async fn load_all_data(&self) -> Result<Vec<V>, StoreError> {
+        let conn = &mut self
+            .connection_pool
+            .get()
+            .expect("Couldn't establish a connection");
+        let entries =
+            fdo_db::sqlite::SqliteOwnerDB::get_all_ovs(conn).expect("Error selecting OVs");
+        let mut items = Vec::<V>::new();
+        for entry in entries {
+            items.push(
+                V::deserialize_from_reader(&mut &entry.contents[..]).map_err(|e| {
+                    StoreError::Unspecified(format!("Error deserializing value: {e:?}"))
+                })?,
+            );
+        }
+        Ok(items)
+    }
+
     async fn load_data(&self, key: &K) -> Result<Option<V>, StoreError> {
         let conn = &mut self
             .connection_pool
@@ -331,7 +367,7 @@ where
         Err(StoreError::MethodNotAvailable)
     }
 
-    async fn query_ovs_db(&self) -> Result<Vec<OwnershipVoucher>, StoreError> {
+    async fn query_ovs_db(&self) -> Result<Vec<V>, StoreError> {
         let mut ret = vec![];
         let conn = &mut self
             .connection_pool
@@ -348,11 +384,9 @@ where
             ))
         })?;
         for db_ov in db_ovs {
-            ret.push(
-                OwnershipVoucher::from_pem_or_raw(&db_ov.contents).map_err(|e| {
-                    StoreError::Unspecified(format!("Error parsing OV contents from DB: {e:?}"))
-                })?,
-            );
+            ret.push(V::deserialize_data(&db_ov.contents).map_err(|e| {
+                StoreError::Unspecified(format!("Error deserializing value: {e:?}"))
+            })?);
         }
         Ok(ret)
     }
@@ -361,7 +395,7 @@ where
         &self,
         to2: bool,
         to0_max: i64,
-    ) -> Result<Vec<OwnershipVoucher>, StoreError> {
+    ) -> Result<Vec<V>, StoreError> {
         let mut ret = vec![];
         let conn = &mut self
             .connection_pool
@@ -376,11 +410,9 @@ where
             ))
         })?;
         for db_ov in db_ovs {
-            ret.push(
-                OwnershipVoucher::from_pem_or_raw(&db_ov.contents).map_err(|e| {
-                    StoreError::Unspecified(format!("Error parsing OV contents from DB: {e:?}"))
-                })?,
-            );
+            ret.push(V::deserialize_data(&db_ov.contents).map_err(|e| {
+                StoreError::Unspecified(format!("Error deserializing value: {e:?}"))
+            })?);
         }
         Ok(ret)
     }
@@ -465,6 +497,24 @@ where
     V: Serializable + Send + Sync + Clone + 'static,
     MKT: crate::MetadataLocalKey + 'static,
 {
+    async fn load_all_data(&self) -> Result<Vec<V>, StoreError> {
+        let conn = &mut self
+            .connection_pool
+            .get()
+            .expect("Couldn't establish a connection");
+        let entries =
+            fdo_db::sqlite::SqliteRendezvousDB::get_all_ovs(conn).expect("Error selecting OVs");
+        let mut items = Vec::<V>::new();
+        for entry in entries {
+            items.push(
+                V::deserialize_from_reader(&mut &entry.contents[..]).map_err(|e| {
+                    StoreError::Unspecified(format!("Error deserializing value: {e:?}"))
+                })?,
+            );
+        }
+        Ok(items)
+    }
+
     async fn load_data(&self, key: &K) -> Result<Option<V>, StoreError> {
         let conn = &mut self
             .connection_pool
@@ -526,7 +576,7 @@ where
         Err(StoreError::MethodNotAvailable)
     }
 
-    async fn query_ovs_db(&self) -> Result<Vec<OwnershipVoucher>, StoreError> {
+    async fn query_ovs_db(&self) -> Result<Vec<V>, StoreError> {
         Err(StoreError::MethodNotAvailable)
     }
 
@@ -534,7 +584,7 @@ where
         &self,
         _to2: bool,
         _to0_max: i64,
-    ) -> Result<Vec<OwnershipVoucher>, StoreError> {
+    ) -> Result<Vec<V>, StoreError> {
         Err(StoreError::MethodNotAvailable)
     }
 

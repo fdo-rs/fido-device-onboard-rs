@@ -117,6 +117,7 @@ async fn _handle_report_to_rendezvous(udt: &OwnerServiceUDT, ov: &OwnershipVouch
 }
 
 async fn report_to_rendezvous(udt: OwnerServiceUDT) -> Result<()> {
+    // TODO: this below (query_data vs query_ovs_db) should be abstracted into the store's Filter's query stuff
     match udt.ownership_voucher_store.query_data().await {
         Ok(mut ft) => {
             ft.neq(

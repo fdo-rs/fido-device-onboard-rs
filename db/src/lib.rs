@@ -56,6 +56,9 @@ where
     /// Gets an OV
     fn get_ov(guid: &str, conn: &mut T) -> Result<OwnerOV>;
 
+    /// Returns all the OVs in the DB
+    fn get_all_ovs(conn: &mut T) -> Result<Vec<OwnerOV>>;
+
     /// Deletes an OV
     fn delete_ov(guid: &str, conn: &mut T) -> Result<()>;
 
@@ -100,6 +103,9 @@ where
 
     /// Gets an OV
     fn get_ov(guid: &str, conn: &mut T) -> Result<RendezvousOV>;
+
+    /// Returns all the OVs in the DB
+    fn get_all_ovs(conn: &mut T) -> Result<Vec<RendezvousOV>>;
 
     /// Deletes an OV
     fn delete_ov(guid: &str, conn: &mut T) -> Result<()>;
