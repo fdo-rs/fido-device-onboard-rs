@@ -42,8 +42,7 @@ mod handlers;
 
 pub(crate) struct OwnerServiceUD {
     // Trusted keys
-    #[allow(dead_code)]
-    trusted_device_keys: X5Bag,
+    trusted_device_keys: Option<X5Bag>,
 
     // Stores
     ownership_voucher_store: Box<
@@ -90,6 +89,7 @@ async fn _handle_report_to_rendezvous(udt: &OwnerServiceUDT, ov: &OwnershipVouch
         &udt.owner_addresses,
         &udt.owner_key,
         udt.ov_registration_period,
+        &udt.trusted_device_keys,
     )
     .await
     {
@@ -117,6 +117,7 @@ async fn _handle_report_to_rendezvous(udt: &OwnerServiceUDT, ov: &OwnershipVouch
 }
 
 async fn report_to_rendezvous(udt: OwnerServiceUDT) -> Result<()> {
+    // TODO: this below (query_data vs query_ovs_db) should be abstracted into the store's Filter's query stuff
     match udt.ownership_voucher_store.query_data().await {
         Ok(mut ft) => {
             ft.neq(
@@ -172,6 +173,7 @@ async fn check_registration_window(udt: &OwnerServiceUDT) -> Result<()> {
             &udt.owner_addresses,
             &udt.owner_key,
             udt.ov_registration_period,
+            &udt.trusted_device_keys,
         )
         .await
         {
@@ -210,6 +212,7 @@ async fn report_ov_to_rendezvous(
     owner_addresses: &[TO2AddressEntry],
     owner_key: &PKey<Private>,
     registration_period: u32,
+    trusted_device_keys: &Option<X5Bag>,
 ) -> Result<u32> {
     let ov_header = ov.header();
     if ov_header.protocol_version() != ProtocolVersion::Version1_1 {
@@ -219,6 +222,24 @@ async fn report_ov_to_rendezvous(
             ProtocolVersion::Version1_1
         );
     }
+
+    match ov.device_certificate_chain() {
+        None => {
+            bail!("No device certificate chain found");
+        }
+        Some(device_cert_chain) => {
+            if let Some(trusted_device_keys) = trusted_device_keys {
+                device_cert_chain
+                    .verify_from_x5bag(trusted_device_keys)
+                    .context("Device certificate is not trusted")?
+            } else {
+                device_cert_chain
+                    .insecure_verify_without_root_verification()
+                    .context("Device certificate chain is malformed")?
+            };
+        }
+    };
+
     // Determine the RV IP
     let rv_info = ov_header
         .rendezvous_info()
@@ -380,16 +401,22 @@ async fn main() -> Result<()> {
     // Bind information
     let bind_addr = settings.bind.clone();
 
-    // Trusted keys
-    let trusted_device_keys = {
-        let trusted_keys_path = &settings.trusted_device_keys_path;
-        let contents = std::fs::read(trusted_keys_path).with_context(|| {
-            format!("Error reading trusted device keys from {trusted_keys_path}")
-        })?;
-        X509::stack_from_pem(&contents).context("Error parsing trusted device keys")?
-    };
-    let trusted_device_keys = X5Bag::with_certs(trusted_device_keys)
-        .context("Error building trusted device keys X5Bag")?;
+    // Load trusted CA certs for device certificate chain verification
+    let trusted_device_keys = settings
+        .trusted_device_keys_path
+        .as_ref()
+        .map(|path| -> Result<X5Bag, anyhow::Error> {
+            let trusted_device_keys = {
+                let contents = std::fs::read(path)
+                    .with_context(|| format!("Error reading trusted device keys at {}", &path))?;
+                X509::stack_from_pem(&contents).context("Error parsing trusted device keys")?
+            };
+
+            X5Bag::with_certs(trusted_device_keys)
+                .context("Error building trusted device keys X5Bag")
+        })
+        .transpose()
+        .context("Error loading trusted device keys")?;
 
     // Our private key
     let owner_key = load_private_key(&settings.owner_private_key_path).with_context(|| {

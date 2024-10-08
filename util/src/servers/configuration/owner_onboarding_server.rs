@@ -15,7 +15,7 @@ pub struct OwnerOnboardingServerSettings {
     pub session_store_driver: StoreConfig,
 
     // Trusted keys
-    pub trusted_device_keys_path: AbsolutePathBuf,
+    pub trusted_device_keys_path: Option<AbsolutePathBuf>,
 
     // Our private owner key
     pub owner_private_key_path: AbsolutePathBuf,

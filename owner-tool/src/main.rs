@@ -1,3 +1,5 @@
+use std::io::Cursor;
+use std::path::PathBuf;
 use std::{convert::TryFrom, env, fs, io::Write, path::Path, str::FromStr};
 
 use anyhow::{bail, Context, Error, Result};
@@ -6,7 +8,6 @@ use fdo_db::models::ManufacturerOV;
 use fdo_db::postgres::PostgresOwnerDB;
 use fdo_db::sqlite::SqliteOwnerDB;
 use fdo_db::DBStoreOwner;
-use fdo_db::{postgres::PostgresManufacturerDB, sqlite::SqliteManufacturerDB, DBStoreManufacturer};
 use openssl::{
     asn1::{Asn1Integer, Asn1Time},
     bn::BigNum,
@@ -111,14 +112,14 @@ struct ExtendOwnershipVoucherArguments {
 
 #[derive(Args)]
 struct ExportManufacturerVouchersArguments {
-    /// Type of the Manufacturer DB holding the OVs
-    db_type: DBType,
-    /// DB connection URL or path to the DB file
-    db_url: String,
-    /// Path to dir where the OVs will be exported
-    path: String,
+    /// Manufacturer server URL
+    manufacturer_server_url: String,
     /// GUID of the voucher to be exported, if no GUID is given all the OVs will be exported
-    guid: Option<String>,
+    #[clap(long, action = ArgAction::Set)]
+    device_guid: Option<String>,
+    /// Path to dir where the OVs will be exported, or the current working directory
+    #[clap(long, action = ArgAction::Set)]
+    path: Option<PathBuf>,
 }
 
 #[derive(Copy, Clone, ValueEnum)]
@@ -147,7 +148,7 @@ async fn main() -> Result<()> {
         Commands::DumpOwnershipVoucher(args) => dump_voucher(&args),
         Commands::DumpDeviceCredential(args) => dump_devcred(&args),
         Commands::ExtendOwnershipVoucher(args) => extend_voucher(&args),
-        Commands::ExportManufacturerVouchers(args) => export_manufacturer_vouchers(&args),
+        Commands::ExportManufacturerVouchers(args) => export_manufacturer_vouchers(&args).await,
         Commands::ImportOwnershipVouchers(args) => import_ownership_vouchers(&args),
     }
 }
@@ -445,10 +446,7 @@ fn initialize_device(args: &InitializeDeviceArguments) -> Result<(), Error> {
     fs::write(&args.ownershipvoucher_out, ov).context("Error writing ownership voucher")?;
     fs::write(&args.device_credential_out, devcred).context("Error writing device credential")?;
 
-    println!(
-        "Created ownership voucher for device {}",
-        device_guid.to_string()
-    );
+    println!("Created ownership voucher for device {}", device_guid);
 
     Ok(())
 }
@@ -488,7 +486,7 @@ fn dump_voucher(args: &DumpOwnershipVoucherArguments) -> Result<(), Error> {
 
     println!("Header:");
     println!("\tProtocol Version: {}", ov_header.protocol_version());
-    println!("\tDevice GUID: {}", ov_header.guid().to_string());
+    println!("\tDevice GUID: {}", ov_header.guid());
     println!("\tRendezvous Info:");
     for rv_entry in ov_header.rendezvous_info().values() {
         println!("\t\t- {rv_entry:?}");
@@ -551,7 +549,7 @@ fn dump_devcred(args: &DumpDeviceCredentialArguments) -> Result<(), Error> {
     println!("Active: {}", dc.active);
     println!("Protocol Version: {}", dc.protver);
     println!("Device Info: {}", dc.device_info);
-    println!("Device GUID: {}", dc.guid.to_string());
+    println!("Device GUID: {}", dc.guid);
     println!("Rendezvous Info:");
     for rv_entry in dc.rvinfo.values() {
         println!("\t- {rv_entry:?}");
@@ -637,52 +635,38 @@ fn _write_ov_to_disk(db_ov: &ManufacturerOV, path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn export_manufacturer_vouchers(args: &ExportManufacturerVouchersArguments) -> Result<()> {
-    let path = Path::new(&args.path);
+async fn export_manufacturer_vouchers(args: &ExportManufacturerVouchersArguments) -> Result<()> {
+    let path = &args.path.clone().unwrap_or(env::current_dir()?);
     if !path.is_dir() {
         bail!("Please provide a path to a valid directory.");
     }
-    match &args.guid {
-        Some(guid) => {
-            // export single
-            let db_ov = match args.db_type {
-                DBType::Sqlite => {
-                    env::set_var("SQLITE_MANUFACTURER_DATABASE_URL", &args.db_url);
-                    let pool = SqliteManufacturerDB::get_conn_pool();
-                    let conn = &mut pool.get()?;
-                    SqliteManufacturerDB::get_ov(guid, conn)?
-                }
-                DBType::Postgres => {
-                    env::set_var("POSTGRES_MANUFACTURER_DATABASE_URL", &args.db_url);
-                    let pool = PostgresManufacturerDB::get_conn_pool();
-                    let conn = &mut pool.get()?;
-                    PostgresManufacturerDB::get_ov(guid, conn)?
-                }
-            };
-            _write_ov_to_disk(&db_ov, path)?;
-            println!("OV {guid} exported.")
-        }
-        None => {
-            // export all
-            let db_ovs = match args.db_type {
-                DBType::Sqlite => {
-                    env::set_var("SQLITE_MANUFACTURER_DATABASE_URL", &args.db_url);
-                    let pool = SqliteManufacturerDB::get_conn_pool();
-                    let conn = &mut pool.get()?;
-                    SqliteManufacturerDB::get_all_ovs(conn)?
-                }
-                DBType::Postgres => {
-                    env::set_var("POSTGRES_MANUFACTURER_DATABASE_URL", &args.db_url);
-                    let pool = PostgresManufacturerDB::get_conn_pool();
-                    let conn = &mut pool.get()?;
-                    PostgresManufacturerDB::get_all_ovs(conn)?
-                }
-            };
-            for db_ov in db_ovs {
-                _write_ov_to_disk(&db_ov, path)?;
-            }
-            println!("OV/s exported.");
-        }
+    let client = reqwest::Client::new();
+    if let Some(device_guid) = &args.device_guid {
+        let ov_path = path.join(device_guid);
+        let mut ov_file = File::create(ov_path)?;
+        let ov = client
+            .get(format!(
+                "{}/ov/{}",
+                &args.manufacturer_server_url, device_guid
+            ))
+            .send()
+            .await?
+            .text()
+            .await?;
+        ov_file.write_all(ov.as_bytes())?;
+        println!("OV {device_guid} exported.")
+    } else {
+        let ovs_tar_path = path.join("export.tar");
+        let mut ovs_tar = File::create(ovs_tar_path)?;
+        let ovs = client
+            .post(format!("{}/export", &args.manufacturer_server_url))
+            .send()
+            .await?
+            .bytes()
+            .await?;
+        let mut content = Cursor::new(ovs);
+        std::io::copy(&mut content, &mut ovs_tar)?;
+        println!("OV/s exported.");
     }
     Ok(())
 }
@@ -721,14 +705,13 @@ fn import_ownership_vouchers(args: &ImportOwnershipVouchersArguments) -> Result<
             };
             let ret = match args.db_type {
                 DBType::Postgres => {
-                    env::set_var("POSTGRES_OWNER_DATABASE_URL", &args.db_url);
-                    let pool = PostgresOwnerDB::get_conn_pool();
+                    let pool = PostgresOwnerDB::get_conn_pool(args.db_url.clone());
                     let conn = &mut match pool.get() {
                         Ok(val) => val,
                         Err(e) => {
                             error_buff.push(format!(
                                 "Error {e} getting a connection from the DB pool with OV {} from path {:?}",
-                                ov.header().guid().to_string(),
+                                ov.header().guid(),
                                 &ov_path
                             ));
                             continue;
@@ -737,14 +720,13 @@ fn import_ownership_vouchers(args: &ImportOwnershipVouchersArguments) -> Result<
                     PostgresOwnerDB::insert_ov(&ov, None, None, conn)
                 }
                 DBType::Sqlite => {
-                    env::set_var("SQLITE_OWNER_DATABASE_URL", &args.db_url);
-                    let pool = SqliteOwnerDB::get_conn_pool();
+                    let pool = SqliteOwnerDB::get_conn_pool(args.db_url.clone());
                     let conn = &mut match pool.get() {
                         Ok(val) => val,
                         Err(e) => {
                             error_buff.push(format!(
                                 "Error {e} getting a connection from the DB pool with OV {} from path {:?}",
-                                ov.header().guid().to_string(),
+                                ov.header().guid(),
                                 &ov_path
                             ));
                             continue;
@@ -757,7 +739,7 @@ fn import_ownership_vouchers(args: &ImportOwnershipVouchersArguments) -> Result<
                 error_buff.push(format!(
                     "Error {:?} inserting OV {} from path {:?}",
                     ret.err(),
-                    ov.header().guid().to_string(),
+                    ov.header().guid(),
                     &ov_path
                 ));
             }
@@ -778,14 +760,12 @@ fn import_ownership_vouchers(args: &ImportOwnershipVouchersArguments) -> Result<
         let ov = OwnershipVoucher::from_pem_or_raw(&content)?;
         match args.db_type {
             DBType::Postgres => {
-                env::set_var("POSTGRES_OWNER_DATABASE_URL", &args.db_url);
-                let pool = PostgresOwnerDB::get_conn_pool();
+                let pool = PostgresOwnerDB::get_conn_pool(args.db_url.clone());
                 let conn = &mut pool.get()?;
                 PostgresOwnerDB::insert_ov(&ov, None, None, conn)?;
             }
             DBType::Sqlite => {
-                env::set_var("SQLITE_OWNER_DATABASE_URL", &args.db_url);
-                let pool = SqliteOwnerDB::get_conn_pool();
+                let pool = SqliteOwnerDB::get_conn_pool(args.db_url.clone());
                 let conn = &mut pool.get()?;
                 SqliteOwnerDB::insert_ov(&ov, None, None, conn)?;
             }

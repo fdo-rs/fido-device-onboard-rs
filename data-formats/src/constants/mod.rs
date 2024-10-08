@@ -409,7 +409,6 @@ impl TryFrom<u8> for MessageType {
 #[repr(u16)]
 #[non_exhaustive]
 pub enum ErrorCode {
-    InvalidJWT = 1,
     InvalidOwnershipVoucher = 2,
     InvalidOwnerSignBody = 3,
     InvalidIPAddress = 4,
