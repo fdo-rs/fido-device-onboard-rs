@@ -17,6 +17,8 @@ DATABASES="${MANUFACTURER_DATABASE} ${OWNER_DATABASE} ${RENDEZVOUS_DATABASE}"
 
 OV_STORE_DRIVER="${OV_STORE_DRIVER:-Directory}"
 
+SERVICE_INFO_DIR="/var/lib/fdo/service-info/files"
+
 DATABASE_DRIVER="None"
 [ "${OV_STORE_DRIVER}" != "Postgres" ] || DATABASE_DRIVER="postgresql"
 [ "${OV_STORE_DRIVER}" != "Sqlite" ] || DATABASE_DRIVER="sqlite"
@@ -39,6 +41,56 @@ generate_fdo_certificates() {
                                           --destination-dir "${KEYS_DIR}" \
                                           $SUBJECT
   done
+}
+
+generate_serviceinfo_files() {
+  mkdir -p ${SERVICE_INFO_DIR}/etc/{sudoers.d,pki/ca-trust/source/anchors}
+  cat > "${SERVICE_INFO_DIR}/etc/hosts" <<EOF
+127.0.0.1 localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1 localhost localhost.localdomain localhost6 localhost6.localdomain6
+EOF
+  cat > "${SERVICE_INFO_DIR}/etc/sudoers.d/edge" <<EOF
+edge ALL=(ALL) NOPASSWD: ALL
+EOF
+  cat > "${SERVICE_INFO_DIR}/etc/pki/ca-trust/source/anchors/isrg-root-x2-cross-signed.crt" <<EOF
+-----BEGIN CERTIFICATE-----
+MIIEYDCCAkigAwIBAgIQB55JKIY3b9QISMI/xjHkYzANBgkqhkiG9w0BAQsFADBP
+MQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJuZXQgU2VjdXJpdHkgUmVzZWFy
+Y2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBYMTAeFw0yMDA5MDQwMDAwMDBa
+Fw0yNTA5MTUxNjAwMDBaME8xCzAJBgNVBAYTAlVTMSkwJwYDVQQKEyBJbnRlcm5l
+dCBTZWN1cml0eSBSZXNlYXJjaCBHcm91cDEVMBMGA1UEAxMMSVNSRyBSb290IFgy
+MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEzZvVn4CDCuwJSvMWSj5cz3es3mcFDR0H
+ttwW+1qLFNvicWDEukWVEYmO6gbf9yoWHKS5xcUy4APgHoIYOIvXRdgKam7mAHf7
+AlF9ItgKbppbd9/w+kHsOdx1ymgHDB/qo4HlMIHiMA4GA1UdDwEB/wQEAwIBBjAP
+BgNVHRMBAf8EBTADAQH/MB0GA1UdDgQWBBR8Qpau3ktIO/qS+J6Mz22LqXI3lTAf
+BgNVHSMEGDAWgBR5tFnme7bl5AFzgAiIyBpY9umbbjAyBggrBgEFBQcBAQQmMCQw
+IgYIKwYBBQUHMAKGFmh0dHA6Ly94MS5pLmxlbmNyLm9yZy8wJwYDVR0fBCAwHjAc
+oBqgGIYWaHR0cDovL3gxLmMubGVuY3Iub3JnLzAiBgNVHSAEGzAZMAgGBmeBDAEC
+ATANBgsrBgEEAYLfEwEBATANBgkqhkiG9w0BAQsFAAOCAgEAG38lK5B6CHYAdxjh
+wy6KNkxBfr8XS+Mw11sMfpyWmG97sGjAJETM4vL80erb0p8B+RdNDJ1V/aWtbdIv
+P0tywC6uc8clFlfCPhWt4DHRCoSEbGJ4QjEiRhrtekC/lxaBRHfKbHtdIVwH8hGR
+Ib/hL8Lvbv0FIOS093nzLbs3KvDGsaysUfUfs1oeZs5YBxg4f3GpPIO617yCnpp2
+D56wKf3L84kHSBv+q5MuFCENX6+Ot1SrXQ7UW0xx0JLqPaM2m3wf4DtVudhTU8yD
+ZrtK3IEGABiL9LPXSLETQbnEtp7PLHeOQiALgH6fxatI27xvBI1sRikCDXCKHfES
+c7ZGJEKeKhcY46zHmMJyzG0tdm3dLCsmlqXPIQgb5dovy++fc5Ou+DZfR4+XKM6r
+4pgmmIv97igyIintTJUJxCD6B+GGLET2gUfA5GIy7R3YPEiIlsNekbave1mk7uOG
+nMeIWMooKmZVm4WAuR3YQCvJHBM8qevemcIWQPb1pK4qJWxSuscETLQyu/w4XKAM
+YXtX7HdOUM+vBqIPN4zhDtLTLxq9nHE+zOH40aijvQT2GcD5hq/1DhqqlWvvykdx
+S2McTZbbVSMKnQ+BdaDmQPVkRgNuzvpqfQbspDQGdNpT2Lm4xiN9qfgqLaSCpi4t
+EcrmzTFYeYXmchynn9NM0GbQp7s=
+-----END CERTIFICATE-----
+EOF
+
+}
+
+
+generate_ssh_key() {
+  SSH_KEY_TMP_DIR=$(mktemp -d)
+  SSH_KEY_FILE="${SSH_KEY_TMP_DIR}/ssh_key"
+  SSH_PUB_KEY_FILE="${SSH_KEY_FILE}.pub"
+  ssh-keygen -q -N '' -f "${SSH_KEY_FILE}"
+  cat "${SSH_PUB_KEY_FILE}"
+  rm -rf "${SSH_KEY_TMP_DIR}"
 }
 
 setup_postgresql() {
@@ -153,11 +205,90 @@ setup_serviceinfo() {
  tee "${CONF_DIR}/serviceinfo-api-server.yml" <<EOF
 ---
 service_info:
-  initial_user: null
-  files: null
-  commands: null
-  diskencryption_clevis: null
-  additional_serviceinfo: null
+  initial_user:
+    username: edge
+    sshkeys:
+    - "${SSH_PUB_KEY}"
+  commands:
+  - command: touch
+    args:
+    - /etc/command-testfile1
+  - command: bash
+    args:
+    - -c
+    - echo command-testfile1-content1 > /etc/command-testfile1
+  - command: bash
+    args:
+    - -c
+    - echo command-testfile1-content2 >> /etc/command-testfile1
+  - command: mkdir
+    args:
+    - -p
+    - /etc/commands
+  - command: mv
+    args:
+    - /etc/command-testfile1
+    - /etc/commands/
+  - command: bash
+    args:
+    - -c
+    - echo command-testfile2-content1 > /etc/commands/command-testfile2
+  - command: bash
+    args:
+    - -c
+    - echo command-testfile2-content2 >> /etc/commands/command-testfile2
+  - command: rm
+    args:
+    - -rf
+    - /etc/commands
+  - command: find
+    args:
+    - /etc
+    - /var
+    - -type
+    - f
+    - -exec
+    - touch {}
+    - ;
+  - command: mkdir
+    args:
+    - -p
+    - /etc/sudoers.d /var/fdo /var/lib/fdo /var/fdo-test /var/lib/fdo-test
+  - command: /usr/bin/sed
+    args:
+    - -i
+    - -e
+    - s/^#PasswordAuthentication yes/PasswordAuthentication no/
+    - /etc/ssh/sshd_config
+    may_fail: false
+    return_stdout: true
+    return_stderr: true
+  - command: systemctl
+    args:
+    - restart
+    - sshd
+    return_stdout: true
+    return_stderr: true
+  - command: systemctl
+    args:
+    - daemon-reload
+    return_stdout: true
+    return_stderr: true
+  files:
+  - path: /etc/hosts
+    permissions: 644
+    source_path: ${SERVICE_INFO_DIR}/etc/hosts
+  - path: /etc/sudoers.d/edge
+    source_path: ${SERVICE_INFO_DIR}/etc/sudoers.d/edge
+  - path: /etc/pki/ca-trust/source/anchors/isrg-root-x2-cross-signed.crt
+    source_path: ${SERVICE_INFO_DIR}/etc/pki/ca-trust/source/anchors/isrg-root-x2-cross-signed.crt
+#  diskencryption_clevis:
+#  - disk_label: /dev/vda
+#    binding:
+#      pin: test
+#      config: "{}"
+#    reencrypt: true
+#  after_onboarding_reboot: true
 bind: 0.0.0.0:8083
 service_info_auth_token: 2IOtlXsSqfcGjnhBLZjPiHIteskzZEW3lncRzpEmgqI=
 admin_auth_token: Va40bSkLcxwnfml1pmIuaWaOZG96mSMB6fu0xuzcueg=
@@ -190,10 +321,12 @@ onboard() {
 
 [ "${OV_STORE_DRIVER}" != "Sqlite" ] || setup_sqlite
 [ "${OV_STORE_DRIVER}" != "Postgres" ] || setup_postgresql
+SSH_PUB_KEY=$(generate_ssh_key)
 generate_fdo_certificates
 setup_manufacturing
 setup_owner
 setup_rendezvous
+generate_serviceinfo_files
 setup_serviceinfo
 systemctl restart fdo-{manufacturing,owner-onboarding,rendezvous,serviceinfo-api}-server.service
 # Wait for servers to be up and running
