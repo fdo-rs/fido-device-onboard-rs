@@ -197,21 +197,11 @@ setup_rendezvous
 setup_serviceinfo
 systemctl restart fdo-{manufacturing,owner-onboarding,rendezvous,serviceinfo-api}-server.service
 # Wait for servers to be up and running
-until [ "$(curl -X POST http://${PRIMARY_IP}:8080/ping)" == "pong" ]; do
-    sleep 1;
-done;
-
-until [ "$(curl -X POST http://${PRIMARY_IP}:8081/ping)" == "pong" ]; do
-    sleep 1;
-done;
-
-until [ "$(curl -X POST http://${PRIMARY_IP}:8082/ping)" == "pong" ]; do
-    sleep 1;
-done;
-
-until [ "$(curl -X POST http://${PRIMARY_IP}:8083/ping)" == "pong" ]; do
-    sleep 1;
-done;
+for PORT in 808{0..3}; do
+  until [ "$(curl -s -X POST http://${PRIMARY_IP}:${PORT}/ping)" == "pong" ]; do
+      sleep 1;
+  done;
+done
 perform_no_plain_di
 [ "${OV_STORE_DRIVER}" = "Directory" ] || export_import_vouchers
 sleep 60
