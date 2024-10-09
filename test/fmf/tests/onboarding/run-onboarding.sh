@@ -179,13 +179,13 @@ export_import_vouchers() {
 
 perform_no_plain_di() {
   rm -f "${DEVICE_CREDENTIAL}" "${ONBOARDING_PERFORMED}"
-  /usr/libexec/fdo/fdo-manufacturing-client no-plain-di \
-                                            --manufacturing-server-url http://${PRIMARY_IP}:8080 \
-                                            --rootcerts ${KEYS_DIR}/diun_cert.pem
+  LOG_LEVEL=trace /usr/libexec/fdo/fdo-manufacturing-client no-plain-di \
+                                                            --manufacturing-server-url http://${PRIMARY_IP}:8080 \
+                                                            --rootcerts ${KEYS_DIR}/diun_cert.pem
 }
 
 onboard() {
-  /usr/libexec/fdo/fdo-client-linuxapp
+  LOG_LEVEL=trace /usr/libexec/fdo/fdo-client-linuxapp
 }
 
 [ "${OV_STORE_DRIVER}" != "Sqlite" ] || setup_sqlite
