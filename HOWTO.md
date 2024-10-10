@@ -903,9 +903,15 @@ identification with the Manufacturing server.
    Identification keys, valid values: `filesystem` (`tpm` not yet
    implemented).
    
-3. `DI_SIGN_KEY_PATH`:
+3. `DI_SIGN_KEY_PATH`: filepath to the private key with DER format.
+   For example, you can create the key file with `openssl` command:
+   ```sh
+   $ openssl ecparam -name secp384r1 -genkey -noout -outform der -out /path/to/sign_key/key.der
+   ```
+   Please note that the curve `secp384r1` must match to the `key_type` specified in `manufacturing_server.yaml`.
 
-4. `DI_HMAC_KEY_PATH`:
+4. `DI_HMAC_KEY_PATH`: filepath to the HMAC key. There is no format limitation,
+   you can use the file with random value.
 
 5. `DEVICE_CREDENTIAL_FILENAME`: [optional] filepath specified by the user to
    store the device credentials, by default `/etc/device-credentials`.
