@@ -4,10 +4,8 @@ discover:
 execute:
     how: tmt
 prepare:
-    - how: install
-      copr: ${PACKIT_COPR_PROJECT}
     - how: shell
-      script: dnf install -y ${PACKIT_COPR_RPMS} postgresql-server sqlite
+      script: dnf install -y postgresql-server sqlite
 provision:
     how: virtual
     memory: 4096

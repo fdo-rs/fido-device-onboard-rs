@@ -50,7 +50,7 @@ sudo rm -rf aio
 
 # Set servers store driver to postgres
 greenprint "🔧 Set servers store driver to postgres"
-sudo pip3 install yq
+sudo pipx install yq
 # Configure manufacturing server db
 yq -yi 'del(.ownership_voucher_store_driver.Directory)' test/fdo/manufacturing-server.yml
 yq -yi ".ownership_voucher_store_driver += {Postgres: {server: \"Manufacturer\", url: \"${DB_URL}\"}}" test/fdo/manufacturing-server.yml
