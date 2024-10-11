@@ -34,9 +34,9 @@ jobs:
           fedora-latest-stable: {}
           fedora-latest: {}
           fedora-rawhide: {}
-          fedora-eln:
-              additional_repos:
-                  - https://kojipkgs.fedoraproject.org/repos/eln-build/latest/$basearch/
+#          fedora-eln:
+#              additional_repos:
+#                  - https://kojipkgs.fedoraproject.org/repos/eln-build/latest/$basearch/
 
     - job: tests
       trigger: pull_request
@@ -48,6 +48,7 @@ jobs:
           fedora-latest-stable: {}
           fedora-latest: {}
           fedora-rawhide: {}
+#          fedora-eln: {}
 
     - <<: *fdo_copr_build
       trigger: commit
