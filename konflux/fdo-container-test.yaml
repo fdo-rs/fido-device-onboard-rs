@@ -1,0 +1,74 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: fdo-container-test
+spec:
+  description: Initiate test given a list of container images
+  params:
+    - name: SNAPSHOT
+      description: A list of container images that should undergo testing
+    - name: GIT_URL
+      description: URL of the GIT repository that contains the tests.
+    - name: GIT_REF
+      description: Branch of the git repository used containing the tests
+  volumes:
+    - name: podinfo
+      downwardAPI:
+        items:
+          - path: "labels"
+            fieldRef:
+              fieldPath: metadata.labels
+          - path: "annotations"
+            fieldRef:
+              fieldPath: metadata.annotations
+  steps:
+    - image: quay.io/testing-farm/cli:latest
+      volumeMounts:
+        - name: podinfo
+          mountPath: /etc/podinfo
+      env:
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+        - name: GIT_URL
+          value: $(params.GIT_URL)
+        - name: GIT_REF
+          value: $(params.GIT_REF)
+      script: |
+        #!/usr/bin/env bash
+        sed -i -e 's/v3\.15/v3\.16/g' /etc/apk/repositories
+        apk update
+        apk add --upgrade apk-tools
+        apk upgrade --available
+        apk add skopeo jq grep curl
+
+        cat /etc/podinfo/labels
+        PR_NAME=$(cat /etc/podinfo/labels | grep -oP '(?<=pipelineRun=")[^"]+')
+        COMPONENT=$(cat /etc/podinfo/labels | grep -oP '(?<=component=")[^"]+')
+        echo "PR_NAME:$PR_NAME"
+        echo "COMPONENT:$COMPONENT"
+
+        echo "${SNAPSHOT}"
+        IMAGE=$(echo "${SNAPSHOT}" | jq -r ".components[]|select(.name==\"$COMPONENT\")|.containerImage")
+        COUNT=$(echo "${SNAPSHOT}" | jq -r ".components|map(select(.name==\"$COMPONENT\"))|length")
+        if [[ ${COUNT} -ne 1 ]]; then
+          echo "Error: multiple images: ${IMAGES} in this application with component name: ${COMPONENT}"
+          exit 1
+        fi
+        echo $IMAGE
+
+        IMAGE_NAME=$(echo "${IMAGE##*/}" | cut -d @ -f 1)
+        IMAGE_TAG=$(echo "${IMAGE##*/}" | cut -d : -f 2)
+        echo "IMAGE_NAME:$IMAGE_NAME"
+        echo "IMAGE_TAG:$IMAGE_TAG"
+
+        skopeo inspect docker://"$IMAGE" > skopeo_inspect.json
+        cat skopeo_inspect.json
+        NAME=$(cat skopeo_inspect.json | jq -r ".Name")
+        echo "NAME:$NAME"
+        
+        if [[ "$NAME" =~ "$IMAGE_NAME" ]]; then
+          exit 0
+        else
+          exit 1
+        fi
+      timeout: "2h"

@@ -1,0 +1,38 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: fdo manufacturing server integration tests
+spec:
+  description: >-
+    Expects a list of container images to be provided via the SNAPSHOT parameter.
+  params:
+    - name: SNAPSHOT
+      description: A list of fdo container images that should undergo testing
+      type: string
+    - name: GIT_URL
+      description: URL of the GIT repository that contains the tests.
+      default: "https://github.com/fdo-rs/fido-device-onboard-rs"
+      type: string
+    - name: GIT_REF
+      default: "main"
+      description: Branch of the git repository used containing the tests
+      type: string
+  tasks:
+    - name: fdo-container-test
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: $(params.GIT_URL)
+          - name: revision
+            value: $(params.GIT_REF)
+          - name: pathInRepo
+            value: konflux/fdo-container-test.yaml
+      params:
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+        - name: GIT_URL
+          value: $(params.GIT_URL)
+        - name: GIT_REF
+          value: $(params.GIT_REF)
+      timeout: "2h"
