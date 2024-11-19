@@ -10,9 +10,6 @@ License:        BSD-3-Clause
 
 URL:            https://github.com/fdo-rs/fido-device-onboard-rs
 Source0:        %{url}/archive/v%{version}/%{name}-rs-%{version}.tar.gz
-# See make-vendored-tarfile.sh in upstream repo
-Source1:        %{name}-rs-%{version}-vendor-patched.tar.xz
-Patch1:         0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch
 
 # Because nobody cares
 ExcludeArch: %{ix86}
@@ -36,23 +33,23 @@ BuildRequires:  tpm2-tss-devel
 %{summary}.
 
 %prep
+%autosetup -p1 -n %{name}-rs-%{version}
 
 %if 0%{?rhel}
-%autosetup -p1 -a1 -n %{name}-rs-%{version}
-rm -f Cargo.lock
 %if 0%{?rhel} >= 10
 %cargo_prep -v vendor
 %else
-%cargo_prep -V 1
+%cargo_prep -V 0
 %endif
 %endif
 
 %if 0%{?fedora}
-%autosetup -p1 -n %{name}-rs-%{version}
 %cargo_prep
 %generate_buildrequires
 %cargo_generate_buildrequires -a
 %endif
+
+rm -f .cargo/cargo.toml
 
 %build
 %cargo_build \
