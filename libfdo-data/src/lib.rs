@@ -41,6 +41,7 @@ pub unsafe extern "C" fn fdo_free_string(s: *mut c_char) {
 /// Note: The returned string ownership is transferred to the caller, and should
 /// be freed with `fdo_free_string`
 #[no_mangle]
+#[allow(unused_unsafe)]
 pub extern "C" fn fdo_get_last_error() -> *mut c_char {
     let result = unsafe { addr_of!(LAST_ERROR) };
     if result.is_null() {
