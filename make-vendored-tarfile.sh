@@ -11,6 +11,9 @@ for PLATFORM in $PLATFORMS; do
   ARGS+="--platform ${PLATFORM} "
 done
 
+# https://issues.redhat.com/browse/RHEL-65521
+ARGS+="--exclude-crate-path idna#tests"
+
 # Clean vendor dir or the filterer will refuse to do the job
 rm -rf vendor
 
