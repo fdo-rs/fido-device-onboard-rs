@@ -1,6 +1,6 @@
 [package]
 name = "fdo-manufacturing-server"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Patrick Uiterwijk <patrick@puiterwijk.org>"]
 edition = "2018"
 
@@ -21,7 +21,7 @@ tar = "0.4.41"
 flate2 = "1.0.31"
 tempdir = "0.3.7"
 
-fdo-data-formats = { path = "../data-formats", version = "0.5.0" }
-fdo-http-wrapper = { path = "../http-wrapper", version = "0.5.0", features = ["server"] }
-fdo-store = { path = "../store", version = "0.5.0", features = ["directory"] }
-fdo-util = { path = "../util", version = "0.5.0" }
+fdo-data-formats = { path = "../data-formats", version = "0.5.1" }
+fdo-http-wrapper = { path = "../http-wrapper", version = "0.5.1", features = ["server"] }
+fdo-store = { path = "../store", version = "0.5.1", features = ["directory"] }
+fdo-util = { path = "../util", version = "0.5.1" }

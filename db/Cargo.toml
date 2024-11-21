@@ -1,6 +1,6 @@
 [package]
 name = "fdo-db"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 
 
@@ -8,10 +8,10 @@ edition = "2021"
 anyhow = "1.0"
 diesel = { version = "2.2.3", features = ["sqlite", "postgres", "r2d2"] }
 
-fdo-data-formats = { path = "../data-formats", version = "0.5.0" }
+fdo-data-formats = { path = "../data-formats", version = "0.5.1" }
 
 [dev-dependencies]
-fdo-http-wrapper = { path = "../http-wrapper", version = "0.5.0", features = ["server"] }
+fdo-http-wrapper = { path = "../http-wrapper", version = "0.5.1", features = ["server"] }
 openssl = "0.10.66"
 
 [features]

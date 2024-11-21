@@ -1,6 +1,6 @@
 [package]
 name = "fdo-owner-tool"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Patrick Uiterwijk <patrick@puiterwijk.org>"]
 edition = "2018"
 
@@ -17,10 +17,10 @@ tokio = { version = "1", features = ["full"] }
 tss-esapi = { version = "7.4", features = ["generate-bindings"] }
 reqwest = { version = "0.12.7", features = ["blocking"] }
 
-fdo-util = { path = "../util", version = "0.5.0" }
-fdo-data-formats = { path = "../data-formats", version = "0.5.0" }
-fdo-http-wrapper = { path = "../http-wrapper", version = "0.5.0", features = ["client"] }
-fdo-db = { path = "../db", version = "0.5.0"}
+fdo-util = { path = "../util", version = "0.5.1" }
+fdo-data-formats = { path = "../data-formats", version = "0.5.1" }
+fdo-http-wrapper = { path = "../http-wrapper", version = "0.5.1", features = ["client"] }
+fdo-db = { path = "../db", version = "0.5.1"}
 
 hex = "0.4"
 clap_builder = "4.4"

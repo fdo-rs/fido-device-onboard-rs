@@ -1,6 +1,6 @@
 [package]
 name = "fdo-util"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Antonio Murdaca <runcom@linux.com>"]
 edition = "2018"
 
@@ -13,9 +13,9 @@ glob = "0.3.1"
 log = "0.4"
 serde = "1"
 
-fdo-data-formats = { path = "../data-formats", version = "0.5.0" }
-fdo-store = { path = "../store", version = "0.5.0" }
-fdo-http-wrapper = { path = "../http-wrapper", version = "0.5.0", features = ["server", "client"] }
+fdo-data-formats = { path = "../data-formats", version = "0.5.1" }
+fdo-store = { path = "../store", version = "0.5.1" }
+fdo-http-wrapper = { path = "../http-wrapper", version = "0.5.1", features = ["server", "client"] }
 serde_yaml = "0.9"
 serde_cbor = "0.11"
 serde_json = "1"
