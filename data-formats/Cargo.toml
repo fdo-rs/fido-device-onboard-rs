@@ -1,6 +1,6 @@
 [package]
 name = "fdo-data-formats"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Patrick Uiterwijk <patrick@puiterwijk.org>"]
 edition = "2018"
 
