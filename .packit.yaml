@@ -50,6 +50,27 @@ jobs:
           fedora-rawhide: {}
 #          fedora-eln: {}
 
+    - job: sync_from_downstream
+      trigger: commit
+
+    - job: propose_downstream
+      trigger: release
+      dist_git_branches:
+        - fedora-development
+        - fedora-latest-stable
+
+    - job: koji_build
+      trigger: commit
+      dist_git_branches:
+        - fedora-development
+        - fedora-latest-stable
+
+    - job: bodhi_update
+      trigger: commit
+      dist_git_branches:
+        - fedora-development
+        - fedora-latest-stable
+
     - <<: *fdo_copr_build
       trigger: commit
       branch: main
