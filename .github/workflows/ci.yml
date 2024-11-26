@@ -163,7 +163,7 @@ jobs:
         env:
           NODE_PATH: ${{ github.workspace }}/node_modules
         with:
-          configFile: .github/commitlint.config.js
+          configFile: .github/commitlint.config.mjs
           failOnWarnings: true
 
   manpages:
