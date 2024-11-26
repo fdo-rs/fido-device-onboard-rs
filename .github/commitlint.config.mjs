@@ -16,7 +16,7 @@ const validateBodyMaxLengthIgnoringDeps = async (parsedCommit) => {
   ]
 }
 
-module.exports = {
+export default {
   extends: ['@commitlint/config-conventional'],
   plugins: ['commitlint-plugin-function-rules'],
   rules: {
