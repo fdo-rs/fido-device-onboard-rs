@@ -4,8 +4,12 @@
 specfile_path: fido-device-onboard.spec
 
 files_to_sync:
-    - fido-device-onboard.spec
-    - .packit.yaml
+    - src:
+      - patches/0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch
+      - .packit.yaml
+      - fido-device-onboard.spec
+      - "fido-device-onboard-rs-*-vendor-patched.tar.xz"
+      dest: .
 
 upstream_package_name: fido-device-onboard
 downstream_package_name: fido-device-onboard
@@ -17,7 +21,19 @@ srpm_build_deps:
     - cargo
     - openssl-devel
 
+packages:
+    fido-device-onboard-fedora:
+        downstream_package_name: fido-device-onboard
+        upstream_package_name: fido-device-onboard
+    fido-device-onboard-centos:
+        downstream_package_name: fido-device-onboard
+        upstream_package_name: fido-device-onboard
+        pkg_tool: centpkg
+
 actions:
+    pre-sync:
+        - bash -c "./make-vendored-tarfile.sh ${PACKIT_PROJECT_VERSION}"
+        - bash -c "git restore Cargo.lock"
     create-archive:
         - bash -c "cp ./patches/0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch ."
         - bash -c "git archive --prefix=fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}/ --format=tar HEAD > fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}.tar"
@@ -34,9 +50,6 @@ jobs:
           fedora-latest-stable: {}
           fedora-latest: {}
           fedora-rawhide: {}
-#          fedora-eln:
-#              additional_repos:
-#                  - https://kojipkgs.fedoraproject.org/repos/eln-build/latest/$basearch/
 
     - job: tests
       trigger: pull_request
@@ -48,16 +61,23 @@ jobs:
           fedora-latest-stable: {}
           fedora-latest: {}
           fedora-rawhide: {}
-#          fedora-eln: {}
 
     - job: sync_from_downstream
       trigger: commit
 
     - job: propose_downstream
       trigger: release
+      packages: [fido-device-onboard-fedora]
       dist_git_branches:
         - fedora-development
         - fedora-latest-stable
+
+    - job: propose_downstream
+      trigger: release
+      packages: [fido-device-onboard-centos]
+      dist_git_branches:
+        - c10s
+        - c9s
 
     - job: koji_build
       trigger: commit
