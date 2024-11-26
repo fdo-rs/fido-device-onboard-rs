@@ -7,7 +7,7 @@ updates:
     commit-message:
       prefix: "chore: "
     reviewers:
-    - "fedora-iot/fdo-rs-maintainers"
+    - "fdo-rs/fdo-team"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -15,4 +15,4 @@ updates:
     commit-message:
       prefix: "chore: "
     reviewers:
-    - "fedora-iot/fdo-rs-maintainers"
+    - "fdo-rs/fdo-team"
