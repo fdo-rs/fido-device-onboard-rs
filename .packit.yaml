@@ -4,8 +4,12 @@
 specfile_path: fido-device-onboard.spec
 
 files_to_sync:
-    - fido-device-onboard.spec
-    - .packit.yaml
+    - src:
+      - patches/0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch
+      - .packit.yaml
+      - fido-device-onboard.spec
+      - "fido-device-onboard-rs-*-vendor-patched.tar.xz"
+      dest: .
 
 upstream_package_name: fido-device-onboard
 downstream_package_name: fido-device-onboard
@@ -18,6 +22,9 @@ srpm_build_deps:
     - openssl-devel
 
 actions:
+    pre-sync:
+        - bash -c "./make-vendored-tarfile.sh ${PACKIT_PROJECT_VERSION}"
+        - bash -c "git restore Cargo.lock"
     create-archive:
         - bash -c "cp ./patches/0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch ."
         - bash -c "git archive --prefix=fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}/ --format=tar HEAD > fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}.tar"
