@@ -81,12 +81,14 @@ jobs:
 
     - job: koji_build
       trigger: commit
+      allowed_pr_authors: [all_committers]
       dist_git_branches:
         - fedora-development
         - fedora-latest-stable
 
     - job: bodhi_update
       trigger: commit
+      allowed_builders: [all_committers]
       dist_git_branches:
         - fedora-development
         - fedora-latest-stable
