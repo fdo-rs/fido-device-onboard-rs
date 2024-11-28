@@ -191,7 +191,6 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 [[package]]
 name = "aws-nitro-enclaves-cose"
 version = "0.4.0"
-source = "git+https://github.com/nullr0ute/aws-nitro-enclaves-cose/?rev=e3938e60d9051690569d1e4fcbe1c0c99d2fafa8#e3938e60d9051690569d1e4fcbe1c0c99d2fafa8"
 dependencies = [
  "openssl",
  "serde",
@@ -199,6 +198,7 @@ dependencies = [
  "serde_cbor",
  "serde_repr",
  "serde_with",
+ "tss-esapi",
 ]
 
 [[package]]
