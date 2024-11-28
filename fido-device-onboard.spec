@@ -10,9 +10,8 @@ License:        BSD-3-Clause
 
 URL:            https://github.com/fdo-rs/fido-device-onboard-rs
 Source0:        %{url}/archive/v%{version}/%{name}-rs-%{version}.tar.gz
-# See make-vendored-tarfile.sh in upstream repo
-Source1:        %{name}-rs-%{version}-vendor-patched.tar.xz
-Patch1:         0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch
+# We need the vendor tar file for CentOS and RHEL builds
+Source1:        %{name}-rs-%{version}-vendor.tar.xz
 
 # Because nobody cares
 ExcludeArch: %{ix86}
@@ -49,6 +48,9 @@ rm -f Cargo.lock
 
 %if 0%{?fedora}
 %autosetup -p1 -n %{name}-rs-%{version}
+sed -i -e 's|aws-nitro-enclaves-cose = { path = "../external/aws-nitro-enclaves-cose"}|aws-nitro-enclaves-cose = "0.4.0"|' \
+    data-formats/Cargo.toml \
+    http-wrapper/Cargo.toml
 %cargo_prep
 %generate_buildrequires
 %cargo_generate_buildrequires -a
