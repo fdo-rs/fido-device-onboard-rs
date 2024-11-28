@@ -60,6 +60,7 @@ impl FromStr for SignatureAlgorithm {
     }
 }
 
+#[allow(clippy::to_string_trait_impl)]
 impl ToString for SignatureAlgorithm {
     fn to_string(&self) -> String {
         match self {
@@ -135,8 +136,10 @@ pub struct SigStructure(
     #[serde(skip_serializing_if = "Option::is_none")]
     Option<ByteBuf>,
     /// external_aad : bstr,
+    #[serde(default)]
     ByteBuf,
     /// payload : bstr
+    #[serde(default)]
     ByteBuf,
 );
 
