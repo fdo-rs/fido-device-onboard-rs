@@ -3,19 +3,21 @@
 
 specfile_path: fido-device-onboard.spec
 
-files_to_sync:
-    - src:
-      - patches/0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch
-      - .packit.yaml
-      - fido-device-onboard.spec
-      - "fido-device-onboard-rs-*-vendor-patched.tar.xz"
-      dest: .
-
 upstream_package_name: fido-device-onboard
 downstream_package_name: fido-device-onboard
 
 upstream_tag_template: v{version}
 copy_upstream_release_description: true
+
+actions:
+    create-archive:
+        - bash -c "make VERSION=${PACKIT_PROJECT_VERSION} packit-create-archive"
+        - bash -c "ls -1 fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}.tar.gz"
+
+files_to_sync:
+    - ".packit.yaml"
+    - "fido-device-onboard.spec"
+    - "fido-device-onboard-rs-*-vendor.tar.xz"
 
 srpm_build_deps:
     - cargo
@@ -30,37 +32,46 @@ packages:
         upstream_package_name: fido-device-onboard
         pkg_tool: centpkg
 
-actions:
-    pre-sync:
-        - bash -c "./make-vendored-tarfile.sh ${PACKIT_PROJECT_VERSION}"
-        - bash -c "git restore Cargo.lock"
-    create-archive:
-        - bash -c "cp ./patches/0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch ."
-        - bash -c "git archive --prefix=fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}/ --format=tar HEAD > fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}.tar"
-        - bash -c "./make-vendored-tarfile.sh ${PACKIT_PROJECT_VERSION}"
-        - bash -c "tar -xvf fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}.tar"
-        - bash -c "ls -1 ./fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}.tar"
-
 jobs:
-    - &fdo_copr_build
+    - &fdo_copr_build_fedora
       job: copr_build
+      packages: [fido-device-onboard-fedora]
       trigger: pull_request
-      targets:
-          centos-stream-9: {}
-          fedora-latest-stable: {}
-          fedora-latest: {}
-          fedora-rawhide: {}
+      targets: ["fedora-latest-stable", "fedora-latest", "fedora-rawhide"]
+
+    - <<: *fdo_copr_build_fedora
+      trigger: commit
+      branch: main
+      owner: "@fedora-iot"
+      project: fedora-iot
+
+    - &fdo_copr_build_centos
+      job: copr_build
+      packages: [fido-device-onboard-centos]
+      trigger: pull_request
+      targets: ["centos-stream-9", "centos-stream-10"]
+
+    - <<: *fdo_copr_build_centos
+      trigger: commit
+      branch: main
+      owner: "@fedora-iot"
+      project: fedora-iot
 
     - job: tests
       trigger: pull_request
-      identifier: onboarding
+      identifier: onboarding-centos
       fmf_path: test/fmf
       tmt_plan: plans/onboarding
-      targets:
-          centos-stream-9: {}
-          fedora-latest-stable: {}
-          fedora-latest: {}
-          fedora-rawhide: {}
+      packages: [fido-device-onboard-centos]
+      targets: ["centos-stream-9", "centos-stream-10"]
+
+    - job: tests
+      trigger: pull_request
+      identifier: onboarding-fedora
+      fmf_path: test/fmf
+      tmt_plan: plans/onboarding
+      packages: [fido-device-onboard-fedora]
+      targets: ["fedora-latest-stable", "fedora-latest", "fedora-rawhide"]
 
     - job: sync_from_downstream
       trigger: commit
@@ -69,33 +80,27 @@ jobs:
       trigger: release
       packages: [fido-device-onboard-fedora]
       dist_git_branches:
-        - fedora-development
-        - fedora-latest-stable
+          - fedora-development
+          - fedora-latest-stable
 
     - job: propose_downstream
       trigger: release
       packages: [fido-device-onboard-centos]
       dist_git_branches:
-        - c10s
-        - c9s
+          - c10s
+          - c9s
 
     - job: koji_build
       trigger: commit
       allowed_pr_authors: [all_committers]
       dist_git_branches:
-        - fedora-development
-        - fedora-latest-stable
+          - fedora-development
+          - fedora-latest-stable
 
     - job: bodhi_update
       trigger: commit
       allowed_builders: [all_committers]
       dist_git_branches:
-        - fedora-development
-        - fedora-latest-stable
-
-    - <<: *fdo_copr_build
-      trigger: commit
-      branch: main
-      owner: "@fedora-iot"  # copr repo namespace
-      project: fedora-iot   # copr repo name so you can consume the builds
+          - fedora-development
+          - fedora-latest-stable
 ...
