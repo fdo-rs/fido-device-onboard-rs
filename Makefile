@@ -1,7 +1,9 @@
 include /etc/os-release
 
 SRCDIR ?= .
-COMMIT = $(shell (cd "$(SRCDIR)" && git rev-parse HEAD))
+VENDOR ?= false
+VERSION = $(shell (cd "$(SRCDIR)" &&  git describe --tags | sed -e 's/^v//' -e 's/-/./'))
+PLATFORMS = $(shell (echo {x86_64,aarch64,powerpc64le,s390x}-unknown-linux-gnu))
 
 #
 # Generic Targets
@@ -23,8 +25,43 @@ help:
 	@echo "The following targets are available:"
 	@echo
 	@echo "    help:               Print this usage information."
+	@echo "    source:             Generate source tar file in the current directory."
+	@echo "    vendor:             Generate vendor tar file in the current directory."
 	@echo "    rpm:                Generate RPM."
+	@echo "    srpm:               Generate SRPM."
 	@echo "    man:                Generate man pages."
+
+#
+# Generating sources and vendor tar files
+#
+
+SOURCE_TARBALL=fido-device-onboard-rs-$(VERSION).tar.gz
+
+$(SOURCE_TARBALL):
+	git archive --prefix=fido-device-onboard-rs-$(VERSION)/ --format=tar.gz HEAD > $(SOURCE_TARBALL)
+
+.PHONY: source
+source: $(SOURCE_TARBALL)
+
+VENDOR_TARBALL=fido-device-onboard-rs-$(VERSION)-vendor.tar.xz
+
+$(VENDOR_TARBALL):
+	vendor_filterer_cmd=$$(command -v cargo-vendor-filterer||:)
+	[ -z "$$vendor_filterer_cmd" ] || rm -f $${vendor_filterer_cmd}
+	# We need v0.5.7 because of RHEL rust version
+	cargo install --quiet cargo-vendor-filterer@0.5.7;
+	for platform in $(PLATFORMS); do  \
+		args+="--platform $${platform} "; \
+	done
+	# https://issues.redhat.com/browse/RHEL-65521
+	args+="--exclude-crate-path idna#tests "
+	rm -rf vendor
+	cargo vendor-filterer $${args}
+	tar cJf $(VENDOR_TARBALL) vendor
+	rm -rf vendor
+
+.PHONY: vendor
+vendor: $(VENDOR_TARBALL)
 
 #
 # Building packages
@@ -38,40 +75,44 @@ help:
 # ./rpmbuild, using rpmbuild's usual directory structure.
 #
 
-RPM_SPECFILE=rpmbuild/SPECS/fido-device-onboard-rs-$(COMMIT).spec
-RPM_TARBALL=rpmbuild/SOURCES/fido-device-onboard-rs-$(COMMIT).tar.gz
-VENDOR_TARBALL=rpmbuild/SOURCES/fido-device-onboard-rs-$(COMMIT)-vendor-patched.tar.xz
+SPEC_FILE=./fido-device-onboard.spec
+RPM_TOP_DIR=$(CURDIR)/rpmbuild
+RPMS_SPECS_DIR=$(RPM_TOP_DIR)/SPECS
+RPMS_SOURCES_DIR=$(RPM_TOP_DIR)/SOURCES
+RPM_SPECFILE=$(RPMS_SPECS_DIR)/fido-device-onboard-rs-$(VERSION).spec
+RPM_TARBALL=$(RPMS_SOURCES_DIR)/fido-device-onboard-rs-$(VERSION).tar.gz
+RPM_VENDOR_TARBALL=${RPMS_SOURCES_DIR}/$(VENDOR_TARBALL)
 
 $(RPM_SPECFILE):
-	mkdir -p $(CURDIR)/rpmbuild/SPECS
-	sed -e "s/^Version:.*/Version: $(COMMIT)/;" fido-device-onboard.spec > $(RPM_SPECFILE)
-	if [ "$(ID)" = "fedora" ] && [ $(VARIANT_ID) != "eln" ]; then \
-		sed -i "/Source1/d ; /^# See make-vendored-tarfile.sh in upstream repo/d ;" $(RPM_SPECFILE); \
-	fi
+	mkdir -p $(RPMS_SPECS_DIR)
+	sed -e "s/^Version:.*/Version:        $(VERSION)/;" \
+	    -e "s|%{url}/archive/v%{version}/||;" \
+	    $(SPEC_FILE) > $(RPM_SPECFILE)
 
-$(RPM_TARBALL):
-	mkdir -p $(CURDIR)/rpmbuild/SOURCES
-	cp ./patches/0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch rpmbuild/SOURCES/;
-	git archive --prefix=fido-device-onboard-rs-$(COMMIT)/ --format=tar.gz HEAD > $(RPM_TARBALL)
-
-$(VENDOR_TARBALL):
-	[ "$(ID)" = "fedora" ] && [ $(VARIANT_ID) != "eln" ] || ( \
-	mkdir -p $(CURDIR)/rpmbuild/SOURCES ; \
-	./make-vendored-tarfile.sh $(COMMIT) ; \
-	mv fido-device-onboard-rs-$(COMMIT)-vendor-patched.tar.xz rpmbuild/SOURCES ;)
+$(RPM_TARBALL): $(SOURCE_TARBALL) $(VENDOR_TARBALL)
+	mkdir -p $(RPMS_SOURCES_DIR)
+	mv $(SOURCE_TARBALL) $(RPM_TARBALL)
+	mv $(VENDOR_TARBALL) $(RPM_VENDOR_TARBALL);
 
 .PHONY: srpm
-srpm: $(RPM_SPECFILE) $(RPM_TARBALL) $(VENDOR_TARBALL)
+srpm: $(RPM_SPECFILE) $(RPM_TARBALL)
 	rpmbuild -bs \
-		--define "_topdir $(CURDIR)/rpmbuild" \
+		--define "_topdir $(RPM_TOP_DIR)" \
 		$(RPM_SPECFILE)
 
 .PHONY: rpm
-rpm: $(RPM_SPECFILE) $(RPM_TARBALL) $(VENDOR_TARBALL)
-	sudo dnf builddep -y fido-device-onboard
+rpm: $(RPM_SPECFILE) $(RPM_TARBALL)
+	sudo dnf builddep -y $(RPM_SPECFILE)
 	rpmbuild -bb \
-		--define "_topdir $(CURDIR)/rpmbuild" \
+		--define "_topdir $(RPM_TOP_DIR)" \
 		$(RPM_SPECFILE)
+
+#
+# Packit target
+#
+
+.PHONY: packit-create-archive
+packit-create-archive: $(SOURCE_TARBALL) $(VENDOR_TARBALL)
 
 #
 # Generating man pages
