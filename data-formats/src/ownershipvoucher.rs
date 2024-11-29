@@ -327,6 +327,8 @@ impl OwnershipVoucher {
 }
 
 impl<'a> OwnershipVoucher {
+    #[allow(unknown_lints)]
+    #[allow(elided_named_lifetimes)]
     pub fn iter_entries(&'a self) -> Result<EntryIter> {
         Ok(EntryIter {
             voucher: self,
@@ -347,7 +349,7 @@ pub struct EntryIter<'a> {
     last_pubkey: PublicKey,
 }
 
-impl<'a> Iterator for EntryIter<'a> {
+impl Iterator for EntryIter<'_> {
     type Item = Result<OwnershipVoucherEntryPayload>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -378,7 +380,7 @@ impl<'a> Iterator for EntryIter<'a> {
     }
 }
 
-impl<'a> EntryIter<'a> {
+impl EntryIter<'_> {
     fn process_element(
         &mut self,
         entry: OwnershipVoucherEntry,
