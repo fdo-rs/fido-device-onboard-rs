@@ -108,6 +108,8 @@ fn create_user_with_password(user: &str, password: &str) -> Result<()> {
     log::info!("Checking for password encryption");
     if !is_password_encrypted(password) {
         log::info!("Encrypting password");
+        #[allow(unknown_lints)]
+        #[allow(clippy::zombie_processes)]
         let echo = Command::new("echo")
             .arg(password)
             .stdout(Stdio::piped())
