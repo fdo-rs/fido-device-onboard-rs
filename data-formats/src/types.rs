@@ -390,7 +390,7 @@ impl<'de> Deserialize<'de> for IPAddress {
     {
         struct IPAddressVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for IPAddressVisitor {
+        impl serde::de::Visitor<'_> for IPAddressVisitor {
             type Value = IPAddress;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -1304,7 +1304,7 @@ impl<'de> Deserialize<'de> for KexSuite {
     {
         struct KexSuiteVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for KexSuiteVisitor {
+        impl serde::de::Visitor<'_> for KexSuiteVisitor {
             type Value = KexSuite;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -1964,7 +1964,7 @@ impl<'de> Deserialize<'de> for RemoteTransport {
     {
         struct RemoteTransportVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for RemoteTransportVisitor {
+        impl serde::de::Visitor<'_> for RemoteTransportVisitor {
             type Value = RemoteTransport;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {

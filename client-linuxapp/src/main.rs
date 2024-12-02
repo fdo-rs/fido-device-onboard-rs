@@ -1231,7 +1231,8 @@ async fn main() -> Result<()> {
         Command::new("systemctl")
             .arg("reboot")
             .spawn()
-            .expect("Reboot failed");
+            .expect("Reboot failed")
+            .wait()?;
     }
     Ok(())
 }
