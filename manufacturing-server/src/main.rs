@@ -16,7 +16,7 @@ use openssl::{
     x509::X509,
 };
 use serde_yaml::Value;
-use tempdir::TempDir;
+use tempfile::TempDir;
 use tokio::signal::unix::{signal, SignalKind};
 use warp::reply::Response;
 
@@ -337,13 +337,13 @@ async fn main() -> Result<()> {
                 *res.status_mut() = warp::http::StatusCode::NOT_FOUND;
                 return res;
             }
-            let tmp_dir = TempDir::new("manufacturer-server-ovs").unwrap();
+            let tmp_dir = TempDir::with_prefix("manufacturer-server-ovs").unwrap();
             for ov in ovs {
                 let file_path = tmp_dir.path().join(ov.header().guid().to_string());
                 let tmp_file = File::create(file_path).unwrap();
                 OwnershipVoucher::serialize_to_writer(&ov, &tmp_file).unwrap();
             }
-            let tmp_dir_archive = TempDir::new("manufacturer-server-ovs-archive").unwrap();
+            let tmp_dir_archive = TempDir::with_prefix("manufacturer-server-ovs-archive").unwrap();
             let tar_gz = File::create(tmp_dir_archive.path().join("ovs.tar.gz")).unwrap();
             let mut tar = tar::Builder::new(tar_gz);
             tar.append_dir_all(".", tmp_dir).unwrap();
