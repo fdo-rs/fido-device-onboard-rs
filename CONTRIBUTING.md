@@ -9,7 +9,7 @@ If you want to suggest any changes to the process, please feel free to open a Pu
 
 ### Developing / building
 
-There are a number of ways in which you can set up development environments for working on FDO (FIDO Device Onboarding). 
+There are a number of ways in which you can set up development environments for working on FDO (FIDO Device Onboarding).
 
 #### On Fedora host system
 
@@ -19,7 +19,7 @@ Previous Fedora releases *might* need a different set of dependencies than the o
 In order to make a test build of this crate, when using Fedora, you can run:
 
 ``` bash
-sudo yum install -y cargo rust rust-src git-core openssl-devel clippy rustfmt golang tpm2-tss-devel clevis clevis-luks cryptsetup cryptsetup-devel clang-devel cracklib-dicts
+sudo yum install -y cargo rust rust-src git-core openssl-devel clippy rustfmt golang tpm2-tss-devel clevis clevis-luks cryptsetup cryptsetup-devel clang-devel cracklib-dicts sqlite-devel libpq-devel
 git clone https://github.com/fedora-iot/fido-device-onboard-rs.git
 cd fido-device-onboard-rs
 cargo build --release
@@ -32,26 +32,26 @@ After making changes, you can use `cargo test` to run the test suite, `cargo fmt
 
 If your host operating system is other than Fedora, following two ways are suggested for devlopement setup.
 1.VSCODE remote containers
-2.Toolbox 
+2.Toolbox
 
 ##### 1. VSCODE remote container setup:
 
 Pre-requisites:
-- Install VSCODE for your host operating system. 
+- Install VSCODE for your host operating system.
 - Install ‘Remote-containers’ extension OR you can also install the ‘Remote Development’ extension which contains three extensions useful for remote container development.
 - Download and install Docker Desktop for your operating system. You need to keep running docker desktop to use VSCODE container feature. Check docker status by running ‘docker info’ on command line.
 
 Setup:
 - Open VSCODE and enter ‘Remote-Containers: Clone Repository in Container Volume...’.
-- Select ‘Github’ then enter the repository name and finally the branch name to be cloned. Make sure you clone repo in remote-containers option and not ‘Git clone repository’ which will clone locally and have your host system’ filesystem. 
+- Select ‘Github’ then enter the repository name and finally the branch name to be cloned. Make sure you clone repo in remote-containers option and not ‘Git clone repository’ which will clone locally and have your host system’ filesystem.
 Repo name : fedora-iot/fido-device-onboard-rs or your forked fido repo name
 Branch: main
 - Once the repo is cloned ,it can be accessed via terminal/cmd line in the VSCODE debug console. (It might take a bit longer to download everything at first).
 - Inside terminal, /workspaces/fido-device-onboard-rs (default directory) run following commands to build and run test suite after successful build:
 ``` bash
 cargo build
-cargo test 
-``` 
+cargo test
+```
 
 ##### 2. ToolBox
 
@@ -67,9 +67,9 @@ You can find the name of the container using : 'toolbox list' command.
 Once you enter tool , download required packages for fdo:
 
 ``` bash
-sudo yum install -y cargo rust rust-src git-core openssl-devel clippy rustfmt golang tpm2-tss-devel clevis clevis-luks cryptsetup cryptsetup-devel clang-devel
+sudo yum install -y cargo rust rust-src git-core openssl-devel clippy rustfmt golang tpm2-tss-devel clevis clevis-luks cryptsetup cryptsetup-devel clang-devel cracklib-dicts sqlite-devel libpq-devel
 git clone git@github.com:fedora-iot/fido-device-onboard-rs.git
-cd fido-device-onboard-rs 
+cd fido-device-onboard-rs
 cargo build
 cargo test
 ```
