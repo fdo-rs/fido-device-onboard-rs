@@ -327,7 +327,7 @@ impl OwnershipVoucher {
 }
 
 impl<'a> OwnershipVoucher {
-    pub fn iter_entries(&'a self) -> Result<EntryIter> {
+    pub fn iter_entries(&'a self) -> Result<EntryIter<'a>> {
         Ok(EntryIter {
             voucher: self,
             index: 0,
