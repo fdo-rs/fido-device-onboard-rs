@@ -125,6 +125,15 @@ rpm: $(RPM_SPECFILE) $(RPM_TARBALL) $(RPM_PATCH_FILE)
 		$(RPM_SPECFILE)
 
 #
+# Packit target
+#
+
+.PHONY: packit-create-archive
+packit-create-archive: $(SOURCE_TARBALL) $(VENDOR_TARBALL)
+	cp $(PATCH_FILE) .
+	ls -1 $(SOURCE_TARBALL)
+
+#
 # Generating man pages
 #
 
