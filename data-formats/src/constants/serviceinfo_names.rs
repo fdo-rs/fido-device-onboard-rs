@@ -6,7 +6,7 @@ impl<'de> serde::Deserialize<'de> for ServiceInfoModule {
         D: serde::de::Deserializer<'de>,
     {
         struct SIMVisitor;
-        impl<'de> serde::de::Visitor<'de> for SIMVisitor {
+        impl serde::de::Visitor<'_> for SIMVisitor {
             type Value = ServiceInfoModule;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
