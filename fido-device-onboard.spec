@@ -10,7 +10,6 @@ License:        BSD-3-Clause
 
 URL:            https://github.com/fdo-rs/fido-device-onboard-rs
 Source0:        %{url}/archive/v%{version}/%{name}-rs-%{version}.tar.gz
-# See make-vendored-tarfile.sh in upstream repo
 Source1:        %{name}-rs-%{version}-vendor-patched.tar.xz
 Patch1:         0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch
 
