@@ -38,60 +38,70 @@ actions:
         - bash -c "make packit-create-archive VERSION=${PACKIT_PROJECT_VERSION}"
 
 jobs:
-    - &fdo_copr_build
-      job: copr_build
-      trigger: pull_request
-      targets:
-          centos-stream-9: {}
-          fedora-latest-stable: {}
-          fedora-latest: {}
-          fedora-rawhide: {}
 
-    - job: tests
-      trigger: pull_request
-      identifier: onboarding
-      fmf_path: test/fmf
-      tmt_plan: plans/onboarding
-      targets:
-          centos-stream-9: {}
-          fedora-latest-stable: {}
-          fedora-latest: {}
-          fedora-rawhide: {}
+  # Fedora jobs
 
-    - job: sync_from_downstream
-      trigger: commit
+  - &fdo_copr_build_fedora
+    job: copr_build
+    packages: [fido-device-onboard-fedora]
+    trigger: pull_request
+    targets: ["fedora-latest-stable", "fedora-latest", "fedora-rawhide"]
 
-    - job: propose_downstream
-      trigger: release
-      packages: [fido-device-onboard-fedora]
-      dist_git_branches:
-        - fedora-development
-        - fedora-latest-stable
+  - <<: *fdo_copr_build_fedora
+    trigger: commit
+    branch: main
+    owner: "@fedora-iot"
+    project: fedora-iot
 
-    - job: propose_downstream
-      trigger: release
-      packages: [fido-device-onboard-centos]
-      dist_git_branches:
-        - c10s
-        - c9s
+  - job: tests
+    trigger: pull_request
+    identifier: onboarding-fedora
+    fmf_path: test/fmf
+    tmt_plan: plans/onboarding
+    packages: [fido-device-onboard-fedora]
+    targets: ["fedora-latest-stable", "fedora-latest", "fedora-rawhide"]
 
-    - job: koji_build
-      trigger: commit
-      allowed_pr_authors: [all_committers]
-      dist_git_branches:
-        - fedora-development
-        - fedora-latest-stable
+  - job: sync_from_downstream
+    trigger: commit
 
-    - job: bodhi_update
-      trigger: commit
-      allowed_builders: [all_committers]
-      dist_git_branches:
-        - fedora-development
-        - fedora-latest-stable
+  - job: propose_downstream
+    trigger: release
+    packages: [fido-device-onboard-fedora]
+    dist_git_branches: ["fedora-development", "fedora-latest-stable"]
 
-    - <<: *fdo_copr_build
-      trigger: commit
-      branch: main
-      owner: "@fedora-iot"  # copr repo namespace
-      project: fedora-iot   # copr repo name so you can consume the builds
-...
+  - job: koji_build
+    trigger: commit
+    allowed_pr_authors: [all_committers]
+    dist_git_branches: ["fedora-development", "fedora-latest-stable"]
+
+  - job: bodhi_update
+    trigger: commit
+    allowed_builders: [all_committers]
+    dist_git_branches: ["fedora-development", "fedora-latest-stable"]
+
+  # CentOS jobs
+
+  - &fdo_copr_build_centos
+    job: copr_build
+    packages: [fido-device-onboard-centos]
+    trigger: pull_request
+    targets: ["centos-stream-9", "centos-stream-10"]
+
+  - <<: *fdo_copr_build_centos
+    trigger: commit
+    branch: main
+    owner: "@fedora-iot"
+    project: fedora-iot
+
+  - job: tests
+    trigger: pull_request
+    identifier: onboarding-centos
+    fmf_path: test/fmf
+    tmt_plan: plans/onboarding
+    packages: [fido-device-onboard-centos]
+    targets: ["centos-stream-9", "centos-stream-10"]
+
+  - job: propose_downstream
+    trigger: release
+    packages: [fido-device-onboard-centos]
+    dist_git_branches: ["c10s", "c9s"]
