@@ -4,12 +4,12 @@
 specfile_path: fido-device-onboard.spec
 
 files_to_sync:
-    - src:
-      - patches/0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch
-      - .packit.yaml
-      - fido-device-onboard.spec
+  - src:
+      - ".packit.yaml"
+      - "fido-device-onboard.spec"
       - "fido-device-onboard-rs-*-vendor-patched.tar.xz"
-      dest: .
+      - "patches/0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch"
+    dest: .
 
 upstream_package_name: fido-device-onboard
 downstream_package_name: fido-device-onboard
@@ -18,17 +18,17 @@ upstream_tag_template: v{version}
 copy_upstream_release_description: true
 
 srpm_build_deps:
-    - cargo
-    - openssl-devel
+  - cargo
+  - openssl-devel
 
 packages:
-    fido-device-onboard-fedora:
-        downstream_package_name: fido-device-onboard
-        upstream_package_name: fido-device-onboard
-    fido-device-onboard-centos:
-        downstream_package_name: fido-device-onboard
-        upstream_package_name: fido-device-onboard
-        pkg_tool: centpkg
+  fido-device-onboard-fedora:
+    downstream_package_name: fido-device-onboard
+    upstream_package_name: fido-device-onboard
+  fido-device-onboard-centos:
+    downstream_package_name: fido-device-onboard
+    upstream_package_name: fido-device-onboard
+    pkg_tool: centpkg
 
 actions:
     pre-sync:
