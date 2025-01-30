@@ -30,6 +30,7 @@ help:
 	@echo "    vendor:             Generate vendor tar file in the current directory."
 	@echo "    rpm:                Generate RPM."
 	@echo "    srpm:               Generate SRPM."
+	@echo "    test:               Run the tests."
 	@echo "    man:                Generate man pages."
 
 #
@@ -147,3 +148,38 @@ man: $(MAN_FILES)
 
 $(RST_DIR)/%.1: $(RST_DIR)/%.rst
 	rst2man $< > $@
+
+#
+# Run tests
+#
+SQLITE_MANUFACTURER_DATABASE_URL=/tmp/ci-manufacturer-db.sqlite
+SQLITE_MANUFACTURER_MIGRATIONS_FILE=./migrations/migrations_manufacturing_server_sqlite
+SQLITE_OWNER_DATABASE_URL=/tmp/ci-owner-db.sqlite
+SQLITE_OWNER_MIGRATIONS_FILE=./migrations/migrations_owner_onboarding_server_sqlite
+SQLITE_RENDEZVOUS_DATABASE_URL=/tmp/ci-rendezvous-db.sqlite
+SQLITE_RENDEZVOUS_MIGRATIONS_FILE=./migrations/migrations_rendezvous_server_sqlite
+
+diesel_cmd:
+	[ -n "$$(command -v diesel)" ] || cargo install --force diesel_cli --no-default-features --features sqlite;
+
+$(SQLITE_MANUFACTURER_DATABASE_URL): diesel_cmd
+	diesel migration run --migration-dir $(SQLITE_MANUFACTURER_MIGRATIONS_FILE) \
+	                     --database-url $(SQLITE_MANUFACTURER_DATABASE_URL)
+
+$(SQLITE_OWNER_DATABASE_URL): diesel_cmd
+	diesel migration run --migration-dir $(SQLITE_OWNER_MIGRATIONS_FILE) \
+	                     --database-url $(SQLITE_OWNER_DATABASE_URL)
+
+$(SQLITE_RENDEZVOUS_DATABASE_URL): diesel_cmd
+	diesel migration run --migration-dir $(SQLITE_RENDEZVOUS_MIGRATIONS_FILE) \
+	                     --database-url $(SQLITE_RENDEZVOUS_DATABASE_URL)
+
+.PHONY: test
+test: $(SQLITE_MANUFACTURER_DATABASE_URL) $(SQLITE_OWNER_DATABASE_URL) $(SQLITE_RENDEZVOUS_DATABASE_URL)
+	SQLITE_MANUFACTURER_DATABASE_URL=$(SQLITE_MANUFACTURER_DATABASE_URL) \
+	SQLITE_OWNER_DATABASE_URL=$(SQLITE_OWNER_DATABASE_URL) \
+	SQLITE_RENDEZVOUS_DATABASE_URL=$(SQLITE_RENDEZVOUS_DATABASE_URL) \
+	cargo test --workspace; \
+	rm -f $(SQLITE_MANUFACTURER_DATABASE_URL) \
+	      $(SQLITE_OWNER_DATABASE_URL) \
+				$(SQLITE_RENDEZVOUS_DATABASE_URL);
