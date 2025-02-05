@@ -11,4 +11,12 @@
 /docs/_site/
 /docs/.jekyll-cache/
 /docs/Gemfile.lock
+# RPM build directory
 /rpmbuild
+
+# Vendor directory
+/vendor
+
+# Source and vendor tar files
+fido-device-onboard-rs-*.tar.gz
+fido-device-onboard-rs-*-vendor-patched.tar.xz
