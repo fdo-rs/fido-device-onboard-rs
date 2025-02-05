@@ -32,14 +32,10 @@ packages:
 
 actions:
     pre-sync:
-        - bash -c "./make-vendored-tarfile.sh ${PACKIT_PROJECT_VERSION}"
+        - bash -c "make vendor VERSION=${PACKIT_PROJECT_VERSION}"
         - bash -c "git restore Cargo.lock"
     create-archive:
-        - bash -c "cp ./patches/0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch ."
-        - bash -c "git archive --prefix=fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}/ --format=tar HEAD > fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}.tar"
-        - bash -c "./make-vendored-tarfile.sh ${PACKIT_PROJECT_VERSION}"
-        - bash -c "tar -xvf fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}.tar"
-        - bash -c "ls -1 ./fido-device-onboard-rs-${PACKIT_PROJECT_VERSION}.tar"
+        - bash -c "make packit-create-archive VERSION=${PACKIT_PROJECT_VERSION}"
 
 jobs:
     - &fdo_copr_build
