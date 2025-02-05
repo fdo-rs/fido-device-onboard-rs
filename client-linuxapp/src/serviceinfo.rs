@@ -108,21 +108,19 @@ fn create_user_with_password(user: &str, password: &str) -> Result<()> {
     log::info!("Checking for password encryption");
     if !is_password_encrypted(password) {
         log::info!("Encrypting password");
-        let echo = Command::new("echo")
-            .arg(password)
-            .stdout(Stdio::piped())
-            .spawn()
-            .expect("Error spawning echo");
-        let hasher = Command::new("openssl")
+        let mut openssl = Command::new("openssl")
             .arg("passwd")
             .arg("-6")
             .arg("-stdin")
-            .stdin(Stdio::from(
-                echo.stdout.expect("Error getting stdout from echo"),
-            ))
-            .output()
-            .expect("Error getting output of openssl");
-        str_encrypted_pw = str::from_utf8(&hasher.stdout)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()?;
+
+        let openssl_stdin = openssl.stdin.as_mut().unwrap();
+        openssl_stdin.write_all(password.as_bytes())?;
+        let output = openssl.wait_with_output()?;
+
+        str_encrypted_pw = str::from_utf8(&output.stdout)
             .expect("Error converting [u8] to string")
             .trim_end()
             .to_string();

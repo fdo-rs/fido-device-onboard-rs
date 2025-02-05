@@ -29,16 +29,6 @@ async fn testpw_testpassword() -> Result<()> {
     .await
 }
 
-#[derive(Debug)]
-struct TestCase {
-    #[allow(dead_code)]
-    diun_verification_method_name: &'static str,
-    #[allow(dead_code)]
-    diun_key_type: &'static str,
-    #[allow(dead_code)]
-    error: anyhow::Error,
-}
-
 async fn test_e2e_impl_default_serviceinfo<F>(
     verification_generator: F,
     diun_key_type: &str,
