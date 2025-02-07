@@ -1,6 +1,6 @@
 [package]
 name = "fdo-store"
-version = "0.5.2"
+version = "0.5.3"
 authors = ["Patrick Uiterwijk <patrick@puiterwijk.org>"]
 edition = "2018"
 
@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 anyhow = { version = "1", optional = true}
 
-fdo-data-formats = { path = "../data-formats", version = "0.5.2" }
+fdo-data-formats = { path = "../data-formats", version = "0.5.3" }
 
 thiserror = "1"
 async-trait = "0.1"
@@ -23,7 +23,7 @@ xattr = { version = "1.0", default-features = false, optional = true }  # We *ne
 serde_cbor = { version = "0.11", optional = true }
 
 # database
-fdo-db = { path = "../db", version = "0.5.2"}
+fdo-db = { path = "../db", version = "0.5.3"}
 
 diesel = { version = "2.2.3", features = ["sqlite", "postgres", "r2d2"], optional = true }
 
