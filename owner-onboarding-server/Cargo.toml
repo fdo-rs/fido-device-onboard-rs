@@ -20,6 +20,7 @@ log = "0.4"
 serde_yaml = "0.9"
 time = "0.3"
 hex = "0.4"
+bytes = "1.8.0"
 
 fdo-data-formats = { path = "../data-formats", version = "0.5.3" }
 fdo-http-wrapper = { path = "../http-wrapper", version = "0.5.3", features = ["server", "client"] }
