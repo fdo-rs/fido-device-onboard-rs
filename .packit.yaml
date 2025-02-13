@@ -28,6 +28,7 @@ packages:
   fido-device-onboard-centos:
     downstream_package_name: fido-device-onboard
     upstream_package_name: fido-device-onboard
+    pkg_tool: centpkg
 
 actions:
     pre-sync:
