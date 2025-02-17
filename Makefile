@@ -60,8 +60,7 @@ vendor-tarball: $(VENDOR_TARBALL)
 vendor:
 	vendor_filterer_cmd=$$(command -v cargo-vendor-filterer||:) \
 	[ -z "$$vendor_filterer_cmd" ] || rm -f $${vendor_filterer_cmd}; \
-	# We need v0.5.7 because of RHEL rust version \
-	cargo install --quiet cargo-vendor-filterer@0.5.7; \
+	cargo install --quiet cargo-vendor-filterer@0.5.16; \
 	for platform in $(PLATFORMS); do  \
 		args+="--platform $${platform} "; \
 	done; \
