@@ -31,11 +31,12 @@ packages:
     pkg_tool: centpkg
 
 actions:
-    pre-sync:
-        - bash -c "make vendor VERSION=${PACKIT_PROJECT_VERSION}"
-        - bash -c "git restore Cargo.lock"
-    create-archive:
-        - bash -c "make packit-create-archive VERSION=${PACKIT_PROJECT_VERSION}"
+  # for the propose-downstream CLI command
+  pre-sync:
+    - bash -c "make vendor-tarball VERSION=${PACKIT_PROJECT_VERSION}"
+  # for the srpm and copr builds
+  create-archive:
+    - bash -c "make packit-create-archive VERSION=${PACKIT_PROJECT_VERSION}"
 
 jobs:
 
