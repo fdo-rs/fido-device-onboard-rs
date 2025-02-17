@@ -7,7 +7,7 @@ use std::{
     string::ToString,
 };
 
-use aws_nitro_enclaves_cose::crypto::{SigningPrivateKey, SigningPublicKey};
+use aws_nitro_enclaves_cose::crypto::{Openssl, SigningPrivateKey, SigningPublicKey};
 use aws_nitro_enclaves_cose::CoseSign1 as COSESignInner;
 use serde_bytes::ByteBuf;
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -1806,7 +1806,7 @@ impl COSESign {
         };
         let payload = payload.serialize_data()?;
 
-        let inner = COSESignInner::new(&payload, &unprotected.into(), sign_key)?;
+        let inner = COSESignInner::new::<Openssl>(&payload, &unprotected.into(), sign_key)?;
 
         Self::new_from_inner(inner)
     }
@@ -1830,14 +1830,18 @@ impl COSESign {
         let mut protected: aws_nitro_enclaves_cose::header_map::HeaderMap = protected.into();
         protected.insert(1.into(), (sig_alg as i8).into());
 
-        let inner =
-            COSESignInner::new_with_protected(&payload, &protected, &unprotected.into(), sign_key)?;
+        let inner = COSESignInner::new_with_protected::<Openssl>(
+            &payload,
+            &protected,
+            &unprotected.into(),
+            sign_key,
+        )?;
 
         Self::new_from_inner(inner)
     }
 
     pub fn verify(&self, sign_key: &dyn SigningPublicKey) -> Result<(), Error> {
-        if self.cached_inner.verify_signature(sign_key)? {
+        if self.cached_inner.verify_signature::<Openssl>(sign_key)? {
             Ok(())
         } else {
             Err(Error::InconsistentValue("Signature verification failed"))
@@ -1860,7 +1864,7 @@ impl COSESign {
     where
         T: Serializable,
     {
-        let payload = self.cached_inner.get_payload(None)?;
+        let payload = self.cached_inner.get_payload::<Openssl>(None)?;
         Ok(UnverifiedValue(T::deserialize_data(&payload)?))
     }
 
@@ -1868,7 +1872,7 @@ impl COSESign {
     where
         T: Serializable,
     {
-        let payload = self.cached_inner.get_payload(Some(key))?;
+        let payload = self.cached_inner.get_payload::<Openssl>(Some(key))?;
         T::deserialize_data(&payload)
     }
 
@@ -1896,7 +1900,9 @@ impl COSESign {
     where
         T: serde::de::DeserializeOwned,
     {
-        let (protected, _) = self.cached_inner.get_protected_and_payload(None)?;
+        let (protected, _) = self
+            .cached_inner
+            .get_protected_and_payload::<Openssl>(None)?;
         match protected.get(&header_key.cbor_value()) {
             None => Ok(None),
             Some(val) => Ok(Some(UnverifiedValue(serde_cbor::value::from_value(
@@ -1913,7 +1919,9 @@ impl COSESign {
     where
         T: serde::de::DeserializeOwned,
     {
-        let (protected, _) = self.cached_inner.get_protected_and_payload(Some(key))?;
+        let (protected, _) = self
+            .cached_inner
+            .get_protected_and_payload::<Openssl>(Some(key))?;
         match protected.get(&header_key.cbor_value()) {
             None => Ok(None),
             Some(val) => Ok(Some(serde_cbor::value::from_value(val.clone())?)),
