@@ -26,8 +26,9 @@ help:
 	@echo "The following targets are available:"
 	@echo
 	@echo "    help:               Print this usage information."
-	@echo "    source:             Generate source tar file in the current directory."
-	@echo "    vendor:             Generate vendor tar file in the current directory."
+	@echo "    source-tarball:     Generate source tar file in the current directory."
+	@echo "    vendor-tarball:     Generate vendor tar file in the current directory."
+	@echo "    vendor:             Vendor dependencies and configure cargo build accordingly."
 	@echo "    rpm:                Generate RPM."
 	@echo "    srpm:               Generate SRPM."
 	@echo "    test:               Run the tests."
@@ -42,34 +43,39 @@ SOURCE_TARBALL=fido-device-onboard-rs-$(VERSION).tar.gz
 $(SOURCE_TARBALL):
 	git archive --prefix=fido-device-onboard-rs-$(VERSION)/ --format=tar.gz HEAD > $(SOURCE_TARBALL)
 
-.PHONY: source
-source: $(SOURCE_TARBALL)
+.PHONY: source-tarball
+source-tarball: $(SOURCE_TARBALL)
 
 VENDOR_TARBALL=fido-device-onboard-rs-$(VERSION)-vendor-patched.tar.xz
 
-$(VENDOR_TARBALL):
-	vendor_filterer_cmd=$$(command -v cargo-vendor-filterer||:)
-	[ -z "$$vendor_filterer_cmd" ] || rm -f $${vendor_filterer_cmd}
-	# We need v0.5.7 because of RHEL rust version
-	cargo install --quiet cargo-vendor-filterer@0.5.7;
-	for platform in $(PLATFORMS); do  \
-		args+="--platform $${platform} "; \
-	done
-	# https://issues.redhat.com/browse/RHEL-65521
-	args+="--exclude-crate-path idna#tests "
-	rm -rf vendor
-	# Use the official crate version
-	patch -p1 < patches/0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch
-	cargo vendor-filterer $${args}
-	# Reapply the crate patch so cargo build keeps working
-	patch -p1 -R < patches/0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch
-	# Patch the official crate so the build works.
-	patch -p1 < patches/0002-fix-aws-nitro-enclaves-cose.patch
-	tar cJf $(VENDOR_TARBALL) vendor
-	rm -rf vendor
+$(VENDOR_TARBALL): vendor
+	tar cJf $(VENDOR_TARBALL) vendor; \
+	rm -rf .cargo vendor; \
+	git restore Cargo.lock;
+
+.PHONY: vendor-tarball
+vendor-tarball: $(VENDOR_TARBALL)
 
 .PHONY: vendor
-vendor: $(VENDOR_TARBALL)
+vendor:
+	vendor_filterer_cmd=$$(command -v cargo-vendor-filterer||:) \
+	[ -z "$$vendor_filterer_cmd" ] || rm -f $${vendor_filterer_cmd}; \
+	# We need v0.5.7 because of RHEL rust version \
+	cargo install --quiet cargo-vendor-filterer@0.5.7; \
+	for platform in $(PLATFORMS); do  \
+		args+="--platform $${platform} "; \
+	done; \
+	# https://issues.redhat.com/browse/RHEL-65521 \
+	args+="--exclude-crate-path idna#tests "; \
+	rm -rf vendor; \
+	# Use the official crate version \
+	patch -p1 < patches/0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch; \
+	mkdir -p .cargo; \
+	cargo vendor-filterer $${args} > ./.cargo/config.toml; \
+	# Reapply the crate patch so cargo build keeps working \
+	patch -p1 -R < patches/0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch; \
+	# Patch the official crate so the build works. \
+	patch -p1 < patches/0002-fix-aws-nitro-enclaves-cose.patch; \
 
 #
 # Building packages
