@@ -25,7 +25,7 @@ serde_cbor = { version = "0.11", optional = true }
 # database
 fdo-db = { path = "../db", version = "0.5.3"}
 
-diesel = { version = "2.2.3", features = ["sqlite", "postgres", "r2d2"], optional = true }
+diesel = { version = "2.2.7", features = ["sqlite", "postgres", "r2d2"], optional = true }
 
 [features]
 directory = ["xattr", "serde_cbor"]
