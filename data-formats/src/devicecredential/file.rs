@@ -11,7 +11,9 @@ use crate::{
     DeviceCredential, ProtocolVersion,
 };
 
-use aws_nitro_enclaves_cose::{error::CoseError, sign::SignatureAlgorithm};
+use aws_nitro_enclaves_cose::{
+    crypto::MessageDigest, crypto::SignatureAlgorithm, error::CoseError,
+};
 use openssl::{pkey::PKey, sign::Signer};
 use serde::{Deserialize, Serialize};
 use serde_tuple::Serialize_tuple;
@@ -249,7 +251,7 @@ impl TpmCoseSigner {
         public: &tss_esapi::structures::Public,
     ) -> Result<
         (
-            (SignatureAlgorithm, openssl::hash::MessageDigest),
+            (SignatureAlgorithm, MessageDigest),
             tss_esapi::interface_types::algorithm::HashingAlgorithm,
             usize,
         ),
@@ -264,13 +266,13 @@ impl TpmCoseSigner {
                 };
                 let param_hash_alg = match hash_alg {
                     tss_esapi::interface_types::algorithm::HashingAlgorithm::Sha256 => {
-                        openssl::hash::MessageDigest::sha256()
+                        MessageDigest::Sha256
                     }
                     tss_esapi::interface_types::algorithm::HashingAlgorithm::Sha384 => {
-                        openssl::hash::MessageDigest::sha384()
+                        MessageDigest::Sha384
                     }
                     tss_esapi::interface_types::algorithm::HashingAlgorithm::Sha512 => {
-                        openssl::hash::MessageDigest::sha512()
+                        MessageDigest::Sha512
                     }
                     _ => {
                         return Err(CoseError::UnsupportedError(
@@ -313,15 +315,7 @@ impl TpmCoseSigner {
 }
 
 impl aws_nitro_enclaves_cose::crypto::SigningPublicKey for TpmCoseSigner {
-    fn get_parameters(
-        &self,
-    ) -> Result<
-        (
-            aws_nitro_enclaves_cose::sign::SignatureAlgorithm,
-            openssl::hash::MessageDigest,
-        ),
-        CoseError,
-    > {
+    fn get_parameters(&self) -> Result<(SignatureAlgorithm, MessageDigest), CoseError> {
         Ok(TpmCoseSigner::public_to_parameters(&self.signing_public)?.0)
     }
 
