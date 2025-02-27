@@ -15,7 +15,6 @@ upstream_package_name: fido-device-onboard
 downstream_package_name: fido-device-onboard
 
 upstream_tag_template: v{version}
-copy_upstream_release_description: true
 
 srpm_build_deps:
   - cargo
