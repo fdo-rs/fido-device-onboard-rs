@@ -6,7 +6,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0"
-diesel = { version = "2.2.3", features = ["sqlite", "postgres", "r2d2"] }
+diesel = { version = "2.2.7", features = ["sqlite", "postgres", "r2d2"] }
 
 fdo-data-formats = { path = "../data-formats", version = "0.5.3" }
 
