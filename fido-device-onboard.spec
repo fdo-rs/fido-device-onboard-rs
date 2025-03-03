@@ -11,7 +11,7 @@ License:        BSD-3-Clause
 URL:            https://github.com/fdo-rs/fido-device-onboard-rs
 Source0:        %{url}/archive/v%{version}/%{name}-rs-%{version}.tar.gz
 Source1:        %{name}-rs-%{version}-vendor-patched.tar.xz
-Patch1:         0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch
+Patch1:         0001-use-released-aws-nitro-enclaves-cose-version.patch
 
 # Because nobody cares
 ExcludeArch: %{ix86}

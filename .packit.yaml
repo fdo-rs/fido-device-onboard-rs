@@ -8,7 +8,7 @@ files_to_sync:
       - ".packit.yaml"
       - "fido-device-onboard.spec"
       - "fido-device-onboard-rs-*-vendor-patched.tar.xz"
-      - "patches/0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch"
+      - "patches/0001-use-released-aws-nitro-enclaves-cose-version.patch"
     dest: .
 
 upstream_package_name: fido-device-onboard
