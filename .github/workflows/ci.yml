@@ -11,7 +11,7 @@ jobs:
     name: Test docs building
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/jekyll-build-pages@main
         with:
           source: ./docs
@@ -21,7 +21,7 @@ jobs:
     name: Build containers
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Build containers
       uses: ./.github/actions/build_containers
 
@@ -29,7 +29,7 @@ jobs:
     name: Check spelling
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Check spelling
         uses: codespell-project/actions-codespell@master
         with:
@@ -43,7 +43,7 @@ jobs:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
@@ -53,7 +53,7 @@ jobs:
     name: Gofmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: if [ "$(gofmt -d -s -l . | tee /dev/stderr | wc -l)" -gt 0 ]; then exit 1; fi
 
   clippy:
@@ -61,7 +61,7 @@ jobs:
     runs-on: ubuntu-latest
     container: fedora:latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Cache
         uses: actions/cache@v4
         with:
@@ -88,7 +88,7 @@ jobs:
       - name: Install deps
         run: |
           dnf install -y make gcc openssl openssl-devel findutils golang git tpm2-tss-devel swtpm swtpm-tools git clevis clevis-luks cryptsetup cryptsetup-devel clang-devel cracklib-dicts sqlite sqlite-devel libpq libpq-devel
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - name: Fix git trust
@@ -142,7 +142,7 @@ jobs:
   postgres_test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Run test
@@ -151,7 +151,7 @@ jobs:
   commitlint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: actions/setup-node@v3
@@ -171,7 +171,7 @@ jobs:
     runs-on: ubuntu-latest
     container: fedora:latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: install deps
         run: |
           dnf install -y make python3-docutils
@@ -182,7 +182,7 @@ jobs:
     name: Test Devcontainer Creation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install devcontainer CLI
         run: npm install -g @vscode/dev-container-cli
       - name: Build devcontainer
