@@ -3,16 +3,15 @@
 %global combined_license Apache-2.0 AND (Apache-2.0 OR BSL-1.0) AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR MIT) AND ((Apache-2.0 OR MIT) AND BSD-3-Clause) AND (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT) AND BSD-2-Clause AND BSD-3-Clause AND (CC0-1.0 OR Apache-2.0) AND (CC0-1.0 OR MIT-0 OR Apache-2.0) AND ISC AND MIT AND ((MIT OR Apache-2.0) AND Unicode-DFS-2016) AND (Apache-2.0 OR MIT OR Zlib) AND MPL-2.0 AND (Unlicense OR MIT)
 
 Name:           fido-device-onboard
-Version:        0.5.1
+Version:        0.5.3
 Release:        1%{?dist}
 Summary:        A rust implementation of the FIDO Device Onboard Specification
 License:        BSD-3-Clause
 
 URL:            https://github.com/fdo-rs/fido-device-onboard-rs
 Source0:        %{url}/archive/v%{version}/%{name}-rs-%{version}.tar.gz
-# See make-vendored-tarfile.sh in upstream repo
 Source1:        %{name}-rs-%{version}-vendor-patched.tar.xz
-Patch1:         0001-Revert-chore-use-git-fork-for-aws-nitro-enclaves-cos.patch
+Patch1:         0001-use-released-aws-nitro-enclaves-cose-version.patch
 
 # Because nobody cares
 ExcludeArch: %{ix86}
@@ -313,6 +312,9 @@ Requires: fdo-init = %{version}-%{release}
 %systemd_postun_with_restart fdo-aio.service
 
 %changelog
+* Thu Jan 09 2025 Peter Robinson <pbrobinson@fedoraproject.org> - 0.5.2-1
+- Update to 0.5.2
+
 * Thu Nov 21 2024 Antonio Murdaca <amurdaca@redhat.com> - 0.5.1-1
 - Update to 0.5.1
 

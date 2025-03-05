@@ -227,7 +227,8 @@ mod tests {
     fn test_ownershipvoucher_parsing() {
         let ov_path = TC::test_asset_path("testdevice1.ov");
 
-        let result = TC::run_external("ownershipvoucher", &[ov_path.to_str().unwrap()]);
+        let result = TC::run_external("ownershipvoucher", &[ov_path.to_str().unwrap()])
+            .expect("Error running ownershipvoucher");
 
         assert!(result.status.success());
         result.stdout_equals(
@@ -244,7 +245,8 @@ Device Info: testdevice",
         let ov_path = TC::test_asset_path("testdevice1.ov");
         let ov_path = ov_path.to_str().unwrap();
 
-        let result = TC::run_external("ownershipvoucher_many", &[&ov_path, &ov_path]);
+        let result = TC::run_external("ownershipvoucher_many", &[ov_path, ov_path])
+            .expect("Error running ownershipvoucher_many");
 
         assert!(result.status.success());
         result.stdout_equals(
@@ -263,7 +265,8 @@ Device 1
     #[test]
     #[serial]
     fn dont_crash_on_empty_ov() {
-        let result = TC::run_external("ownershipvoucher", &["/dev/null"]);
+        let result = TC::run_external("ownershipvoucher", &["/dev/null"])
+            .expect("Error running ownershipvoucher with /dev/null");
 
         assert!(result.status.success());
         result.stdout_equals("failed to parse: Array parse error: No data to be deserialized");

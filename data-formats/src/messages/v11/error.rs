@@ -78,7 +78,6 @@ impl ServerMessage for ErrorMessage {}
 
 #[cfg(test)]
 mod test {
-    use std::u128;
 
     use super::ErrorCode;
     use super::ErrorMessage;
@@ -90,7 +89,7 @@ mod test {
         let error_code = ErrorCode::InvalidOwnershipVoucher;
         let previous_message_type = MessageType::TO0OwnerSign;
         let error_string = "Ownership voucher manufacturer not trusted".to_string();
-        let error_uuid = 16378777930150272023 as u128;
+        let error_uuid = 16378777930150272023_u128;
         let error = ErrorMessage::new(error_code, previous_message_type, error_string, error_uuid);
 
         let serialized_error = error.serialize_data();
@@ -107,7 +106,7 @@ mod test {
         let error_code = ErrorCode::InvalidOwnershipVoucher;
         let previous_message_type = MessageType::TO0OwnerSign;
         let error_string = "Ownership voucher manufacturer not trusted".to_string();
-        let error_uuid = 16378777930150272023 as u128;
+        let error_uuid = 16378777930150272023_u128;
 
         let error_decoded = hex::decode(error_message_encoded);
         assert!(error_decoded.is_ok());

@@ -327,7 +327,7 @@ impl OwnershipVoucher {
 }
 
 impl<'a> OwnershipVoucher {
-    pub fn iter_entries(&'a self) -> Result<EntryIter> {
+    pub fn iter_entries(&'a self) -> Result<EntryIter<'a>> {
         Ok(EntryIter {
             voucher: self,
             index: 0,
@@ -347,7 +347,7 @@ pub struct EntryIter<'a> {
     last_pubkey: PublicKey,
 }
 
-impl<'a> Iterator for EntryIter<'a> {
+impl Iterator for EntryIter<'_> {
     type Item = Result<OwnershipVoucherEntryPayload>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -378,7 +378,7 @@ impl<'a> Iterator for EntryIter<'a> {
     }
 }
 
-impl<'a> EntryIter<'a> {
+impl EntryIter<'_> {
     fn process_element(
         &mut self,
         entry: OwnershipVoucherEntry,
@@ -567,7 +567,7 @@ fn test_check_device_info_unsupported_characters() {
 fn test_check_device_info_supported_characters() {
     let device_info: String = "FDO".to_string();
     let is_device_info_valid = check_device_info(&device_info);
-    assert_eq!((), is_device_info_valid.unwrap());
+    assert!(is_device_info_valid.is_ok());
 }
 
 impl Serializable for OwnershipVoucherHeader {

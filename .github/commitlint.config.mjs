@@ -8,7 +8,7 @@ const validateBodyMaxLengthIgnoringDeps = async (parsedCommit) => {
       && body != null
       && body.includes('Updates the requirements on');
 
-  const bodyMaxLineLength = 100;
+  const bodyMaxLineLength = 1000;
 
   return [
     isDepsCommit || !body || maxLineLength(body, bodyMaxLineLength),
@@ -16,7 +16,7 @@ const validateBodyMaxLengthIgnoringDeps = async (parsedCommit) => {
   ]
 }
 
-module.exports = {
+export default {
   extends: ['@commitlint/config-conventional'],
   plugins: ['commitlint-plugin-function-rules'],
   rules: {

@@ -38,3 +38,6 @@ default-members = [
 ]
 
 resolver = "2"
+
+[patch.crates-io]
+aws-nitro-enclaves-cose = { git = "https://github.com/awslabs/aws-nitro-enclaves-cose/", rev = "6064f826d551a9db0bd42e9cf928feaf272e8d17" }

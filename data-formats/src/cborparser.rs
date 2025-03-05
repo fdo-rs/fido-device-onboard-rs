@@ -522,17 +522,17 @@ mod test {
     use crate::{DeserializableMany, Serializable};
 
     #[test]
-    fn test_empty_array_static() {
+    fn test_empty_array_static() -> Result<(), String> {
         let data = vec![0x80];
         let parsed: Result<ParsedArray<super::ParsedArraySize1>, _> =
             ParsedArray::deserialize_data(&data);
-        if let Err(crate::Error::ArrayParseError(
-            super::ArrayParseError::InvalidNumberOfElements(0, 1),
-        )) = parsed
-        {
-            assert!(true);
-        } else {
-            panic!("Received: {:?}", parsed);
+
+        match parsed {
+            Err(crate::Error::ArrayParseError(
+                super::ArrayParseError::InvalidNumberOfElements(0, 1),
+            )) => Ok(()), // Return Ok(()) if we get the expected error
+            Err(e) => Err(format!("Unexpected error: {:?}", e)), // Return an error message for unexpected errors
+            Ok(_) => Err("Expected error but received Ok result".into()), // Return an error message for Ok result
         }
     }
 
@@ -676,7 +676,7 @@ mod test {
     }
 
     #[test]
-    fn test_array_with_tagged_integer_map() {
+    fn test_array_with_tagged_integer_map() -> Result<(), String> {
         let data = vec![0x81, 0xC6, 0xA1, 0x01, 0x02];
         let parsed: ParsedArray<super::ParsedArraySize1> =
             ParsedArray::deserialize_data(&data).expect("Failed to parse");
@@ -689,17 +689,18 @@ mod test {
                 {
                     // Correct
                 } else {
-                    panic!("Invalid value");
+                    return Err("Invalid value".to_string());
                 }
             } else {
-                panic!("Not a map found");
+                return Err("Not a map found".to_string());
             }
         } else {
-            panic!("Not a tag found");
+            return Err("Not a tag found".to_string());
         }
         assert_eq!(parsed.tag(), None);
         let serialized = parsed.serialize_data().expect("Failed to serialize");
         assert_eq!(serialized, data);
+        Ok(())
     }
 
     #[test]
