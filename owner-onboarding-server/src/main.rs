@@ -547,6 +547,15 @@ async fn main() -> Result<()> {
     let hello = warp::get().map(|| "Hello from the owner onboarding service");
     let handler_ping = fdo_http_wrapper::server::ping_handler();
 
+    let ud = user_data.clone();
+    let handler_import = warp::post()
+        .and(warp::path("import"))
+        .and(warp::body::content_length_limit(1024 * 16))
+        .and(warp::body::bytes())
+        .map(move |bytes: bytes::Bytes| (ud.clone(), bytes))
+        .untuple_one()
+        .and_then(handlers::handler_import);
+
     // TO2
     let handler_to2_hello_device = fdo_http_wrapper::server::fdo_request_filter(
         ProtocolVersion::Version1_1,
@@ -606,6 +615,7 @@ async fn main() -> Result<()> {
                 .or(handler_to2_device_service_info)
                 .or(handler_to2_done),
         )
+        .or(handler_import) // TODO(runcom): needs authentication with API key at least!
         .recover(fdo_http_wrapper::server::handle_rejection)
         .with(warp::log("owner-onboarding-service"));
 
