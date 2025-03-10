@@ -2,8 +2,25 @@ initial_user:
   username: username_per_device
   sshkeys:
   - "testkeyperdevice"
-files: null
-commands: null
+files:
+- path: /var/lib/fdo/service-info-api/files/hosts
+  permissions: 644
+  source_path: /server/local/etc/hosts
+commands:
+- command: ls
+  args:
+  - /etc/hosts
+  return_stdout: true
+  return_stderr: true
+- command: ls
+  args:
+  - /etc/doesnotexist/whatever.foo
+  may_fail: true
+  return_stdout: true
+  return_stderr: true
+- command: touch
+  args:
+  - /etc/command-testfile
 diskencryption_clevis: null
 additional_serviceinfo: null
 after_onboarding_reboot: false

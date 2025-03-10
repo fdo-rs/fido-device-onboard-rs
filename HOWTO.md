@@ -967,9 +967,18 @@ still required to be set by the user (`DI_SIGN_KEY_PATH`, `DI_HMAC_KEY_PATH`).
   If other devices do not have their `per-device serviceinfo` file under `device_specific_store_driver` they will get onboarded
   with settings from the main file, which is `serviceinfo-api-server.yml`.
   
+  Where:
+  - `initial_user`: the initial user from the per-device serviceinfo configuration will be chosen over the base serviceinfo configuration, if exists.
+  - `files`: add additional [files](#per-device-files) to be written next to the base files.
+  - `commands`: add additional commands to be executed after the base commands.
+  - `diskencryption_clevis`: unhandled
+  - `additional_serviceinfo`: unhandled
+  - `after_onboarding_reboot`: unhandled
+
   1. Initialize the device as mentioned in [How to generate an Ownership Voucher and Credential for a Device](#how-to-generate-an-ownership-voucher-ov-and-credential-for-a-device-device-initialization).
 
   2. Dump the `device-credentials`
+
   ```bash
   fdo-owner-tool dump-device-credential /path/to/device-credentials
   ```
@@ -979,3 +988,7 @@ still required to be set by the user (`DI_SIGN_KEY_PATH`, `DI_HMAC_KEY_PATH`).
   4. You can refer to [per_device_serviceinfo.yml](https://github.com/fedora-iot/fido-device-onboard-rs/blob/main/examples/config/device_specific_serviceinfo.yml) as an example.
 
   5. Follow the onboarding procedure and this particular device will get the serviceinfo settings as mentioned in the above file.
+
+#### Per device files
+
+Files will be written to the `path` location. Both the files from the base and per-device serviceinfo configuration will be written. If the same `path` is defined multiple times in a configuration, the latest `path` definition will be written. If the same `path` is defined in the base as well in the per-device serviceinfo configuration, the per device serviceinfo configuration will have precedence over the base serviceinfo configuration.
