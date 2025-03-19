@@ -13,6 +13,7 @@ FDO version:
     ```
 
 * Update the `fido-device-onboard.spec` file and set the new version: `Version: 0.5.3`
+and update the changelog `rpmdev-bumpspec -D -c "Update to 0.5.3"` (check the release).
 * Update the `version` within the `[[package]]` section in all the `Cargo.toml` files.
 * Update the `[[dependencies]]` in all the `Cargo.toml` files to use the latest
 FDO versions.
