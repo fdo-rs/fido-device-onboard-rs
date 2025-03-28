@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1"
-config = "0.13.4"
+config = "0.15.11"
 openssl = "0.10.70"
 log = "0.4"
 time = "0.3"
