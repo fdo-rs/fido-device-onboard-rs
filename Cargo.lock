@@ -997,7 +997,7 @@ checksum = "25cbce373ec4653f1a01a31e8a5e5ec0c622dc27ff9c4e6606eefef5cbbed4a5"
 
 [[package]]
 name = "fdo-admin-tool"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "anyhow",
  "clap 4.4.18",
@@ -1022,7 +1022,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-client-linuxapp"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "anyhow",
  "devicemapper",
@@ -1044,7 +1044,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-data"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "assert-str",
  "cbindgen",
@@ -1056,7 +1056,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-data-formats"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "aws-nitro-enclaves-cose",
  "byteorder",
@@ -1083,7 +1083,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-db"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "anyhow",
  "diesel",
@@ -1094,7 +1094,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-http-wrapper"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "async-trait",
  "aws-nitro-enclaves-cose",
@@ -1117,7 +1117,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-manufacturing-client"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "anyhow",
  "clap 4.4.18",
@@ -1136,7 +1136,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-manufacturing-server"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "anyhow",
  "config",
@@ -1159,7 +1159,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-owner-onboarding-server"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "anyhow",
  "config",
@@ -1182,7 +1182,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-owner-tool"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "anyhow",
  "clap 4.4.18",
@@ -1203,7 +1203,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-rendezvous-server"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "anyhow",
  "config",
@@ -1222,7 +1222,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-serviceinfo-api-server"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "anyhow",
  "config",
@@ -1241,7 +1241,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-store"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1258,7 +1258,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-util"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "anyhow",
  "config",
@@ -1886,7 +1886,7 @@ dependencies = [
 
 [[package]]
 name = "integration-tests"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "anyhow",
  "fdo-data-formats",

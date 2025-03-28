@@ -12,7 +12,7 @@
 
 #define FDO_DATA_MAJOR 0
 #define FDO_DATA_MINOR 5
-#define FDO_DATA_PATCH 3
+#define FDO_DATA_PATCH 4
 
 typedef struct FdoOwnershipVoucher FdoOwnershipVoucher;
 
