@@ -19,5 +19,5 @@ install() {
         "/usr/libexec/manufacturing-client-service"
 
     install_and_enable_unit "manufacturing-client.service" \
-        "default.target"
+        "initrd.target"
 }
