@@ -12,7 +12,7 @@ fdo-data-formats = { path = "../data-formats", version = "0.5.4" }
 
 [dev-dependencies]
 fdo-http-wrapper = { path = "../http-wrapper", version = "0.5.2", features = ["server"] }
-openssl = "0.10.70"
+openssl = "0.10.72"
 
 [features]
 postgres = []
