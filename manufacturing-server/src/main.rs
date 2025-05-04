@@ -1,14 +1,15 @@
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
-use std::fs::{self, File};
-use std::io::Read;
+use std::fs;
+
 use std::str::FromStr;
 use std::sync::Arc;
 
-use fdo_data_formats::{constants::ErrorCode, ProtocolVersion};
+use fdo_data_formats::ProtocolVersion;
 use fdo_store::Store;
 
-use warp::{Filter, Rejection};
+use handlers::mgmt;
+use warp::Filter;
 
 use anyhow::{bail, Context, Error, Result};
 use openssl::{
@@ -16,16 +17,13 @@ use openssl::{
     x509::X509,
 };
 use serde_yaml::Value;
-use tempfile::TempDir;
 use tokio::signal::unix::{signal, SignalKind};
-use warp::reply::Response;
 
 use fdo_data_formats::{
     constants::{KeyStorageType, MfgStringType, PublicKeyType, RendezvousVariable},
     ownershipvoucher::OwnershipVoucher,
     publickey::{PublicKey, X5Chain},
     types::{Guid, RendezvousInfo},
-    Serializable,
 };
 use fdo_util::servers::{
     configuration::manufacturing_server::{DiunSettings, ManufacturingServerSettings},
@@ -275,97 +273,16 @@ async fn main() -> Result<()> {
     // Initialize handlers
     let hello = warp::path::end().map(|| "Hello from the manufacturing server");
     let ud = user_data.clone();
-    let handler_ovs = warp::path!("ov" / String)
+    let handler_ovs = warp::path!("ov" / Guid)
         .map(move |guid| (guid, ud.clone()))
-        .and_then(
-            |(guid, ud): (String, Arc<ManufacturingServiceUD>)| async move {
-                let typed_guid = match Guid::from_str(&guid) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        return Err(Rejection::from(fdo_http_wrapper::server::Error::new(
-                            ErrorCode::InternalServerError,
-                            fdo_data_formats::constants::MessageType::Invalid,
-                            &e.to_string(),
-                        )))
-                    }
-                };
-                let ov = match ud.ownership_voucher_store.load_data(&typed_guid).await {
-                    Ok(ov) => ov.unwrap(),
-                    Err(e) => {
-                        return Err(Rejection::from(fdo_http_wrapper::server::Error::new(
-                            ErrorCode::InternalServerError,
-                            fdo_data_formats::constants::MessageType::Invalid,
-                            &format!("Error loading ownership voucher with guid {}: {}", guid, e),
-                        )))
-                    }
-                };
-                let ov_pem = match ov.to_pem() {
-                    Ok(v) => v,
-                    Err(e) => {
-                        return Err(Rejection::from(fdo_http_wrapper::server::Error::new(
-                            ErrorCode::InternalServerError,
-                            fdo_data_formats::constants::MessageType::Invalid,
-                            &format!("Error converting ownership voucher to pem: {}", e),
-                        )))
-                    }
-                };
-                let mut res = Response::new(ov_pem.into());
-                res.headers_mut().insert(
-                    "Content-Type",
-                    warp::http::header::HeaderValue::from_static("application/x-pem-file"),
-                );
-                Ok(res)
-            },
-        );
+        .untuple_one()
+        .and_then(mgmt::handler_ov);
+
     let ud = user_data.clone();
     let handler_export = warp::post()
-        .and(warp::path("export").map(move || (ud.clone())).and_then(
-            |ud: Arc<ManufacturingServiceUD>| async move {
-                match ud.ownership_voucher_store.load_all_data().await {
-                    Ok(ovs) => Ok(ovs),
-                    Err(_) => Err(Rejection::from(fdo_http_wrapper::server::Error::new(
-                        ErrorCode::InternalServerError,
-                        fdo_data_formats::constants::MessageType::Invalid,
-                        "Error loading ownership vouchers",
-                    ))),
-                }
-            },
-        ))
-        .map(|ovs: Vec<OwnershipVoucher>| {
-            if ovs.is_empty() {
-                let mut res = Response::new("".into());
-                *res.status_mut() = warp::http::StatusCode::NOT_FOUND;
-                return res;
-            }
-            let tmp_dir = TempDir::with_prefix("manufacturer-server-ovs").unwrap();
-            for ov in ovs {
-                let file_path = tmp_dir.path().join(ov.header().guid().to_string());
-                let tmp_file = File::create(file_path).unwrap();
-                OwnershipVoucher::serialize_to_writer(&ov, &tmp_file).unwrap();
-            }
-            let tmp_dir_archive = TempDir::with_prefix("manufacturer-server-ovs-archive").unwrap();
-            let tar_gz = File::create(tmp_dir_archive.path().join("ovs.tar.gz")).unwrap();
-            let mut tar = tar::Builder::new(tar_gz);
-            tar.append_dir_all(".", tmp_dir).unwrap();
-            tar.finish().unwrap();
-            let mut file = File::open(tmp_dir_archive.path().join("ovs.tar.gz")).unwrap();
-            let mut data: Vec<u8> = Vec::new();
-            match file.read_to_end(&mut data) {
-                Err(why) => {
-                    let mut res = Response::new(why.to_string().into());
-                    *res.status_mut() = warp::http::StatusCode::INTERNAL_SERVER_ERROR;
-                    res
-                }
-                Ok(_) => {
-                    let mut res = Response::new(data.into());
-                    res.headers_mut().insert(
-                        "Content-Type",
-                        warp::http::header::HeaderValue::from_static("application/x-tar"),
-                    );
-                    res
-                }
-            }
-        });
+        .and(warp::path("export"))
+        .map(move || (ud.clone()))
+        .and_then(mgmt::handler_export);
 
     // DI
     let handler_di_app_start = fdo_http_wrapper::server::fdo_request_filter(
