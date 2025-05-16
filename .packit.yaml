@@ -29,6 +29,10 @@ packages:
     downstream_package_name: fido-device-onboard
     upstream_package_name: fido-device-onboard
     pkg_tool: centpkg
+  fido-device-onboard-rhel:
+    downstream_package_name: fido-device-onboard
+    upstream_package_name: fido-device-onboard
+    pkg_tool: centpkg
 
 actions:
   # for the propose-downstream CLI command
@@ -101,3 +105,30 @@ jobs:
     tmt_plan: plans/onboarding
     packages: [fido-device-onboard-centos]
     targets: ["centos-stream-9", "centos-stream-10"]
+
+  # RHEL-10 jobs
+
+  - &fdo_copr_build_rhel
+    job: copr_build
+    packages: [fido-device-onboard-rhel]
+    trigger: pull_request
+    targets:
+      epel-10-x86_64:
+        distros: [RHEL-10.0-Nightly]
+
+  - <<: *fdo_copr_build_rhel
+    trigger: commit
+    branch: main
+    owner: "@fedora-iot"
+    project: fedora-iot
+
+  - job: tests
+    trigger: pull_request
+    identifier: onboarding-image-mode
+    fmf_path: test/fmf
+    tmt_plan: plans/image-mode-onboarding
+    use_internal_tf: true
+    packages: [fido-device-onboard-rhel]
+    targets:
+      epel-10-x86_64:
+        distros: [RHEL-10.0-Nightly]
