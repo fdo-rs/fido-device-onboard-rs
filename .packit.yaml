@@ -101,3 +101,14 @@ jobs:
     tmt_plan: plans/onboarding
     packages: [fido-device-onboard-centos]
     targets: ["centos-stream-9", "centos-stream-10"]
+
+  # RHEL-10 jobs
+
+  - job: tests
+    trigger: pull_request
+    identifier: onboarding-image-mode
+    fmf_path: test/fmf
+    tmt_plan: plans/image-mode-onboarding
+    use_internal_tf: true
+    packages: [fido-device-onboard-centos]
+    targets: ["rhel-10.0"]
