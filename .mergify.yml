@@ -1,38 +1,38 @@
 queue_rules:
-- name: fido-device-onboard-rs
-  conditions:
-    - base=main
-    - "#approved-reviews-by>=1"
+  - name: duplicated fido-device-onboard-rs from Automatic merge on approval
+    queue_conditions:
+      - base=main
+      - "#approved-reviews-by>=1"
+      - "label!=possible stability impact"
+    merge_conditions:
+      - base=main
+      - "#approved-reviews-by>=1"
+    merge_method: merge
+  - name: duplicated fido-device-onboard-rs from Automatic merge on approval (stability
+      impact no impact)
+    queue_conditions:
+      - base=main
+      - "#approved-reviews-by>=1"
+      - "label=possible stability impact"
+      - "label=stability impact assessed: no impact"
+    merge_conditions:
+      - base=main
+      - "#approved-reviews-by>=1"
+    merge_method: merge
+  - name: duplicated fido-device-onboard-rs from Automatic merge on approval (stability
+      impact)
+    queue_conditions:
+      - base=main
+      - "#approved-reviews-by>=2"
+      - "label=possible stability impact"
+    merge_conditions:
+      - base=main
+      - "#approved-reviews-by>=1"
+    merge_method: merge
 
 pull_request_rules:
-  - name: Automatic merge on approval
-    conditions:
-    - base=main
-    - "#approved-reviews-by>=1"
-    - "label!=possible stability impact"
+  - name: Automatic merge on approval + Automatic merge on approval (stability impact
+      no impact) + Automatic merge on approval (stability impact)
+    conditions: []
     actions:
       queue:
-        name: fido-device-onboard-rs
-        method: merge
-
-  - name: Automatic merge on approval (stability impact no impact)
-    conditions:
-    - base=main
-    - "#approved-reviews-by>=1"
-    - "label=possible stability impact"
-    - "label=stability impact assessed: no impact"
-    actions:
-      queue:
-        name: fido-device-onboard-rs
-        method: merge
-
-
-  - name: Automatic merge on approval (stability impact)
-    conditions:
-    - base=main
-    - "#approved-reviews-by>=2"
-    - "label=possible stability impact"
-    actions:
-      queue:
-        name: fido-device-onboard-rs
-        method: merge
