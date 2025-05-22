@@ -1,0 +1,18 @@
+summary: FDO Image Mode test plan
+discover:
+  how: fmf
+  test: image-mode-onboarding
+execute:
+  how: tmt
+provision:
+  hardware:
+    virtualization:
+      is-supported: true
+    cpu:
+      processors: ">= 2"
+    memory: ">= 6 GB"
+
+/fdo-bootc:
+  summary: Test fdo in rhel-10 Image Mode
+  environment+:
+    TEST_CASE: fdo-bootc
