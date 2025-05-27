@@ -1,0 +1,75 @@
+---
+- hosts: image_mode_guest
+  become: no
+  vars:
+    fdo_credential: "false"
+    total_counter: "0"
+    failed_counter: "0"
+
+  tasks:
+    # check installed fido device onboard packages
+    - name: fdo should be installed
+      block:
+        - name: fdo should be installed
+          shell: rpm -qa | grep -E 'fdo|fido'
+
+    # check tpm device
+    - name: check tpm device
+      stat:
+        path: /dev/tpm0
+      ignore_errors: yes
+      when: fdo_credential == "true"
+
+    # case: check fdo onboarding status
+    # after fdo onboarding finished, /boot/device-credentials will be moved to /etc/device-credentials
+    - name: check if fdo onboarding completed successfully
+      block:
+        - name: wait until the file /etc/device-credentials is present before continuing
+          wait_for:
+            path: /etc/device-credentials
+      always:
+        - set_fact:
+            total_counter: "{{ total_counter | int + 1 }}"
+      rescue:
+        - name: failed count + 1
+          set_fact:
+            failed_counter: "{{ failed_counter | int + 1 }}"
+      when: fdo_credential == "true"
+
+    # Check FDO status and task status
+    - name: check fdo-client-linuxapp logs
+      command: journalctl -u fdo-client-linuxapp
+      register: result_fdo_client_linuxapp_journalctl
+      become: yes
+      when:
+        - fdo_credential == "true"
+
+    - name: check secure device onboarding successful
+      block:
+        - assert:
+            that:
+              - "'Secure Device Onboarding DONE' in result_fdo_client_linuxapp_journalctl.stdout"
+            fail_msg: "Secure Device Onboarding not successful"
+            success_msg: "Secure Device Onboarding successful"
+      always:
+        - set_fact:
+            total_counter: "{{ total_counter | int + 1 }}"
+      rescue:
+        - name: failed count + 1
+          set_fact:
+            failed_counter: "{{ failed_counter | int + 1 }}"
+      when: fdo_credential == "true"
+
+    # Check FDO client avc log
+    - name: check FDO client avc logs
+      command: ausearch -m avc -m user_avc -m selinux_err -i
+      ignore_errors: yes
+      become: yes
+      when:
+        - fdo_credential == "true"
+
+    - assert:
+        that:
+          - failed_counter == "0"
+        fail_msg: "Run {{ total_counter }} tests, but {{ failed_counter }} of them failed"
+        success_msg: "Totally {{ total_counter }} test passed"
