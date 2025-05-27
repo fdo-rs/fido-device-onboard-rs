@@ -1,0 +1,12 @@
+---
+service_info:
+  initial_user: null
+  files: null
+  commands: null
+  additional_serviceinfo: null
+bind: 0.0.0.0:8083
+service_info_auth_token: 2IOtlXsSqfcGjnhBLZjPiHIteskzZEW3lncRzpEmgqI=
+admin_auth_token: Va40bSkLcxwnfml1pmIuaWaOZG96mSMB6fu0xuzcueg=
+device_specific_store_driver:
+  Directory:
+    path: /etc/fdo/stores/serviceinfo_api_devices
