@@ -15,7 +15,7 @@ openssl = "0.10.72"
 tokio = { version = "1", features = ["full"] }
 rand = "0.8.4"
 tss-esapi = { version = "7.4", features = ["generate-bindings"] }
-regex = "1.3.7"
+regex = "1.11.1"
 
 fdo-data-formats = { path = "../data-formats", version = "0.5.4" }
 fdo-http-wrapper = { path = "../http-wrapper", version = "0.5.4", features = ["client"] }
