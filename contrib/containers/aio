@@ -8,4 +8,5 @@ COPY --from=fdo-build:${BUILDID} /usr/src/target/release/fdo-serviceinfo-api-ser
 COPY --from=fdo-build:${BUILDID} /usr/src/target/release/fdo-client-linuxapp /usr/bin
 COPY --from=fdo-build:${BUILDID} /usr/src/target/release/fdo-owner-tool /usr/bin
 COPY --from=fdo-build:${BUILDID} /usr/src/target/release/fdo-manufacturing-client /usr/bin
+RUN yum install -y sqlite libpq cryptsetup-libs clevis clevis-luks
 ENTRYPOINT ["fdo-admin-tool"]
