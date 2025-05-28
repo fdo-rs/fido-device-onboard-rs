@@ -23,7 +23,7 @@ num-traits = "0.2"
 num-derive = "0.4"
 paste = "1.0"
 pem = "3.0"
-tss-esapi = { version = "7.4", features = ["generate-bindings"] }
+tss-esapi = { version = "7.6", features = ["generate-bindings"] }
 byteorder = "1"
 
 http = "0.2"
