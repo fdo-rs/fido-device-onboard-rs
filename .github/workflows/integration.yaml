@@ -104,7 +104,7 @@ jobs:
         run: sudo dnf install -y make gcc openssl openssl-devel findutils golang git tpm2-tss-devel swtpm swtpm-tools git clevis clevis-luks cryptsetup cryptsetup-devel clang-devel cracklib-dicts rust-toolset rpmdevtools python3-docutils createrepo_c podman buildah skopeo
 
       - name: Clone repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ needs.pr-info.outputs.sha }}
           fetch-depth: 0
