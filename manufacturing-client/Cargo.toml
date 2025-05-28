@@ -1,6 +1,6 @@
 [package]
 name = "fdo-manufacturing-client"
-version = "0.5.4"
+version = "0.5.5"
 authors = ["Patrick Uiterwijk <patrick@puiterwijk.org>"]
 edition = "2018"
 
@@ -17,7 +17,7 @@ rand = "0.8.4"
 tss-esapi = { version = "7.6", features = ["generate-bindings"] }
 regex = "1.11.1"
 
-fdo-data-formats = { path = "../data-formats", version = "0.5.4" }
-fdo-http-wrapper = { path = "../http-wrapper", version = "0.5.4", features = ["client"] }
-fdo-util = { path = "../util", version = "0.5.4" }
+fdo-data-formats = { path = "../data-formats", version = "0.5.5" }
+fdo-http-wrapper = { path = "../http-wrapper", version = "0.5.5", features = ["client"] }
+fdo-util = { path = "../util", version = "0.5.5" }
 clap_builder = "4.4"
