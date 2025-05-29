@@ -159,7 +159,7 @@ jobs:
           node-version: 'latest'
       - name: Install commitlint dependencies
         run: npm install commitlint
-      - uses: wagoid/commitlint-github-action@v5
+      - uses: wagoid/commitlint-github-action@v6
         env:
           NODE_PATH: ${{ github.workspace }}/node_modules
         with:
