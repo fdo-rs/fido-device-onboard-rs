@@ -1,0 +1,6 @@
+test: ./test.sh
+duration: 120m
+adjust+:
+  - when: distro != rhel
+    enabled: false
+    because: Test enabled just for Image Mode RHEL-10
