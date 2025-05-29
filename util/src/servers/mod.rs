@@ -117,13 +117,7 @@ fn component_env_prefix(component: &str) -> String {
 }
 
 fn conf_dir_from_env(key: &str) -> Option<String> {
-    match env::var_os(key) {
-        None => None,
-        Some(v) => match v.into_string() {
-            Ok(s) => Some(s),
-            Err(_) => None,
-        },
-    }
+    env::var_os(key)?.into_string().ok()
 }
 
 pub fn yaml_to_cbor(val: &Value) -> Result<CborValue> {
