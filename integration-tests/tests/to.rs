@@ -292,7 +292,7 @@ ssh-ed25519 sshkey_default user@example2.com
 
 fn determine_device_credential_guid(path: &Path) -> Result<Guid> {
     let dc_contents = fs::read(path).context("Error reading device credential")?;
-    let dc: FileDeviceCredential =
-        serde_cbor::from_slice(&dc_contents).context("Error deserializing device credential")?;
+    let dc: FileDeviceCredential = ciborium::de::from_reader(dc_contents.as_slice())
+        .context("Error deserializing device credential")?;
     Ok(dc.guid)
 }
