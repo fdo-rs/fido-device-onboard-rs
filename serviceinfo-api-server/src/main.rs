@@ -261,64 +261,66 @@ async fn serviceinfo_handler(
         .contains(&FedoraIotServiceInfoModule::BinaryFile.into())
     {
         if let Some(files) = &user_data.service_info_configuration.settings.files {
-            for file in files {
-                reply.add_extra(FedoraIotServiceInfoModule::BinaryFile, "name", &file.path);
-                reply.add_extra(
-                    FedoraIotServiceInfoModule::BinaryFile,
-                    "length",
-                    &file.contents_len,
-                );
-                if let Some(parsed_permissions) = &file.parsed_permissions {
-                    reply.add_extra(
-                        FedoraIotServiceInfoModule::BinaryFile,
-                        "mode",
-                        &parsed_permissions,
-                    );
-                }
-                reply.add_extra(
-                    FedoraIotServiceInfoModule::BinaryFile,
-                    "data001|hex",
-                    &file.contents_hex,
-                );
-                reply.add_extra(
-                    FedoraIotServiceInfoModule::BinaryFile,
-                    "sha-384|hex",
-                    &file.hash_hex,
-                );
-            }
+            add_binary_files_to_reply(files, &mut reply);
+
+            log::debug!("Added base configuration binary files");
         }
+
+        // precedence is given to 'per_device' settings over base serviceinfo_api_server.yml config
+        match settings_per_device(&query_info.device_guid.to_string().replace('\"', "")) {
+            Ok(config) => {
+                let per_device_settings = config;
+                match ServiceInfoConfiguration::from_settings(per_device_settings){
+                    Ok(per_device_service_info_configuration) => {
+                        if let Some(files) = &per_device_service_info_configuration.settings.files {
+                            add_binary_files_to_reply(files, &mut reply);
+
+                            log::debug!("Added per-device configuration binary files");
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("{}", e);
+                    }
+                };
+            }
+            Err(_) => {
+                log::info!("No per-device configuration file found");
+            }
+        };
     }
 
     if query_info
         .modules
         .contains(&FedoraIotServiceInfoModule::Command.into())
     {
+        // Add base configuration commands 
         if let Some(commands) = &user_data.service_info_configuration.settings.commands {
-            for command in commands {
-                reply.add_extra(
-                    FedoraIotServiceInfoModule::Command,
-                    "command",
-                    &command.command,
-                );
-                reply.add_extra(FedoraIotServiceInfoModule::Command, "args", &command.args);
-                reply.add_extra(
-                    FedoraIotServiceInfoModule::Command,
-                    "may_fail",
-                    &command.may_fail,
-                );
-                reply.add_extra(
-                    FedoraIotServiceInfoModule::Command,
-                    "return_stdout",
-                    &command.return_stdout,
-                );
-                reply.add_extra(
-                    FedoraIotServiceInfoModule::Command,
-                    "return_stderr",
-                    &command.return_stderr,
-                );
-                reply.add_extra(FedoraIotServiceInfoModule::Command, "execute", &true);
-            }
+            add_commands_to_reply(commands, &mut reply);
+
+            log::debug!("Added base configuration commands");
         }
+
+        // Add device specific commands to reply
+        match settings_per_device(&query_info.device_guid.to_string().replace('\"', "")) {
+            Ok(config) => {
+                let per_device_settings = config;
+                match ServiceInfoConfiguration::from_settings(per_device_settings){
+                    Ok(per_device_service_info_configuration) => {
+                        if let Some(commands) = &per_device_service_info_configuration.settings.commands {
+                            add_commands_to_reply(commands, &mut reply);
+
+                            log::debug!("Added per-device configuration commands");
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("{}", e);
+                    }
+                };
+            }
+            Err(_) => {
+                log::info!("No per-device configuration file found");
+            }
+        };
     }
 
     if query_info
@@ -389,6 +391,61 @@ async fn serviceinfo_handler(
         }
     }
     Ok(warp::reply::json(&reply.reply))
+}
+
+fn add_binary_files_to_reply(files: &Vec<fdo_util::servers::configuration::serviceinfo_api_server::ServiceInfoFile>, reply: &mut ServiceInfoApiReplyBuilder) {
+    for file in files {
+        reply.add_extra(FedoraIotServiceInfoModule::BinaryFile, "name", &file.path);
+        reply.add_extra(
+            FedoraIotServiceInfoModule::BinaryFile,
+            "length",
+            &file.contents_len,
+        );
+        if let Some(parsed_permissions) = &file.parsed_permissions {
+            reply.add_extra(
+                FedoraIotServiceInfoModule::BinaryFile,
+                "mode",
+                &parsed_permissions,
+            );
+        }
+        reply.add_extra(
+            FedoraIotServiceInfoModule::BinaryFile,
+            "data001|hex",
+            &file.contents_hex,
+        );
+        reply.add_extra(
+            FedoraIotServiceInfoModule::BinaryFile,
+            "sha-384|hex",
+            &file.hash_hex,
+        );
+    }
+}
+
+fn add_commands_to_reply(commands: &Vec<fdo_util::servers::configuration::serviceinfo_api_server::ServiceInfoCommand>, reply: &mut ServiceInfoApiReplyBuilder) {
+    for command in commands {
+        reply.add_extra(
+            FedoraIotServiceInfoModule::Command,
+            "command",
+            &command.command,
+        );
+        reply.add_extra(FedoraIotServiceInfoModule::Command, "args", &command.args);
+        reply.add_extra(
+            FedoraIotServiceInfoModule::Command,
+            "may_fail",
+            &command.may_fail,
+        );
+        reply.add_extra(
+            FedoraIotServiceInfoModule::Command,
+            "return_stdout",
+            &command.return_stdout,
+        );
+        reply.add_extra(
+            FedoraIotServiceInfoModule::Command,
+            "return_stderr",
+            &command.return_stderr,
+        );
+        reply.add_extra(FedoraIotServiceInfoModule::Command, "execute", &true);
+    }
 }
 
 fn deserialize_from_str<'de, D>(deserializer: D) -> Result<fdo_data_formats::types::Guid, D::Error>
