@@ -120,9 +120,9 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 
 [[package]]
 name = "assert-str"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6eff46575e86b852295e41df8599e94a910b1136c6af2821df9925f3cf8a1389"
+checksum = "3d445d5e5f013d57c1bed970994be8b65e479605c489c36b3b308126e2a43afd"
 
 [[package]]
 name = "async-lock"
