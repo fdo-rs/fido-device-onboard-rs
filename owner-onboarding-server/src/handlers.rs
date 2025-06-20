@@ -3,6 +3,7 @@ use std::{collections::HashSet, str::FromStr};
 use fdo_data_formats::{
     constants::{DeviceSigType, ErrorCode, HeaderKeys},
     messages::Message,
+    ownershipvoucher::OwnershipVoucher,
     types::{
         COSEHeaderMap, COSESign, CipherSuite, Guid, KeyDeriveSide, KeyExchange, Nonce,
         RendezvousInfo, SigInfo, TO2ProveDevicePayload, TO2ProveOVHdrPayload,
@@ -678,5 +679,28 @@ pub(crate) async fn report_to_rendezvous_handler(
     crate::report_to_rendezvous(udt)
         .await
         .map_err(|e| warp::reject::custom(RtrFailure(e)))?;
+    Ok(warp::reply::Response::new("ok".into()))
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+struct ImportFailure(anyhow::Error);
+impl warp::reject::Reject for ImportFailure {}
+
+pub(crate) async fn handler_import(
+    udt: crate::OwnerServiceUDT,
+    bytes: bytes::Bytes,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let ovs = OwnershipVoucher::many_from_pem(&bytes)
+        .map_err(|e| warp::reject::custom(ImportFailure(e.into())))?;
+    log::info!("Importing {} ownership voucher(s)", ovs.len());
+    // TODO(runcom): handler this better in case only partial import is done
+    for ov in ovs {
+        let guid = ov.header().guid().clone();
+        udt.ownership_voucher_store
+            .store_data(guid, ov)
+            .await
+            .map_err(|e| warp::reject::custom(ImportFailure(e.into())))?;
+    }
     Ok(warp::reply::Response::new("ok".into()))
 }
