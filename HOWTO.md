@@ -645,7 +645,7 @@ Where:
   - `files`: [OPTIONAL] transfers files to a device.
     - `path`: destination path.
     - `permissions`: permissions to set on the file.
-    - `source_path`: source file path, must be a file under `/var/lib/fdo/`.
+    - `source_path`: source file path.
   - `commands`: [OPTIONAL] executes the given list of commands on the device.
       - `command`: command to execute.
       - `args`: list of arguments for the command.
