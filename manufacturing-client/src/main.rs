@@ -80,6 +80,14 @@ struct PlainDIArgs {
     /// Available values: filesystem, tpm.
     #[clap(long)]
     key_ref: String,
+
+    /// Path to the sign key for DI protocol.
+    #[clap(long)]
+    sign_key_path: Option<String>,
+
+    /// Path to the hmac key for DI protocol.
+    #[clap(long)]
+    hmac_key_path: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -346,9 +354,10 @@ async fn main() -> Result<()> {
                     }
                 }
 
-                keyref = KeyReference::str_key(args.key_ref)
-                    .await
-                    .context("Error determining key for DI")?;
+                keyref =
+                    KeyReference::str_key(args.key_ref, args.sign_key_path, args.hmac_key_path)
+                        .await
+                        .context("Error determining key for DI")?;
                 client = ServiceClient::new(ProtocolVersion::Version1_1, &url);
             }
             Commands::NoPlainDI(args) => {
@@ -748,6 +757,10 @@ impl KeyReference {
         let sign_key_path = env::var("DI_SIGN_KEY_PATH").context("No DI sign key path set")?;
         let hmac_key_path = env::var("DI_HMAC_KEY_PATH").context("No DI HMAC key path set")?;
 
+        KeyReference::key_filesystem(sign_key_path, hmac_key_path).await
+    }
+
+    async fn key_filesystem(sign_key_path: String, hmac_key_path: String) -> Result<Self> {
         let sign_key = fs::read(&sign_key_path)
             .with_context(|| format!("Error reading sign key from {}", &sign_key_path))?;
         let hmac_key = fs::read(&hmac_key_path)
@@ -770,10 +783,25 @@ impl KeyReference {
         }
     }
 
-    async fn str_key(key: String) -> Result<Self> {
+    async fn str_key(
+        key: String,
+        sign_key_path: Option<String>,
+        hmac_key_path: Option<String>,
+    ) -> Result<Self> {
         let key_storage_type = KeyStorageType::from_str(&key).context("Invalid sroage type")?;
         match key_storage_type {
-            KeyStorageType::FileSystem => KeyReference::env_key_filesystem().await,
+            KeyStorageType::FileSystem => match (sign_key_path, hmac_key_path) {
+                (Some(_), None) => {
+                    bail!("--sign-key-path is required for filesystem key reference")
+                }
+                (None, Some(_)) => {
+                    bail!("--hmac-key-path is required for filesystem key reference")
+                }
+                (None, None) => bail!(
+                    "--sign-key-path and --hmac-key-path are required for filesystem key reference"
+                ),
+                (Some(s), Some(h)) => KeyReference::key_filesystem(s, h).await,
+            },
             _ => bail!(format!("Unsupported key storage type {key_storage_type:?}")),
         }
     }
