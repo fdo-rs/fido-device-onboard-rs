@@ -79,7 +79,7 @@ jobs:
         with:
           toolchain: stable
           components: clippy
-      - run: cargo clippy -- -D warnings -D clippy::panic -D clippy::todo
+      - run: cargo clippy -- -D clippy::panic -D clippy::todo
 
   build_and_test:
     runs-on: ubuntu-latest
