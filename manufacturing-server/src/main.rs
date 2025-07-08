@@ -295,7 +295,7 @@ async fn main() -> Result<()> {
                         return Err(Rejection::from(fdo_http_wrapper::server::Error::new(
                             ErrorCode::InternalServerError,
                             fdo_data_formats::constants::MessageType::Invalid,
-                            &format!("Error loading ownership voucher with guid {}: {}", guid, e),
+                            &format!("Error loading ownership voucher with guid {guid}: {e}"),
                         )))
                     }
                 };
@@ -305,7 +305,7 @@ async fn main() -> Result<()> {
                         return Err(Rejection::from(fdo_http_wrapper::server::Error::new(
                             ErrorCode::InternalServerError,
                             fdo_data_formats::constants::MessageType::Invalid,
-                            &format!("Error converting ownership voucher to pem: {}", e),
+                            &format!("Error converting ownership voucher to pem: {e}"),
                         )))
                     }
                 };
