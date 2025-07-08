@@ -1,3 +1,4 @@
-possible stability impact:
-- libfdo-data/fdo_data.h
-- libfdo-data/libfdo-data-go.doc
+"possible stability impact":
+  - changed-files:
+    - any-glob-to-any-file: "libfdo-data/fdo_data.h"
+    - any-glob-to-any-file: "libfdo-data/libfdo-data-go.doc"
