@@ -997,7 +997,7 @@ checksum = "25cbce373ec4653f1a01a31e8a5e5ec0c622dc27ff9c4e6606eefef5cbbed4a5"
 
 [[package]]
 name = "fdo-admin-tool"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "clap 4.4.18",
@@ -1022,7 +1022,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-client-linuxapp"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "devicemapper",
@@ -1044,7 +1044,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-data"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "assert-str",
  "cbindgen",
@@ -1056,7 +1056,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-data-formats"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "aws-nitro-enclaves-cose",
  "byteorder",
@@ -1083,7 +1083,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-db"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "diesel",
@@ -1094,7 +1094,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-http-wrapper"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "async-trait",
  "aws-nitro-enclaves-cose",
@@ -1117,7 +1117,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-manufacturing-client"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "clap 4.4.18",
@@ -1136,7 +1136,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-manufacturing-server"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "config",
@@ -1159,7 +1159,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-owner-onboarding-server"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "config",
@@ -1182,7 +1182,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-owner-tool"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "clap 4.4.18",
@@ -1203,7 +1203,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-rendezvous-server"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "config",
@@ -1222,7 +1222,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-serviceinfo-api-server"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "config",
@@ -1241,7 +1241,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-store"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1258,7 +1258,7 @@ dependencies = [
 
 [[package]]
 name = "fdo-util"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "config",
@@ -1886,7 +1886,7 @@ dependencies = [
 
 [[package]]
 name = "integration-tests"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "fdo-data-formats",
@@ -2120,13 +2120,13 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "0.8.11"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4a650543ca06a924e8b371db273b2756685faae30f8487da1b56505a8f78b0c"
+checksum = "78bed444cc8a2160f01cbcf811ef18cac863ad68ae8ca62092e8db51d51c761c"
 dependencies = [
  "libc",
  "wasi",
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2223,16 +2223,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da0df0e5185db44f69b44f26786fe401b6c293d1907744beaa7fa62b2e5a517a"
 dependencies = [
  "autocfg",
-]
-
-[[package]]
-name = "num_cpus"
-version = "1.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4161fcb6d602d4d2081af7c3a45852d875a03dd337a6bfdd6e06407b61342a43"
-dependencies = [
- "hermit-abi 0.3.9",
- "libc",
 ]
 
 [[package]]
@@ -2696,9 +2686,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.10.3"
+version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b62dbe01f0b06f9d8dc7d49e05a0785f153b00b2c227856282f671e0318c9b15"
+checksum = "b544ef1b4eac5dc2db33ea63606ae9ffcfac26c1416a2806ae0bf5f56b201191"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -2708,9 +2698,9 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
-version = "0.4.6"
+version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86b83b8b9847f9bf95ef68afb0b8e6cdb80f498442f5179a29fad448fcc1eaea"
+checksum = "809e8dc61f6de73b46c85f4c96486310fe304c434cfa43669d7b40f711150908"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -2719,9 +2709,9 @@ dependencies = [
 
 [[package]]
 name = "regex-syntax"
-version = "0.8.2"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
+checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 
 [[package]]
 name = "reqwest"
@@ -3436,28 +3426,27 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.36.0"
+version = "1.45.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61285f6515fa018fb2d1e46eb21223fff441ee8db5d0f1435e8ab4f5cdb80931"
+checksum = "75ef51a33ef1da925cea3e4eb122833cb377c61439ca401b770f54902b806779"
 dependencies = [
  "backtrace",
  "bytes",
  "libc",
  "mio",
- "num_cpus",
  "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
  "tokio-macros",
- "windows-sys 0.48.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
 name = "tokio-macros"
-version = "2.2.0"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b8a1e28f2deaa14e508979454cb3a223b10b938b45af148bc0986de36f1923b"
+checksum = "6e06d43f1345a3bcd39f6a56dbb7dcab2ba47e68e8ac134855e7e2bdbaf8cab8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3554,9 +3543,9 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "tss-esapi"
-version = "7.5.1"
+version = "7.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9ba6594ded739cb539f8ffcd3713f6c21d4525c47314bbc6de15c0cd251aedf"
+checksum = "78ea9ccde878b029392ac97b5be1f470173d06ea41d18ad0bb3c92794c16a0f2"
 dependencies = [
  "bitfield",
  "enumflags2",
@@ -3990,18 +3979,18 @@ dependencies = [
 
 [[package]]
 name = "windows-sys"
-version = "0.48.0"
+version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "677d2418bec65e3338edb076e806bc1ec15693c5d0104683f2efe857f61056a9"
+checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
 dependencies = [
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
 name = "windows-sys"
-version = "0.52.0"
+version = "0.59.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
+checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets 0.52.6",
 ]

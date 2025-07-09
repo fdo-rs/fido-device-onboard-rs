@@ -446,7 +446,7 @@ fn initialize_device(args: &InitializeDeviceArguments) -> Result<(), Error> {
     fs::write(&args.ownershipvoucher_out, ov).context("Error writing ownership voucher")?;
     fs::write(&args.device_credential_out, devcred).context("Error writing device credential")?;
 
-    println!("Created ownership voucher for device {}", device_guid);
+    println!("Created ownership voucher for device {device_guid}");
 
     Ok(())
 }

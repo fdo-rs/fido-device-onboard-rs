@@ -10,7 +10,12 @@ jobs:
   triage:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/labeler@v4
+    - uses: actions/checkout@v4
+      with:
+        repository: "fdo-rs/fido-device-onboard-rs"
+        ref: ${{ github.event.pull_request.head.sha }}
+    - uses: actions/labeler@v5
       with:
         repo-token: "${{ secrets.GITHUB_TOKEN }}"
         sync-labels: true
+        configuration-path: '.github/labeler.yml'

@@ -1,6 +1,6 @@
 [package]
 name = "fdo-http-wrapper"
-version = "0.5.4"
+version = "0.5.5"
 authors = ["Patrick Uiterwijk <patrick@puiterwijk.org>"]
 edition = "2018"
 
@@ -18,8 +18,8 @@ hex = "0.4"
 
 openssl = "0.10.72"
 
-fdo-data-formats = { path = "../data-formats", version = "0.5.4" }
-fdo-store = { path = "../store", version = "0.5.4" }
+fdo-data-formats = { path = "../data-formats", version = "0.5.5" }
+fdo-store = { path = "../store", version = "0.5.5" }
 aws-nitro-enclaves-cose = "0.5.2"
 
 # Server-side

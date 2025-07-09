@@ -20,3 +20,6 @@
 # Source and vendor tar files
 fido-device-onboard-rs-*.tar.gz
 fido-device-onboard-rs-*-vendor-patched.tar.xz
+
+# SQLite test files
+*.sqlite
