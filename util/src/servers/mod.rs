@@ -70,7 +70,7 @@ pub fn settings_per_device(guid: &str) -> Result<ServiceInfoSettings> {
 
     let path_per_device_store = match settings.device_specific_store_driver {
         StoreConfig::Directory { mut path } => {
-            let file_name = format!("{}.yml", guid);
+            let file_name = format!("{guid}.yml");
             path.push(file_name);
             path.to_string_lossy().into_owned()
         }

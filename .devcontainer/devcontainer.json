@@ -5,35 +5,30 @@
 	},
 	"containerUser": "vscode",
 	"updateRemoteUserUID": true,
-	"containerEnv": {
-		"HOME": "/home/vscode"
-	},
 	"runArgs": [
-		"--userns=keep-id:uid=1000,gid=1000",
 		"--cap-add=SYS_PTRACE",
 		"--security-opt",
 		"seccomp=unconfined"
 	],
-	"settings": {
-		"files.watcherExclude": {
-			"**/target/**": true
-		},
-		"rust-analyzer.checkOnSave.command": "clippy"
+        "customizations": {
+		"vscode": {
+			"settings": {
+				"files.watcherExclude": {
+					"**/target/**": true
+				},
+				"rust-analyzer.checkOnSave.command": "clippy"
+			},
+			"extensions": [
+				"mutantdino.resourcemonitor",
+				"matklad.rust-analyzer",
+				"tamasfe.even-better-toml",
+				"serayuzgur.crates",
+				"rust-lang.rust-analyzer"
+			]
+		}
 	},
-	"extensions": [
-		"mutantdino.resourcemonitor",
-		"matklad.rust-analyzer",
-		"tamasfe.even-better-toml",
-		"serayuzgur.crates",
-		"rust-lang.rust-analyzer"
-	],
 	"remoteEnv": {
 		"PATH": "${containerEnv:PATH}:/home/vscode/.cargo/bin",
-		"SQLITE_MANUFACTURER_DATABASE_URL": "../ci-manufacturer-db.sqlite",
-		"SQLITE_OWNER_DATABASE_URL": "../ci-owner-db.sqlite",
-		"SQLITE_RENDEZVOUS_DATABASE_URL": "../ci-rendezvous-db.sqlite"
-	},
-	"containerEnv": {
 		"SQLITE_MANUFACTURER_DATABASE_URL": "../ci-manufacturer-db.sqlite",
 		"SQLITE_OWNER_DATABASE_URL": "../ci-owner-db.sqlite",
 		"SQLITE_RENDEZVOUS_DATABASE_URL": "../ci-rendezvous-db.sqlite"
