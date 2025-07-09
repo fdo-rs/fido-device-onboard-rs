@@ -1,0 +1,27 @@
+summary: FDO Image Mode test plan
+discover:
+  how: fmf
+  test: image-mode-onboarding
+prepare:
+  - name: Prepare repository
+    how: shell
+    script: |
+      git clone $REPO_URL /tmp/$REPO_NAME
+      cd /tmp/$REPO_NAME
+      git fetch origin +refs/pull/*:refs/remotes/origin/pr/*
+      git checkout origin/pr/$PR_NUMBER/head
+      git submodule update --init
+execute:
+  how: tmt
+provision:
+  hardware:
+    virtualization:
+      is-supported: true
+    cpu:
+      processors: ">= 2"
+    memory: ">= 6 GB"
+
+/fdo-bootc:
+  summary: Test fdo in rhel-10 Image Mode
+  environment+:
+    TEST_CASE: fdo-bootc

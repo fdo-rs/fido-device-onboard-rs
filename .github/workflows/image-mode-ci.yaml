@@ -1,0 +1,61 @@
+---
+name: Image Mode CI Test
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  check-pull-request:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query author repository permissions
+        uses: octokit/request-action@v2.x
+        id: user_permission
+        with:
+          route: GET /repos/${{ github.repository }}/collaborators/${{ github.event.sender.login }}/permission
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check if user does have correct permissions
+        if: contains('admin write', fromJson(steps.user_permission.outputs.data).permission)
+        id: check_user_perm
+        run: |
+          echo "User '${{ github.event.sender.login }}' has permission '${{ fromJson(steps.user_permission.outputs.data).permission }}' allowed values: 'admin', 'write'"
+          echo "allowed_user=true" >> $GITHUB_OUTPUT
+      - name: Get information for pull request
+        uses: octokit/request-action@v2.x
+        id: pr-api
+        with:
+          route: GET /repos/${{ github.repository }}/pulls/${{ github.event.number }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    outputs:
+      allowed_user: ${{ steps.check_user_perm.outputs.allowed_user }}
+      sha: ${{ fromJson(steps.pr-api.outputs.data).head.sha }}
+      ref: ${{ fromJson(steps.pr-api.outputs.data).head.ref }}
+      repo_url: ${{ fromJson(steps.pr-api.outputs.data).head.repo.html_url }}
+
+  RHEL-10-fdo-bootc:
+    name: Test fdo RHEL-10.0 Image Mode
+    needs: check-pull-request
+    if: ${{ needs.check-pull-request.outputs.allowed_user == 'true' }}
+    continue-on-error: true
+    runs-on: ubuntu-latest
+
+    steps:
+       - name: Run the tests
+         uses: sclorg/testing-farm-as-github-action@v3.1.2
+         with:
+           compose: RHEL-10.0-Nightly
+           api_key: ${{ secrets.TF_API_KEY }}
+           git_url: ${{ needs.check-pull-request.outputs.repo_url }}
+           git_ref: ${{ needs.check-pull-request.outputs.ref }}
+           tmt_context: "arch=x86_64;distro=rhel-10-0"
+           tmt_path: "./test/fmf"
+           tmt_plan_regex: fdo-bootc
+           tf_scope: private
+           variables: "ARCH=x86_64;REPO_URL=${{ github.server_url }}/${{ github.repository }};REPO_NAME=${{ github.repository }};PR_NUMBER=${{ github.event.number }}"
+           timeout: 90
+           secrets: "QUAY_USERNAME=${{ secrets.QUAY_USERNAME }};QUAY_PASSWORD=${{ secrets.QUAY_PASSWORD }};STAGE_REDHAT_IO_USERNAME=${{ secrets.STAGE_REDHAT_IO_USERNAME }};STAGE_REDHAT_IO_TOKEN=${{ secrets.STAGE_REDHAT_IO_TOKEN }};DOWNLOAD_NODE=${{ secrets.DOWNLOAD_NODE }};REDHAT_IO_USERNAME=${{ secrets.REDHAT_IO_USERNAME }};REDHAT_IO_TOKEN=${{ secrets.REDHAT_IO_TOKEN }};SSH_KEY=${{ secrets.SSH_KEY }};SSH_PASSWORD=${{ secrets.SSH_PASSWORD }}"
