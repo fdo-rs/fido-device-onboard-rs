@@ -1,0 +1,31 @@
+---
+session_store_driver:
+  Directory:
+    path: /etc/fdo/stores/manufacturing_sessions
+ownership_voucher_store_driver:
+  Directory:
+    path: /etc/fdo/stores/owner_vouchers
+public_key_store_driver:
+  Directory:
+    path: /etc/fdo/stores/manufacturer_keys
+bind: "0.0.0.0:8080"
+protocols:
+  plain_di: false
+  diun:
+    mfg_string_type: SerialNumber
+    key_type: SECP384R1
+    allowed_key_storage_types:
+      - FileSystem
+    key_path: /etc/fdo/keys/diun_key.der
+    cert_path: /etc/fdo/keys/diun_cert.pem
+rendezvous_info:
+  - deviceport: 8082
+    ip_address: 192.168.100.1
+    ownerport: 8082
+    protocol: http
+manufacturing:
+  manufacturer_cert_path: /etc/fdo/keys/manufacturer_cert.pem
+  device_cert_ca_private_key: /etc/fdo/keys/device_ca_key.der
+  device_cert_ca_chain: /etc/fdo/keys/device_ca_cert.pem
+  owner_cert_path: /etc/fdo/keys/owner_cert.pem
+  manufacturer_private_key: /etc/fdo/keys/manufacturer_key.der
