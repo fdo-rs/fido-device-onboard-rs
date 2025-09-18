@@ -2,7 +2,7 @@ use std::{io::Write, process::Command};
 
 use anyhow::{anyhow, bail, Context, Result};
 use libcryptsetup_rs::CryptDevice;
-use secrecy::{ExposeSecret, Secret};
+use secrecy::{ExposeSecret, SecretBox};
 
 fn get_clevis_token(dev: &mut CryptDevice) -> Result<u32> {
     let mut clevis_token = None;
@@ -58,7 +58,7 @@ fn get_clevis_keyslot(dev: &mut CryptDevice, clevis_token: u32) -> Result<u32> {
 
 pub(super) fn get_clevis_token_slot_pass(
     dev: &mut CryptDevice,
-) -> Result<(u32, u32, Secret<Vec<u8>>)> {
+) -> Result<(u32, u32, SecretBox<Vec<u8>>)> {
     let clevis_token = get_clevis_token(dev).context("Error getting clevis token ID")?;
     let clevis_slot =
         get_clevis_keyslot(dev, clevis_token).context("error getting clevis keyslot")?;
@@ -81,7 +81,7 @@ pub(super) fn get_clevis_token_slot_pass(
         .output()
         .context("Error calling clevis to get password")?;
 
-    let pass = secrecy::Secret::new(output.stdout);
+    let pass = secrecy::SecretBox::new(Box::new(output.stdout));
 
     if !output.status.success() {
         bail!(
