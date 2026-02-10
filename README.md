@@ -1,3 +1,18 @@
+# Deprecated
+
+This project is **deprecated** and is no longer actively maintained.
+
+- No new features will be added.
+- Bug fixes and security patches will be provided on a case by case basis.
+- The repository will remain available for archival and reference purposes.
+
+If you depend on this project, consider:
+
+1. Forking the repository to maintain your own version, or  
+2. Migrating to an alternative implementation that is actively maintained.
+
+We thank all contributors and users who supported this project.
+
 # fido-device-onboard-rs
 An implementation of the FIDO Device Onboard Specification written in rust.
 
