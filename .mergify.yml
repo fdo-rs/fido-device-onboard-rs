@@ -8,8 +8,8 @@ queue_rules:
       - base=main
       - "#approved-reviews-by>=1"
     merge_method: merge
-  - name: duplicated fido-device-onboard-rs from Automatic merge on approval (stability impact
-      no impact)
+  - name: duplicated fido-device-onboard-rs from Automatic merge on approval (stability impact no
+      impact)
     queue_conditions:
       - base=main
       - "#approved-reviews-by>=1"
@@ -30,8 +30,8 @@ queue_rules:
     merge_method: merge
 
 pull_request_rules:
-  - name: Automatic merge on approval + Automatic merge on approval (stability impact no
-      impact) + Automatic merge on approval (stability impact)
+  - name: Automatic merge on approval + Automatic merge on approval (stability impact no impact) 
+      + Automatic merge on approval (stability impact)
     conditions: []
     actions:
       queue:
@@ -40,9 +40,11 @@ priority_rules:
     conditions:
       - "label!=possible stability impact"
     priority: 2500
-  - name: priority for queue `duplicated fido-device-onboard-rs from Automatic merge on approval
+    allow_checks_interruption: true
+  - name: priority for queue `duplicated fido-device-onboard-rs from Automatic merge on approval 
       (stability impact no impact)`
     conditions:
       - "#approved-reviews-by>=1"
       - "label=stability impact assessed: no impact"
     priority: 2250
+    allow_checks_interruption: true
