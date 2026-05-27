@@ -30,7 +30,7 @@ time = "0.3"
 
 # Client-side
 reqwest = { version = "0.12", optional = true, features = ["native-tls", "json"] }
-url = { version = "2", optional = true }
+url = { version = "2.5.4", optional = true }
 
 [features]
 server = ["warp", "warp-sessions", "uuid"]
