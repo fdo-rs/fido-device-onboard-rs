@@ -7,10 +7,10 @@ use fdo_data_formats::StoredItem;
 use fdo_db::*;
 use std::marker::PhantomData;
 
+use crate::MetadataValue;
 use crate::ServerType;
 use crate::Store;
 use crate::StoreError;
-use crate::MetadataValue;
 use fdo_data_formats::Serializable;
 
 pub(super) fn initialize<OT, K, V, MKT>(
