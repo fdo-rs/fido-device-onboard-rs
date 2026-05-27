@@ -711,14 +711,12 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
         }
         if let Some(sshkey_password) = &sshkey_password {
             log::info!("SSHkey module was active, creating user with password");
-            create_user_with_password(
-                sshkey_user.as_ref().unwrap(),
-                sshkey_password,
-            )
-            .context(format!(
-                "Error creating new user with password: {}",
-                sshkey_user.as_ref().unwrap()
-            ))?;
+            create_user_with_password(sshkey_user.as_ref().unwrap(), sshkey_password).context(
+                format!(
+                    "Error creating new user with password: {}",
+                    sshkey_user.as_ref().unwrap()
+                ),
+            )?;
         }
         if let Some(sshkey_keys) = sshkey_keys {
             log::info!("SSHkey module was active, installing SSH keys");
