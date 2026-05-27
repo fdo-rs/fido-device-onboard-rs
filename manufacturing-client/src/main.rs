@@ -354,11 +354,10 @@ async fn main() -> Result<()> {
             Commands::NoPlainDI(args) => {
                 url = args.manufacturing_server_url;
 
-                if args.rootcerts.is_some() {
-                    let bag = get_X5Bag_from_rootcerts_path(args.rootcerts.unwrap())?;
+                if let Some(rootcerts) = args.rootcerts {
+                    let bag = get_X5Bag_from_rootcerts_path(rootcerts)?;
                     diun_pub_key_verification = DiunPublicKeyVerificationMode::Certs(bag);
-                } else if args.hash.is_some() {
-                    let input_hash = args.hash.unwrap();
+                } else if let Some(input_hash) = args.hash {
                     let hash = Hash::from_str(&input_hash)
                         .context(format!("Error parsing '{input_hash}' as hash"))?;
                     diun_pub_key_verification = DiunPublicKeyVerificationMode::Hash(hash);

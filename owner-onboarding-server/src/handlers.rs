@@ -545,11 +545,11 @@ async fn perform_service_info(
                 &initial_user.password,
             )?;
         }
-        if initial_user.ssh_keys.is_some() {
+        if let Some(ssh_keys) = &initial_user.ssh_keys {
             out_si.add(
                 FedoraIotServiceInfoModule::SSHKey,
                 "sshkeys",
-                &(initial_user.ssh_keys.unwrap().join(";")),
+                &ssh_keys.join(";"),
             )?;
         }
     }

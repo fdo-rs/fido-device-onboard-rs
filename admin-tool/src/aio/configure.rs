@@ -2,7 +2,6 @@ use anyhow::{bail, Context, Error, Result};
 use clap::Args;
 use fdo_data_formats::types::RemoteConnection;
 use serde::{Deserialize, Serialize};
-use std::net::Ipv4Addr;
 use std::{collections::BTreeMap, net::IpAddr, path::Path};
 
 use fdo_store::StoreConfig;
@@ -477,7 +476,7 @@ pub(super) fn generate_configs_and_keys(
             for ifaddr in ifaddrs {
                 if let Some(sockaddrsto) = ifaddr.address {
                     if let Some(sockaddr) = sockaddrsto.as_sockaddr_in() {
-                        let address = IpAddr::from(Ipv4Addr::from(sockaddr.ip()));
+                        let address = IpAddr::from(sockaddr.ip());
                         if is_valid_address(&address) {
                             contact_addresses.push(ContactAddress::IpAddr(address));
                         }
