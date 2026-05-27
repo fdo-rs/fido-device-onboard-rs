@@ -709,11 +709,11 @@ async fn process_serviceinfo_in(si_in: &ServiceInfo, si_out: &mut ServiceInfo) -
         } else if sshkey_keys.is_none() && sshkey_password.is_none() {
             bail!("SSHkey module missing password and key");
         }
-        if sshkey_password.is_some() {
+        if let Some(sshkey_password) = &sshkey_password {
             log::info!("SSHkey module was active, creating user with password");
             create_user_with_password(
                 sshkey_user.as_ref().unwrap(),
-                sshkey_password.as_ref().unwrap(),
+                sshkey_password,
             )
             .context(format!(
                 "Error creating new user with password: {}",

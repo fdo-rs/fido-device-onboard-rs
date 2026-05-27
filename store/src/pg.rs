@@ -10,7 +10,7 @@ use std::marker::PhantomData;
 use crate::ServerType;
 use crate::Store;
 use crate::StoreError;
-use crate::{FilterType, MetadataLocalKey, MetadataValue, ValueIter};
+use crate::MetadataValue;
 use fdo_data_formats::Serializable;
 
 pub(super) fn initialize<OT, K, V, MKT>(
@@ -50,33 +50,6 @@ struct PostgresManufacturerStore<K, V> {
 }
 
 impl<K, V> PostgresManufacturerStore<K, V> where K: std::string::ToString {}
-
-pub struct PostgresManufacturerStoreFilterType {
-    neqs: Vec<bool>,
-    lts: Vec<bool>,
-}
-
-#[async_trait]
-impl<V, MKT> FilterType<V, MKT> for PostgresManufacturerStoreFilterType
-where
-    V: Serializable + Send + Sync + Clone + 'static,
-    MKT: MetadataLocalKey,
-{
-    fn neq(&mut self, _key: &crate::MetadataKey<MKT>, _expected: &dyn MetadataValue) {
-        self.neqs = Vec::new();
-    }
-    fn lt(&mut self, _key: &crate::MetadataKey<MKT>, _max: i64) {
-        self.lts = Vec::new();
-    }
-    async fn query(&self) -> Result<crate::FilterQueryResult<V>, StoreError> {
-        let values = Vec::new();
-        Ok(Some(ValueIter {
-            index: 0,
-            values,
-            errored: false,
-        }))
-    }
-}
 
 #[async_trait]
 impl<OT, K, V, MKT> Store<OT, K, V, MKT> for PostgresManufacturerStore<K, V>
@@ -224,33 +197,6 @@ struct PostgresOwnerStore<K, V> {
 }
 
 impl<K, V> PostgresOwnerStore<K, V> where K: std::string::ToString {}
-
-pub struct PostgresOwnerStoreFilterType {
-    neqs: Vec<bool>,
-    lts: Vec<bool>,
-}
-
-#[async_trait]
-impl<V, MKT> FilterType<V, MKT> for PostgresOwnerStoreFilterType
-where
-    V: Serializable + Send + Sync + Clone + 'static,
-    MKT: MetadataLocalKey,
-{
-    fn neq(&mut self, _key: &crate::MetadataKey<MKT>, _expected: &dyn MetadataValue) {
-        self.neqs = Vec::new();
-    }
-    fn lt(&mut self, _key: &crate::MetadataKey<MKT>, _max: i64) {
-        self.lts = Vec::new();
-    }
-    async fn query(&self) -> Result<crate::FilterQueryResult<V>, StoreError> {
-        let values = Vec::new();
-        Ok(Some(ValueIter {
-            index: 0,
-            values,
-            errored: false,
-        }))
-    }
-}
 
 // TODO: this whole implementation uses OwnershipVoucher but the store interface
 // has been made to work with different objects (generics indeed). Think about Sessions too
@@ -467,33 +413,6 @@ struct PostgresRendezvousStore<K, V> {
 }
 
 impl<K, V> PostgresRendezvousStore<K, V> where K: std::string::ToString {}
-
-pub struct PostgresRendezvousStoreFilterType {
-    neqs: Vec<bool>,
-    lts: Vec<bool>,
-}
-
-#[async_trait]
-impl<V, MKT> FilterType<V, MKT> for PostgresRendezvousStoreFilterType
-where
-    V: Serializable + Send + Sync + Clone + 'static,
-    MKT: MetadataLocalKey,
-{
-    fn neq(&mut self, _key: &crate::MetadataKey<MKT>, _expected: &dyn MetadataValue) {
-        self.neqs = Vec::new();
-    }
-    fn lt(&mut self, _key: &crate::MetadataKey<MKT>, _max: i64) {
-        self.lts = Vec::new();
-    }
-    async fn query(&self) -> Result<crate::FilterQueryResult<V>, StoreError> {
-        let values = Vec::new();
-        Ok(Some(ValueIter {
-            index: 0,
-            values,
-            errored: false,
-        }))
-    }
-}
 
 #[async_trait]
 impl<OT, K, V, MKT> Store<OT, K, V, MKT> for PostgresRendezvousStore<K, V>
