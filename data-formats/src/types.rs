@@ -775,7 +775,7 @@ impl ServiceInfo {
         self.add(StandardServiceInfoModule::DevMod, "modules", &list)
     }
 
-    pub fn iter(&self) -> ServiceInfoIter {
+    pub fn iter(&self) -> ServiceInfoIter<'_> {
         ServiceInfoIter { info: self, pos: 0 }
     }
 
