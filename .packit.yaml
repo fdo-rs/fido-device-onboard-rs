@@ -58,7 +58,7 @@ jobs:
     trigger: pull_request
     identifier: onboarding-fedora
     fmf_path: test/fmf
-    tmt_plan: plans/onboarding
+    tmt_plan: test/fmf/plans/onboarding
     packages: [fido-device-onboard-fedora]
     targets: ["fedora-latest-stable", "fedora-latest", "fedora-rawhide"]
 
@@ -100,7 +100,7 @@ jobs:
     trigger: pull_request
     identifier: onboarding-centos
     fmf_path: test/fmf
-    tmt_plan: plans/onboarding
+    tmt_plan: test/fmf/plans/onboarding
     packages: [fido-device-onboard-centos]
     targets:
       centos-stream-9-x86_64:
