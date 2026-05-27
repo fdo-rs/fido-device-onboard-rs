@@ -675,7 +675,7 @@ impl OwnershipVoucherEntryPayload {
         &self.hash_header_info
     }
 
-    pub fn extra(&self) -> RefExtraType {
+    pub fn extra(&self) -> RefExtraType<'_> {
         self.extra.as_ref()
     }
 
