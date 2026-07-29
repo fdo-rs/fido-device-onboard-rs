@@ -94,10 +94,16 @@ jobs:
     owner: "@fedora-iot"
     project: fedora-iot
 
+  # Use dict format with explicit distros to work around
+  # https://github.com/packit/packit/issues/2700
   - job: tests
     trigger: pull_request
     identifier: onboarding-centos
     fmf_path: test/fmf
     tmt_plan: plans/onboarding
     packages: [fido-device-onboard-centos]
-    targets: ["centos-stream-9", "centos-stream-10"]
+    targets:
+      centos-stream-9-x86_64:
+        distros: [centos-stream-9]
+      centos-stream-10-x86_64:
+        distros: [centos-stream-10]
