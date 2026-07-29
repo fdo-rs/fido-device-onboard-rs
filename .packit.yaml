@@ -82,11 +82,13 @@ jobs:
 
   # CentOS jobs
 
+  # add epel targets to work around
+  # https://github.com/packit/packit/issues/2700
   - &fdo_copr_build_centos
     job: copr_build
     packages: [fido-device-onboard-centos]
     trigger: pull_request
-    targets: ["centos-stream-9", "centos-stream-10"]
+    targets: ["centos-stream-9", "centos-stream-10", "epel-9", "epel-10"]
 
   - <<: *fdo_copr_build_centos
     trigger: commit
@@ -94,7 +96,7 @@ jobs:
     owner: "@fedora-iot"
     project: fedora-iot
 
-  # Use dict format with explicit distros to work around
+  # add epel targets to work around
   # https://github.com/packit/packit/issues/2700
   - job: tests
     trigger: pull_request
@@ -102,8 +104,4 @@ jobs:
     fmf_path: test/fmf
     tmt_plan: test/fmf/plans/onboarding
     packages: [fido-device-onboard-centos]
-    targets:
-      centos-stream-9-x86_64:
-        distros: [centos-stream-9]
-      centos-stream-10-x86_64:
-        distros: [centos-stream-10]
+    targets: ["centos-stream-9", "centos-stream-10", "epel-9", "epel-10"]
