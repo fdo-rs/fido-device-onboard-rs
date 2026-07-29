@@ -77,16 +77,7 @@ fn perform_reencrypt(dev_name: &str) -> Result<()> {
             data_shift: 0,
             max_hotzone_size: 0,
             device_size: 0,
-            luks2: libcryptsetup_rs::CryptParamsLuks2 {
-                pbkdf: None,
-                integrity: None,
-                integrity_params: None,
-                data_alignment: 0,
-                data_device: None,
-                sector_size: 0,
-                label: None,
-                subsystem: None,
-            },
+            luks2: None,
             flags: libcryptsetup_rs::consts::flags::CryptReencrypt::empty(),
         })
         .context("Error getting reencryption status")?;
