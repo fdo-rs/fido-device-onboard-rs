@@ -263,7 +263,7 @@ impl X5Bag {
     where
         P: openssl::pkey::HasPublic,
     {
-        for (_, cert) in self.certs.iter() {
+        for cert in self.certs.values() {
             if cert.public_key().unwrap().public_eq(to_find) {
                 return true;
             }
