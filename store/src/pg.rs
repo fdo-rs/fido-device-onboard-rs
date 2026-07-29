@@ -259,7 +259,7 @@ where
                     .map_err(|e| {
                         StoreError::Database(format!(
                             "Unable to update OV (guid {}) to2 with value {val}: {e:?}",
-                            &key.to_string()
+                            key.to_string()
                         ))
                     })
             }
@@ -276,7 +276,7 @@ where
                 .map_err(|e| {
                     StoreError::Database(format!(
                         "Unable to update OV (guid {}) to0 with value {val}: {e:?}",
-                        &key.to_string()
+                        key.to_string()
                     ))
                 })
             }
@@ -392,7 +392,7 @@ where
         fdo_db::postgres::PostgresOwnerDB::delete_ov(&key.to_string(), conn).map_err(|e| {
             StoreError::Database(format!(
                 "Error deleting OV with guid {}: {e:?}",
-                &key.to_string()
+                key.to_string()
             ))
         })
     }
@@ -524,7 +524,7 @@ where
             .map_err(|e| {
                 StoreError::Database(format!(
                     "Error inserting StoredItem with guid {}: {e:?}",
-                    &key.to_string()
+                    key.to_string()
                 ))
             })
     }
