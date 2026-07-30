@@ -408,7 +408,7 @@ async fn main() -> Result<()> {
         .map(|path| -> Result<X5Bag, anyhow::Error> {
             let trusted_device_keys = {
                 let contents = std::fs::read(path)
-                    .with_context(|| format!("Error reading trusted device keys at {}", &path))?;
+                    .with_context(|| format!("Error reading trusted device keys at {}", path))?;
                 X509::stack_from_pem(&contents).context("Error parsing trusted device keys")?
             };
 
@@ -422,14 +422,14 @@ async fn main() -> Result<()> {
     let owner_key = load_private_key(&settings.owner_private_key_path).with_context(|| {
         format!(
             "Error loading owner key from {}",
-            &settings.owner_private_key_path
+            settings.owner_private_key_path
         )
     })?;
     let owner_pubkey = {
         let contents = std::fs::read(&settings.owner_public_key_path).with_context(|| {
             format!(
                 "Error reading owner public key from {}",
-                &settings.owner_public_key_path
+                settings.owner_public_key_path
             )
         })?;
         PublicKey::try_from(X509::from_pem(&contents).context("Error parsing owner public key")?)

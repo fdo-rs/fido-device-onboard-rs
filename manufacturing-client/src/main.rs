@@ -748,9 +748,9 @@ impl KeyReference {
         let hmac_key_path = env::var("DI_HMAC_KEY_PATH").context("No DI HMAC key path set")?;
 
         let sign_key = fs::read(&sign_key_path)
-            .with_context(|| format!("Error reading sign key from {}", &sign_key_path))?;
+            .with_context(|| format!("Error reading sign key from {}", sign_key_path))?;
         let hmac_key = fs::read(&hmac_key_path)
-            .with_context(|| format!("Error reading HMAC key from {}", &hmac_key_path))?;
+            .with_context(|| format!("Error reading HMAC key from {}", hmac_key_path))?;
 
         let sign_key = PKey::private_key_from_der(&sign_key).context("Error loading sign key")?;
 

@@ -647,7 +647,7 @@ async fn export_manufacturer_vouchers(args: &ExportManufacturerVouchersArguments
         let ov = client
             .get(format!(
                 "{}/ov/{}",
-                &args.manufacturer_server_url, device_guid
+                args.manufacturer_server_url, device_guid
             ))
             .send()
             .await?
@@ -659,7 +659,7 @@ async fn export_manufacturer_vouchers(args: &ExportManufacturerVouchersArguments
         let ovs_tar_path = path.join("export.tar");
         let mut ovs_tar = File::create(ovs_tar_path)?;
         let ovs = client
-            .post(format!("{}/export", &args.manufacturer_server_url))
+            .post(format!("{}/export", args.manufacturer_server_url))
             .send()
             .await?
             .bytes()
@@ -682,14 +682,14 @@ fn import_ownership_vouchers(args: &ImportOwnershipVouchersArguments) -> Result<
             let ov_path = match &path {
                 Ok(path) => path.path(),
                 Err(e) => {
-                    error_buff.push(format!("Error {e} with path {:?}", &path));
+                    error_buff.push(format!("Error {e} with path {:?}", path));
                     continue;
                 }
             };
             let content = match fs::read(&ov_path) {
                 Ok(value) => value,
                 Err(e) => {
-                    error_buff.push(format!("Error {e} reading path {:?}", &ov_path));
+                    error_buff.push(format!("Error {e} reading path {:?}", ov_path));
                     continue;
                 }
             };
@@ -698,7 +698,7 @@ fn import_ownership_vouchers(args: &ImportOwnershipVouchersArguments) -> Result<
                 Err(e) => {
                     error_buff.push(format!(
                         "Error {e} serializing OV contents at path {:?}",
-                        &ov_path
+                        ov_path
                     ));
                     continue;
                 }
@@ -712,7 +712,7 @@ fn import_ownership_vouchers(args: &ImportOwnershipVouchersArguments) -> Result<
                             error_buff.push(format!(
                                 "Error {e} getting a connection from the DB pool with OV {} from path {:?}",
                                 ov.header().guid(),
-                                &ov_path
+                                ov_path
                             ));
                             continue;
                         }
@@ -727,7 +727,7 @@ fn import_ownership_vouchers(args: &ImportOwnershipVouchersArguments) -> Result<
                             error_buff.push(format!(
                                 "Error {e} getting a connection from the DB pool with OV {} from path {:?}",
                                 ov.header().guid(),
-                                &ov_path
+                                ov_path
                             ));
                             continue;
                         }
@@ -740,7 +740,7 @@ fn import_ownership_vouchers(args: &ImportOwnershipVouchersArguments) -> Result<
                     "Error {:?} inserting OV {} from path {:?}",
                     ret.err(),
                     ov.header().guid(),
-                    &ov_path
+                    ov_path
                 ));
             }
         }
