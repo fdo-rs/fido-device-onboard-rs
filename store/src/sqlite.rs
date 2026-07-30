@@ -7,10 +7,10 @@ use fdo_data_formats::StoredItem;
 use fdo_db::*;
 use std::marker::PhantomData;
 
+use crate::MetadataValue;
 use crate::ServerType;
 use crate::Store;
 use crate::StoreError;
-use crate::{FilterType, MetadataLocalKey, MetadataValue, ValueIter};
 use fdo_data_formats::Serializable;
 
 pub(super) fn initialize<OT, K, V, MKT>(
@@ -50,33 +50,6 @@ struct SqliteManufacturerStore<K, V> {
 }
 
 impl<K, V> SqliteManufacturerStore<K, V> where K: std::string::ToString {}
-
-pub struct SqliteManufacturerStoreFilterType {
-    neqs: Vec<bool>,
-    lts: Vec<bool>,
-}
-
-#[async_trait]
-impl<V, MKT> FilterType<V, MKT> for SqliteManufacturerStoreFilterType
-where
-    V: Serializable + Send + Sync + Clone + 'static,
-    MKT: MetadataLocalKey,
-{
-    fn neq(&mut self, _key: &crate::MetadataKey<MKT>, _expected: &dyn MetadataValue) {
-        self.neqs = Vec::new();
-    }
-    fn lt(&mut self, _key: &crate::MetadataKey<MKT>, _max: i64) {
-        self.lts = Vec::new();
-    }
-    async fn query(&self) -> Result<crate::FilterQueryResult<V>, StoreError> {
-        let values = Vec::new();
-        Ok(Some(ValueIter {
-            index: 0,
-            values,
-            errored: false,
-        }))
-    }
-}
 
 #[async_trait]
 impl<OT, K, V, MKT> Store<OT, K, V, MKT> for SqliteManufacturerStore<K, V>
@@ -226,33 +199,6 @@ struct SqliteOwnerStore<K, V> {
 
 impl<K, V> SqliteOwnerStore<K, V> where K: std::string::ToString {}
 
-pub struct SqliteOwnerStoreFilterType {
-    neqs: Vec<bool>,
-    lts: Vec<bool>,
-}
-
-#[async_trait]
-impl<V, MKT> FilterType<V, MKT> for SqliteOwnerStoreFilterType
-where
-    V: Serializable + Send + Sync + Clone + 'static,
-    MKT: MetadataLocalKey,
-{
-    fn neq(&mut self, _key: &crate::MetadataKey<MKT>, _expected: &dyn MetadataValue) {
-        self.neqs = Vec::new();
-    }
-    fn lt(&mut self, _key: &crate::MetadataKey<MKT>, _max: i64) {
-        self.lts = Vec::new();
-    }
-    async fn query(&self) -> Result<crate::FilterQueryResult<V>, StoreError> {
-        let values = Vec::new();
-        Ok(Some(ValueIter {
-            index: 0,
-            values,
-            errored: false,
-        }))
-    }
-}
-
 #[async_trait]
 impl<OT, K, V, MKT> Store<OT, K, V, MKT> for SqliteOwnerStore<K, V>
 where
@@ -311,7 +257,7 @@ where
                     .map_err(|e| {
                         StoreError::Database(format!(
                             "Unable to update OV (guid {}) to2 with value {val}: {e:?}",
-                            &key.to_string()
+                            key.to_string()
                         ))
                     })
             }
@@ -328,7 +274,7 @@ where
                 .map_err(|e| {
                     StoreError::Database(format!(
                         "Unable to update OV (guid {}) to0 with value {val}: {e:?}",
-                        &key.to_string()
+                        key.to_string()
                     ))
                 })
             }
@@ -440,7 +386,7 @@ where
         fdo_db::sqlite::SqliteOwnerDB::delete_ov(&key.to_string(), conn).map_err(|e| {
             StoreError::Database(format!(
                 "Error deleting OV with guid {}: {e:?}",
-                &key.to_string()
+                key.to_string()
             ))
         })
     }
@@ -461,33 +407,6 @@ struct SqliteRendezvousStore<K, V> {
 }
 
 impl<K, V> SqliteRendezvousStore<K, V> where K: std::string::ToString {}
-
-pub struct SqliteRendezvousStoreFilterType {
-    neqs: Vec<bool>,
-    lts: Vec<bool>,
-}
-
-#[async_trait]
-impl<V, MKT> FilterType<V, MKT> for SqliteRendezvousStoreFilterType
-where
-    V: Serializable + Send + Sync + Clone + 'static,
-    MKT: MetadataLocalKey,
-{
-    fn neq(&mut self, _key: &crate::MetadataKey<MKT>, _expected: &dyn MetadataValue) {
-        self.neqs = Vec::new();
-    }
-    fn lt(&mut self, _key: &crate::MetadataKey<MKT>, _max: i64) {
-        self.lts = Vec::new();
-    }
-    async fn query(&self) -> Result<crate::FilterQueryResult<V>, StoreError> {
-        let values = Vec::new();
-        Ok(Some(ValueIter {
-            index: 0,
-            values,
-            errored: false,
-        }))
-    }
-}
 
 #[async_trait]
 impl<OT, K, V, MKT> Store<OT, K, V, MKT> for SqliteRendezvousStore<K, V>
@@ -599,7 +518,7 @@ where
             .map_err(|e| {
                 StoreError::Database(format!(
                     "Error inserting StoredItem with guid {}: {e:?}",
-                    &key.to_string()
+                    key.to_string()
                 ))
             })
     }

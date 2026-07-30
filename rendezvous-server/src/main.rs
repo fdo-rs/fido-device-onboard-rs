@@ -93,7 +93,7 @@ async fn main() -> Result<()> {
         .map(|path| -> Result<X5Bag, anyhow::Error> {
             let trusted_manufacturer_keys = {
                 let contents = std::fs::read(&path).with_context(|| {
-                    format!("Error reading trusted manufacturer keys at {}", &path)
+                    format!("Error reading trusted manufacturer keys at {}", path)
                 })?;
                 X509::stack_from_pem(&contents)
                     .context("Error parsing trusted manufacturer keys")?
@@ -111,7 +111,7 @@ async fn main() -> Result<()> {
         .map(|path| -> Result<X5Bag, anyhow::Error> {
             let trusted_device_keys = {
                 let contents = std::fs::read(path)
-                    .with_context(|| format!("Error reading trusted device keys at {}", &path))?;
+                    .with_context(|| format!("Error reading trusted device keys at {}", path))?;
                 X509::stack_from_pem(&contents).context("Error parsing trusted device keys")?
             };
             X5Bag::with_certs(trusted_device_keys)

@@ -354,11 +354,10 @@ async fn main() -> Result<()> {
             Commands::NoPlainDI(args) => {
                 url = args.manufacturing_server_url;
 
-                if args.rootcerts.is_some() {
-                    let bag = get_X5Bag_from_rootcerts_path(args.rootcerts.unwrap())?;
+                if let Some(rootcerts) = args.rootcerts {
+                    let bag = get_X5Bag_from_rootcerts_path(rootcerts)?;
                     diun_pub_key_verification = DiunPublicKeyVerificationMode::Certs(bag);
-                } else if args.hash.is_some() {
-                    let input_hash = args.hash.unwrap();
+                } else if let Some(input_hash) = args.hash {
                     let hash = Hash::from_str(&input_hash)
                         .context(format!("Error parsing '{input_hash}' as hash"))?;
                     diun_pub_key_verification = DiunPublicKeyVerificationMode::Hash(hash);
@@ -749,9 +748,9 @@ impl KeyReference {
         let hmac_key_path = env::var("DI_HMAC_KEY_PATH").context("No DI HMAC key path set")?;
 
         let sign_key = fs::read(&sign_key_path)
-            .with_context(|| format!("Error reading sign key from {}", &sign_key_path))?;
+            .with_context(|| format!("Error reading sign key from {}", sign_key_path))?;
         let hmac_key = fs::read(&hmac_key_path)
-            .with_context(|| format!("Error reading HMAC key from {}", &hmac_key_path))?;
+            .with_context(|| format!("Error reading HMAC key from {}", hmac_key_path))?;
 
         let sign_key = PKey::private_key_from_der(&sign_key).context("Error loading sign key")?;
 

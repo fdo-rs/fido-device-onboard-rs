@@ -60,7 +60,7 @@ impl DeviceCredentialLocation for FileSystemPath {
         if Path::new(&self.path).exists() {
             Some(Ok(Box::new(self.clone())))
         } else {
-            log::trace!("No (device credential) file exists at {}", &self.path);
+            log::trace!("No (device credential) file exists at {}", self.path);
             None
         }
     }
@@ -69,9 +69,9 @@ impl DeviceCredentialLocation for FileSystemPath {
 impl UsableDeviceCredentialLocation for FileSystemPath {
     fn read(&self) -> Result<Box<dyn DeviceCredential>> {
         let contents = fs::read(&self.path)
-            .with_context(|| format!("Error reading (device credential) file at {}", &self.path))?;
+            .with_context(|| format!("Error reading (device credential) file at {}", self.path))?;
         let fdc = FileDeviceCredential::deserialize_data(&contents)
-            .with_context(|| format!("Error parsing device credential from {}", &self.path))?;
+            .with_context(|| format!("Error parsing device credential from {}", self.path))?;
         Ok(Box::new(fdc))
     }
 
@@ -79,7 +79,7 @@ impl UsableDeviceCredentialLocation for FileSystemPath {
         match self.deactivation_method {
             DeactivationMethod::None => Ok(()),
             DeactivationMethod::Delete => fs::remove_file(&self.path)
-                .with_context(|| format!("Error deleting file at {}", &self.path)),
+                .with_context(|| format!("Error deleting file at {}", self.path)),
             DeactivationMethod::Deactivate => self.perform_deactivation(),
         }
     }
@@ -88,9 +88,9 @@ impl UsableDeviceCredentialLocation for FileSystemPath {
 impl FileSystemPath {
     fn perform_deactivation(&self) -> Result<()> {
         let contents = fs::read(&self.path)
-            .with_context(|| format!("Error reading (device credential) file at {}", &self.path))?;
+            .with_context(|| format!("Error reading (device credential) file at {}", self.path))?;
         let mut fdc = FileDeviceCredential::deserialize_data(&contents)
-            .with_context(|| format!("Error parsing device credential from {}", &self.path))?;
+            .with_context(|| format!("Error parsing device credential from {}", self.path))?;
 
         fdc.active = false;
         let new_dc_contents = fdc
@@ -102,7 +102,7 @@ impl FileSystemPath {
 
     fn write(&self, new_contents: Vec<u8>) -> Result<()> {
         fs::write(&self.path, new_contents)
-            .with_context(|| format!("Error writing to file at {}", &self.path))
+            .with_context(|| format!("Error writing to file at {}", self.path))
     }
 }
 
@@ -113,15 +113,16 @@ struct FileSystemPathEnv {
 
 impl DeviceCredentialLocation for FileSystemPathEnv {
     fn resolve(&self) -> Option<Result<Box<dyn UsableDeviceCredentialLocation>>> {
-        let env_val = match env::var_os(&self.env_var) {
-            None => return None,
-            Some(v) => match v.into_string() {
+        let env_val = {
+            let v = env::var_os(&self.env_var)?;
+            match v.into_string() {
                 Ok(s) => s,
                 Err(_) => return Some(Err(anyhow!("Invalid environment variable value"))),
-            },
+            }
         };
-        let deactivation_method = match env::var_os(format!("{}_DELETE", &self.env_var)) {
-            None => match env::var_os(format!("{}_DEACTIVATE", &self.env_var)) {
+
+        let deactivation_method = match env::var_os(format!("{}_DELETE", self.env_var)) {
+            None => match env::var_os(format!("{}_DEACTIVATE", self.env_var)) {
                 None => DeactivationMethod::None,
                 Some(_) => DeactivationMethod::Deactivate,
             },
@@ -129,7 +130,7 @@ impl DeviceCredentialLocation for FileSystemPathEnv {
         };
         log::trace!(
             "Resolved environment variable {} to filesystem path {} (deactivation method {:?})",
-            &self.env_var,
+            self.env_var,
             &env_val,
             &deactivation_method,
         );

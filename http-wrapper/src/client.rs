@@ -214,7 +214,7 @@ impl ServiceClient {
 
         let url = format!(
             "{}/fdo/{}/msg/{}",
-            &self.base_url,
+            self.base_url,
             self.protocol_version,
             OM::message_type() as u8
         );

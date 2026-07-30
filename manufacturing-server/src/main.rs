@@ -319,7 +319,7 @@ async fn main() -> Result<()> {
         );
     let ud = user_data.clone();
     let handler_export = warp::post()
-        .and(warp::path("export").map(move || (ud.clone())).and_then(
+        .and(warp::path("export").map(move || ud.clone()).and_then(
             |ud: Arc<ManufacturingServiceUD>| async move {
                 match ud.ownership_voucher_store.load_all_data().await {
                     Ok(ovs) => Ok(ovs),
