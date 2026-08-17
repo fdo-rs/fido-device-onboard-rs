@@ -23,7 +23,7 @@ tempfile = "3"
 tera = "1"
 regex = "1.11.1"
 lazy_static = "1.4.0"
-openssl = "0.10.72"
+openssl = "0.10.79"
 libc = "0.2"
 reqwest = { version = "0.12", features = ["json"] }
 tokio = "1.45.1"

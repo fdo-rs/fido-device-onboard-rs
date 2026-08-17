@@ -1130,11 +1130,11 @@ impl KeyExchange {
             let mut bnctx = BigNumContext::new()?;
 
             let mut derived = EcPoint::new(&ec_group)?;
-            derived.mul(
+            derived.mul2(
                 &ec_group,
                 other_pub.public_key(),
                 our_key.private_key(),
-                &bnctx,
+                &mut bnctx,
             )?;
             if derived.is_infinity(&ec_group) || !derived.is_on_curve(&ec_group, &mut bnctx)? {
                 return Err(Error::KeyExchangeError("Invalid key derived"));
